@@ -663,7 +663,7 @@ impl<W: TextWrite> renderer::BuiltinNodesRenderer<W> for BuiltinNodesRenderer<W>
             self.writer.write_safe_str(w, "<code")?;
             write_attributes!(arena, node_ref, source, w, self.format_options, code_span);
             self.writer.write_safe_str(w, ">")?;
-            self.writer.raw_write(w, &kd.value_str(source))?;
+            self.writer.raw_write(w, &kd.str(source))?;
             return Ok(WalkStatus::SkipChildren);
         } else {
             self.writer.write_safe_str(w, "</code>")?;

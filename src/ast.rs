@@ -2664,7 +2664,7 @@ impl CodeSpan {
 
     /// Returns the string representation of the code span value of this code span.
     /// If the value contains a newline character, it will be replaced with a space character.
-    pub fn value_str<'a>(&'a self, source: &'a str) -> Cow<'a, str> {
+    pub fn str<'a>(&'a self, source: &'a str) -> Cow<'a, str> {
         match &self.value {
             CodeSpanValue::Indices(indices) => {
                 if indices.is_empty() {
@@ -2697,6 +2697,14 @@ impl CodeSpan {
                 }
             }
         }
+    }
+
+    /// Returns the string representation of the code span value of this code span.
+    /// If the value contains a newline character, it will be replaced with a space character.
+    /// Deprecated: use [`str`] instead.
+    #[deprecated(since = "1.7.1", note = "Use `str` instead")]
+    pub fn value_str<'a>(&'a self, source: &'a str) -> Cow<'a, str> {
+        self.str(source)
     }
 }
 
