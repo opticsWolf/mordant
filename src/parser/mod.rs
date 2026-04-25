@@ -59,54 +59,41 @@ pub use self::task_list_item::*;
 
 extern crate alloc;
 
-use core::cell::Cell;
-use core::cell::RefCell;
-use core::fmt;
-use core::fmt::Debug;
-use core::iter;
-use core::marker::PhantomData;
-
-use alloc::boxed::Box;
-use alloc::format;
-use alloc::rc::Rc;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::vec;
-use alloc::vec::Vec;
-
-use crate::as_kind_data;
-use crate::as_type_data_mut;
-use crate::ast::KindData;
-use crate::ast::Text;
-use crate::ast::TextQualifier;
-use crate::ast::NODE_REF_UNDEFINED;
-use crate::ast::{self, Arena, ArenaOptions, NodeRef};
-use crate::context;
-use crate::context::AnyValueSpec;
-use crate::context::ContextKey;
-use crate::context::ContextKeyRegistry;
-use crate::error::{CallbackError, Result};
-use crate::matches_kind;
-use crate::text;
-use crate::text::Reader;
-use crate::util;
-use crate::util::fold_case_full;
-use crate::util::is_blank;
-use crate::util::is_punct;
-use crate::util::is_space;
-use crate::util::to_link_reference;
-use crate::util::trim_left;
-use crate::util::trim_left_space;
-use crate::util::trim_right;
-use crate::util::trim_right_space;
-use crate::util::utf8_len;
-use crate::util::{HashMap, HashSet, Prioritized};
+use alloc::{
+    boxed::Box,
+    format,
+    rc::Rc,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
+use core::{
+    cell::{Cell, RefCell},
+    fmt,
+    fmt::Debug,
+    iter,
+    marker::PhantomData,
+};
 
 use bitflags::bitflags;
 
 #[allow(unused_imports)]
 #[cfg(not(feature = "std"))]
 use crate::println;
+use crate::{
+    as_kind_data, as_type_data_mut,
+    ast::{self, Arena, ArenaOptions, KindData, NodeRef, Text, TextQualifier, NODE_REF_UNDEFINED},
+    context,
+    context::{AnyValueSpec, ContextKey, ContextKeyRegistry},
+    error::{CallbackError, Result},
+    matches_kind, text,
+    text::Reader,
+    util,
+    util::{
+        fold_case_full, is_blank, is_punct, is_space, to_link_reference, trim_left,
+        trim_left_space, trim_right, trim_right_space, utf8_len, HashMap, HashSet, Prioritized,
+    },
+};
 
 // Context {{{
 
@@ -2632,10 +2619,8 @@ pub fn gfm(options: impl Into<GfmOptions>) -> impl ParserExtension {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
     use crate::println;
-
     use crate::text::Index;
 
     struct Hoge {

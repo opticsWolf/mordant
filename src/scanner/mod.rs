@@ -2,11 +2,13 @@
 
 mod scanner_gen;
 
-pub use self::scanner_gen::*;
-
-use crate::text::{self, Reader, Segment, EOS};
-use crate::util::is_space;
 use memchr::memmem;
+
+pub use self::scanner_gen::*;
+use crate::{
+    text::{self, Reader, Segment, EOS},
+    util::is_space,
+};
 
 /// Trait for scanning input for specific patterns.
 pub trait Scan {

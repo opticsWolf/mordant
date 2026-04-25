@@ -1,14 +1,16 @@
 use core::cmp::max;
 
-use crate::ast::{Arena, CodeBlock, CodeBlockKind, FenceData, NodeRef};
-use crate::parser::{BlockParser, Context, State};
-use crate::text::{Reader as _, Segment};
-use crate::util::{
-    indent_position, indent_position_padding, indent_width, is_blank, trim_left_space_length,
-    trim_right_space_length,
+use crate::{
+    as_kind_data, as_kind_data_mut, as_type_data_mut,
+    ast::{Arena, CodeBlock, CodeBlockKind, FenceData, NodeRef},
+    parser::{BlockParser, Context, State},
+    text,
+    text::{Reader as _, Segment},
+    util::{
+        indent_position, indent_position_padding, indent_width, is_blank, trim_left_space_length,
+        trim_right_space_length,
+    },
 };
-use crate::{as_kind_data, text};
-use crate::{as_kind_data_mut, as_type_data_mut};
 
 /// [`BlockParser`] for indented code blocks.
 #[derive(Debug, Default)]

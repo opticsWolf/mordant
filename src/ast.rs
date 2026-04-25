@@ -94,24 +94,23 @@
 
 extern crate alloc;
 
-use alloc::borrow::Cow;
-use alloc::boxed::Box;
-use alloc::format;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
-use core::any::Any;
-use core::error::Error as CoreError;
-use core::fmt::{self, Debug, Display, Formatter, Write};
-use core::iter::IntoIterator;
-use core::ops::{Index, IndexMut};
-use core::result::Result as CoreResult;
-
-use crate::error::*;
-use crate::text;
-use crate::util::{StringMap, TinyVec};
+use alloc::{borrow::Cow, boxed::Box, format, string::String, vec, vec::Vec};
+use core::{
+    any::Any,
+    error::Error as CoreError,
+    fmt::{self, Debug, Display, Formatter, Write},
+    iter::IntoIterator,
+    ops::{Index, IndexMut},
+    result::Result as CoreResult,
+};
 
 use bitflags::bitflags;
+
+use crate::{
+    error::*,
+    text,
+    util::{StringMap, TinyVec},
+};
 
 // NodeRef {{{
 
@@ -1999,15 +1998,15 @@ impl From<List> for KindData {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Task {
-    Unchecked,
-    Checked,
+    Active,
+    Completed,
 }
 
 impl Display for Task {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Task::Unchecked => write!(f, "Unchecked"),
-            Task::Checked => write!(f, "Checked"),
+            Task::Active => write!(f, "Active"),
+            Task::Completed => write!(f, "Completed"),
         }
     }
 }

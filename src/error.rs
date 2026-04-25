@@ -2,17 +2,16 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use alloc::format;
-use alloc::string::String;
-use core::fmt::{self, Debug, Formatter};
-use core::result::Result as CoreResult;
-use core::{error::Error as CoreError, fmt::Display};
-
-use crate::ast::NodeRef;
-
+use alloc::{boxed::Box, format, string::String};
+use core::{
+    error::Error as CoreError,
+    fmt::{self, Debug, Display, Formatter},
+    result::Result as CoreResult,
+};
 #[cfg(feature = "std")]
 use std::backtrace::{Backtrace, BacktraceStatus};
+
+use crate::ast::NodeRef;
 
 /// Alias for a Result type that uses [`Error`].
 pub type Result<T> = CoreResult<T, Error>;

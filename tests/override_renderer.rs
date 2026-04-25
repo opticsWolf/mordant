@@ -1,19 +1,18 @@
 extern crate alloc;
 
 use alloc::string::String;
-use rushdown::new_markdown_to_html;
-use rushdown::parser;
-use rushdown::renderer::html::renderer_extension;
-use rushdown::renderer::html::RendererExtension;
-
 use core::any::TypeId;
-
-use rushdown::ast::*;
-use rushdown::renderer;
-use rushdown::renderer::*;
 
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
 use rushdown::println;
+use rushdown::{
+    ast::*,
+    new_markdown_to_html, parser, renderer,
+    renderer::{
+        html::{renderer_extension, RendererExtension},
+        *,
+    },
+};
 
 #[allow(dead_code)]
 struct CustomParagraphRenderer<W: TextWrite> {

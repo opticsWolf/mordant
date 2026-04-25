@@ -18,14 +18,14 @@ mod scanner;
 
 mod error;
 use alloc::string::String;
-pub use error::Error;
-pub use error::Result;
 
-use crate::parser::Parser;
-use crate::parser::ParserExtension;
-use crate::renderer::html;
-use crate::renderer::TextWrite;
-use crate::text::BasicReader;
+pub use error::{Error, Result};
+
+use crate::{
+    parser::{Parser, ParserExtension},
+    renderer::{html, TextWrite},
+    text::BasicReader,
+};
 
 /// Trait for converting Markdown to HTML.
 ///

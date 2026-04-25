@@ -1,24 +1,24 @@
 extern crate alloc;
 
-use crate::context::{ContextKey, ContextKeyRegistry, NodeRefValue};
+use alloc::{rc::Rc, string::ToString, vec::Vec};
+use core::{cell::RefCell, cmp::min};
+
 #[allow(unused_imports)]
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
 use crate::println;
-
-use alloc::rc::Rc;
-use alloc::string::ToString;
-use alloc::vec::Vec;
-
-use core::cell::RefCell;
-use core::cmp::min;
-
-use crate::ast::{Arena, Attributes, Heading, HeadingKind, NodeRef};
-use crate::parser::{parse_attributes, BlockParser, Context, Options, State};
-use crate::text::{BlockReader, Reader as _, Segment, EOS};
-use crate::util::{
-    is_blank, is_punct, is_space, trim_left_length, trim_left_space_length, trim_right_space_length,
+use crate::{
+    as_type_data, as_type_data_mut,
+    ast::{Arena, Attributes, Heading, HeadingKind, NodeRef},
+    context::{ContextKey, ContextKeyRegistry, NodeRefValue},
+    matches_kind,
+    parser::{parse_attributes, BlockParser, Context, Options, State},
+    text,
+    text::{BlockReader, Reader as _, Segment, EOS},
+    util::{
+        is_blank, is_punct, is_space, trim_left_length, trim_left_space_length,
+        trim_right_space_length,
+    },
 };
-use crate::{as_type_data, as_type_data_mut, matches_kind, text};
 
 /// [`BlockParser`] for ATX headings.
 #[derive(Debug, Default)]

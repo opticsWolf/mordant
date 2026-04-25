@@ -2,22 +2,21 @@
 
 extern crate alloc;
 
-use crate::parser::parse_attributes;
+use alloc::{
+    format,
+    string::{String, ToString},
+    vec::Vec,
+};
+
 #[allow(unused_imports)]
 #[cfg(not(feature = "std"))]
 use crate::println;
-
-use crate::text;
-use crate::util::is_blank;
-use crate::Error;
-use crate::MarkdownToHtml;
-use alloc::format;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::vec::Vec;
-
-use crate::util::{visualize_spaces, HashMap};
-use crate::Result;
+use crate::{
+    parser::parse_attributes,
+    text,
+    util::{is_blank, visualize_spaces, HashMap},
+    Error, MarkdownToHtml, Result,
+};
 
 const ATTRIBUTE_SEPARATOR: &str = "//- - - - - - - - -//";
 const CASE_SEPARATOR: &str = "//= = = = = = = = = = = = = = = = = = = = = = = =//";
@@ -391,6 +390,7 @@ fn get_env(key: &str) -> Option<String> {
     unsafe {
         extern crate libc;
         use core::slice;
+
         use libc::c_char;
 
         let mut buf = key.as_bytes().to_vec();

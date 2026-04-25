@@ -1,16 +1,14 @@
 extern crate alloc;
 
+use alloc::{borrow::Cow, string::String};
+
 #[allow(unused_imports)]
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
 use crate::println;
-
-use alloc::borrow::Cow;
-use alloc::string::String;
-
-use crate::ast::Attributes;
-use crate::text::{self};
-use crate::util::{
-    is_punct, is_space, resolve_entity_references, resolve_numeric_references, TinyVec,
+use crate::{
+    ast::Attributes,
+    text::{self},
+    util::{is_punct, is_space, resolve_entity_references, resolve_numeric_references, TinyVec},
 };
 
 /// Parses attributes from the reader.
@@ -211,11 +209,9 @@ fn parse_unquoted_attribute_value<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[allow(unused_imports)]
     #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
     use crate::println;
-
     use crate::text::Reader;
 
     #[test]

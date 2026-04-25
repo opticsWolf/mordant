@@ -2,21 +2,17 @@
 
 extern crate alloc;
 
-#[allow(unused_imports)]
-#[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
-use crate::println;
-
-use alloc::borrow::Cow;
-use alloc::string::String;
-use alloc::vec;
-use alloc::vec::Vec;
-use core::fmt::{self, Debug};
-use core::ops::{DerefMut, Index, IndexMut};
+use alloc::{borrow::Cow, string::String, vec, vec::Vec};
 use core::{
     borrow::Borrow,
     cmp::{min, Ordering},
-    ops::Deref,
+    fmt::{self, Debug},
+    ops::{Deref, DerefMut, Index, IndexMut},
 };
+
+#[allow(unused_imports)]
+#[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
+use crate::println;
 
 #[cfg(any(feature = "hashbrown", not(feature = "std")))]
 pub type HashMap<K, V> = hashbrown::HashMap<K, V>;
@@ -2002,9 +1998,9 @@ impl<'a, T> IntoIterator for &'a mut TinyVec<T> {
 #[cfg(test)]
 mod tests {
 
-    use super::*;
     use alloc::string::ToString;
 
+    use super::*;
     #[allow(unused_imports)]
     #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
     use crate::println;

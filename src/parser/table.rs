@@ -1,6 +1,5 @@
-use core::cell::RefCell;
-
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use core::cell::RefCell;
 
 use crate::{
     as_kind_data, as_type_data_mut,

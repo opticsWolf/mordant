@@ -40,13 +40,10 @@
 
 extern crate alloc;
 
+use alloc::{boxed::Box, string::String, vec::Vec};
 use core::any::Any;
 
-use crate::ast::NodeRef;
-use crate::util::HashMap;
-use alloc::boxed::Box;
-use alloc::string::String;
-use alloc::vec::Vec;
+use crate::{ast::NodeRef, util::HashMap};
 
 /// Specification for values stored in [`Context`].
 pub trait AnyValueSpec {
@@ -549,7 +546,6 @@ impl AnyValueSpec for ObjectValue {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[allow(unused_imports)]
     #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
     use crate::println;

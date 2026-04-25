@@ -1,15 +1,24 @@
 extern crate alloc;
 
-use core::any::TypeId;
-use core::fmt::{self, Write};
+use core::{
+    any::TypeId,
+    fmt::{self, Write},
+};
 
-use rushdown::renderer::html::{renderer_extension, Options, RendererExtension};
-use rushdown::Result;
-use rushdown::{as_extension_data, as_type_data, ast, text::*};
-use rushdown::{ast::*, text};
-use rushdown::{matches_kind, parser};
-use rushdown::{new_markdown_to_html, renderer::*};
-use rushdown::{parser::*, renderer};
+use rushdown::{
+    as_extension_data, as_type_data, ast,
+    ast::*,
+    matches_kind, new_markdown_to_html, parser,
+    parser::*,
+    renderer,
+    renderer::{
+        html::{renderer_extension, Options, RendererExtension},
+        *,
+    },
+    text,
+    text::*,
+    Result,
+};
 
 // UserMention(inline extension) {{{
 

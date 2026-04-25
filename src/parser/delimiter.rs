@@ -5,12 +5,8 @@ extern crate alloc;
 use crate::println;
 use crate::{
     ast::{Arena, NodeRef, Text, TextQualifier},
-    parser::{Context, DelimiterProcessor, ParseStackElemRef},
-    text::Segment,
-};
-use crate::{
-    parser::Delimiter,
-    text::{self, Reader},
+    parser::{Context, Delimiter, DelimiterProcessor, ParseStackElemRef},
+    text::{self, Reader, Segment},
     util::{char_at, is_unicode_space, is_unicode_symbol_or_punct},
 };
 

@@ -1,10 +1,12 @@
-use crate::ast::{Arena, NodeRef, RawHtml};
-use crate::parser::{Context, InlineParser};
-use crate::scanner::{
-    scan_html_cdata_reader, scan_html_comment_reader, scan_html_declaration_reader,
-    scan_html_processing_instruction_reader, scan_html_tag_reader,
+use crate::{
+    ast::{Arena, NodeRef, RawHtml},
+    parser::{Context, InlineParser},
+    scanner::{
+        scan_html_cdata_reader, scan_html_comment_reader, scan_html_declaration_reader,
+        scan_html_processing_instruction_reader, scan_html_tag_reader,
+    },
+    text::{self, Reader},
 };
-use crate::text::{self, Reader};
 
 /// [`InlineParser`] for inline raw HTML.
 #[derive(Debug, Default)]

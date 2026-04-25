@@ -4,23 +4,22 @@ pub mod html;
 
 extern crate alloc;
 
-use core::any::TypeId;
-use core::fmt::Debug;
-
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use core::cell::{Cell, RefCell};
-
-use alloc::rc::Rc;
-
-use crate::ast::{self, *};
-use crate::context::{self, AnyValueSpec, ContextKey, ContextKeyRegistry};
-use crate::error::{CallbackError, Error, Result};
-use crate::util::{HashMap, Prioritized};
+use alloc::{boxed::Box, rc::Rc, vec::Vec};
+use core::{
+    any::TypeId,
+    cell::{Cell, RefCell},
+    fmt::Debug,
+};
 
 #[allow(unused_imports)]
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
 use crate::println;
+use crate::{
+    ast::{self, *},
+    context::{self, AnyValueSpec, ContextKey, ContextKeyRegistry},
+    error::{CallbackError, Error, Result},
+    util::{HashMap, Prioritized},
+};
 
 // TextWrite {{{
 

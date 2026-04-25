@@ -1,10 +1,10 @@
-use pprof::protos::Message;
 use std::{
     fs::{self, File},
     io::Write,
     path::PathBuf,
 };
 
+use pprof::protos::Message;
 use rushdown::{new_markdown_to_html, parser, renderer::html};
 
 fn data_path(name: &str) -> PathBuf {

@@ -1,7 +1,9 @@
-use std::env;
-use std::fs::{read_to_string, File};
-use std::io::{BufWriter, Write};
-use std::path::{Path, PathBuf};
+use std::{
+    env,
+    fs::{read_to_string, File},
+    io::{BufWriter, Write},
+    path::{Path, PathBuf},
+};
 
 // gen_html_entities {{{
 

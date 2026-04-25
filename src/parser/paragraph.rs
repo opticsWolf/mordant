@@ -1,8 +1,10 @@
-use crate::as_type_data_mut;
-use crate::ast::{Arena, NodeRef, Paragraph};
-use crate::parser::{BlockParser, Context, State};
-use crate::text;
-use crate::text::Reader as _;
+use crate::{
+    as_type_data_mut,
+    ast::{Arena, NodeRef, Paragraph},
+    parser::{BlockParser, Context, State},
+    text,
+    text::Reader as _,
+};
 
 /// [`BlockParser`] for paragraphs.
 #[derive(Debug, Default)]

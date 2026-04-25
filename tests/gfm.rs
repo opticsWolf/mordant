@@ -144,8 +144,8 @@ fn test_task_list_item_override() {
                 |w, _source, arena, list_ref, _context, pctx| -> Result<()> {
                     let task = as_kind_data!(arena, list_ref, ListItem).task().unwrap();
                     let css_class = match task {
-                        Task::Unchecked => "task-list-item-unchecked",
-                        Task::Checked => "task-list-item-checked",
+                        Task::Active => "task-list-item-unchecked",
+                        Task::Completed => "task-list-item-checked",
                         _ => unreachable!(),
                     };
                     pctx.writer().write_safe_str(w, "<span class=\"")?;

@@ -2,10 +2,12 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use crate::ast::{Arena, Link, NodeRef, Text};
-use crate::parser::{Context, InlineParser};
-use crate::scanner::{scan_email, scan_url};
-use crate::text::{self, Reader, Segment};
+use crate::{
+    ast::{Arena, Link, NodeRef, Text},
+    parser::{Context, InlineParser},
+    scanner::{scan_email, scan_url},
+    text::{self, Reader, Segment},
+};
 
 /// InlineParser that parses auto links.
 #[derive(Debug, Default)]

@@ -1,14 +1,18 @@
-use crate::ast::{Arena, HtmlBlock, HtmlBlockKind, NodeRef};
-use crate::parser::{BlockParser, Context, State};
-use crate::scanner::{
-    scan_html_block_close_1, scan_html_block_close_2, scan_html_block_close_3,
-    scan_html_block_close_4, scan_html_block_close_5, scan_html_block_open_1,
-    scan_html_block_open_2, scan_html_block_open_3, scan_html_block_open_4, scan_html_block_open_5,
-    scan_html_block_open_6, scan_html_block_open_7,
+use crate::{
+    as_kind_data, as_kind_data_mut, as_type_data, as_type_data_mut,
+    ast::{Arena, HtmlBlock, HtmlBlockKind, NodeRef},
+    matches_kind,
+    parser::{BlockParser, Context, State},
+    scanner::{
+        scan_html_block_close_1, scan_html_block_close_2, scan_html_block_close_3,
+        scan_html_block_close_4, scan_html_block_close_5, scan_html_block_open_1,
+        scan_html_block_open_2, scan_html_block_open_3, scan_html_block_open_4,
+        scan_html_block_open_5, scan_html_block_open_6, scan_html_block_open_7,
+    },
+    text,
+    text::Reader as _,
+    util::is_blank,
 };
-use crate::text::Reader as _;
-use crate::util::is_blank;
-use crate::{as_kind_data, as_kind_data_mut, as_type_data, as_type_data_mut, matches_kind, text};
 
 /// [`BlockParser`] for html blocks.
 #[derive(Debug, Default)]

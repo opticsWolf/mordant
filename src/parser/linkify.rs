@@ -1,20 +1,19 @@
 extern crate alloc;
 
-use alloc::boxed::Box;
-use alloc::fmt;
-use alloc::string::String;
-use alloc::string::ToString;
-use alloc::vec;
-use alloc::vec::Vec;
+use alloc::{
+    boxed::Box,
+    fmt,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
-use crate::ast::{Arena, Link, NodeRef, Text};
-use crate::parser::ParserOptions;
-use crate::parser::{Context, InlineParser};
-use crate::text::Segment;
-use crate::util::trim_right_length;
 use crate::{
+    ast::{Arena, Link, NodeRef, Text},
+    parser::{Context, InlineParser, ParserOptions},
     scanner::{scan_email, scan_url_strict, scan_url_www, Scan},
-    text::{self, Reader},
+    text::{self, Reader, Segment},
+    util::trim_right_length,
 };
 
 /// Options for GFM auto links.

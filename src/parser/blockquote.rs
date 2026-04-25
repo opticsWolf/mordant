@@ -1,8 +1,10 @@
-use crate::ast::{Arena, Blockquote, NodeRef};
-use crate::parser::{BlockParser, Context, State};
-use crate::text;
-use crate::text::Reader as _;
-use crate::util::{indent_width, tab_width};
+use crate::{
+    ast::{Arena, Blockquote, NodeRef},
+    parser::{BlockParser, Context, State},
+    text,
+    text::Reader as _,
+    util::{indent_width, tab_width},
+};
 
 /// [`BlockParser`] for blockquotes.
 #[derive(Debug, Default)]

@@ -1,20 +1,21 @@
 extern crate alloc;
 
-use crate::context::{BoolValue, ContextKey, ContextKeyRegistry};
+use alloc::rc::Rc;
+use core::{cell::RefCell, ops::Range};
+
 #[allow(unused_imports)]
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
 use crate::println;
-
-use alloc::rc::Rc;
-
-use core::cell::RefCell;
-use core::ops::Range;
-
-use crate::ast::{Arena, KindData, List, ListItem, NodeRef};
-use crate::parser::{is_thematic_break, matches_setext_heading_bar, BlockParser, Context, State};
-use crate::text::Reader;
-use crate::util::{indent_position, indent_width, is_blank};
-use crate::{as_kind_data, as_kind_data_mut, as_type_data, matches_kind, text};
+use crate::{
+    as_kind_data, as_kind_data_mut, as_type_data,
+    ast::{Arena, KindData, List, ListItem, NodeRef},
+    context::{BoolValue, ContextKey, ContextKeyRegistry},
+    matches_kind,
+    parser::{is_thematic_break, matches_setext_heading_bar, BlockParser, Context, State},
+    text,
+    text::Reader,
+    util::{indent_position, indent_width, is_blank},
+};
 
 const SKIP_LIST_PARSER: &str = "_slp";
 const EMPTY_LIST_ITEM_WITH_BLANK_LINES: &str = "_eliwbl";

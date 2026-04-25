@@ -1,7 +1,9 @@
-use crate::ast::{Arena, CodeSpan, NodeRef, Text};
-use crate::parser::{Context, InlineParser};
-use crate::text::{self, Reader, Segment};
-use crate::util::TinyVec;
+use crate::{
+    ast::{Arena, CodeSpan, NodeRef, Text},
+    parser::{Context, InlineParser},
+    text::{self, Reader, Segment},
+    util::TinyVec,
+};
 
 /// [`InlineParser`] for inline codes.
 #[derive(Debug, Default)]

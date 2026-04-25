@@ -5,15 +5,17 @@ extern crate alloc;
 
 use alloc::string::{String, ToString};
 
-use crate::error::Error;
-use crate::renderer::BuiltinNodesRenderer as _;
-use crate::renderer::{self, *};
-use crate::util::{
-    escape_html, escape_url, try_escape_html_byte, try_resolve_entity_reference,
-    try_resolve_numeric_reference, try_unescape_punct, AsciiWordSet, EscapeUrlOptions,
-    UnescapePunctResult,
+use crate::{
+    as_kind_data,
+    error::Error,
+    matches_kind,
+    renderer::{self, BuiltinNodesRenderer as _, *},
+    util::{
+        escape_html, escape_url, try_escape_html_byte, try_resolve_entity_reference,
+        try_resolve_numeric_reference, try_unescape_punct, AsciiWordSet, EscapeUrlOptions,
+        UnescapePunctResult,
+    },
 };
-use crate::{as_kind_data, matches_kind};
 
 // FormatOptions {{{
 
@@ -262,13 +264,13 @@ impl<W: TextWrite> renderer::BuiltinNodesRenderer<W> for BuiltinNodesRenderer<W>
             }
             if let Some(task) = context.pop_task() {
                 match task {
-                    Task::Checked => {
+                    Task::Completed => {
                         self.writer.write_safe_str(
                             w,
                             r#"<input checked="" disabled="" type="checkbox""#,
                         )?;
                     }
-                    Task::Unchecked => {
+                    Task::Active => {
                         self.writer
                             .write_safe_str(w, r#"<input disabled="" type="checkbox""#)?;
                     }
@@ -1393,13 +1395,13 @@ impl<W: TextWrite> RenderNode<W> for ParagraphRenderer<W> {
                     )?;
                 } else {
                     match task {
-                        Task::Checked => {
+                        Task::Completed => {
                             self.ctx.writer.write_safe_str(
                                 w,
                                 r#"<input checked="" disabled="" type="checkbox""#,
                             )?;
                         }
-                        Task::Unchecked => {
+                        Task::Active => {
                             self.ctx
                                 .writer
                                 .write_safe_str(w, r#"<input disabled="" type="checkbox""#)?;

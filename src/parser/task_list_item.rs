@@ -1,8 +1,11 @@
-use crate::ast::{Arena, NodeRef, Task};
-use crate::parser::{Context, ParagraphTransformer};
-use crate::scanner::scan_task_list_item;
-use crate::text::{self, Reader};
-use crate::{as_kind_data_mut, as_type_data_mut, matches_kind};
+use crate::{
+    as_kind_data_mut, as_type_data_mut,
+    ast::{Arena, NodeRef, Task},
+    matches_kind,
+    parser::{Context, ParagraphTransformer},
+    scanner::scan_task_list_item,
+    text::{self, Reader},
+};
 
 /// [`ParagraphTransformer`] that transforms list items into task list items.
 #[derive(Debug, Default)]
@@ -47,9 +50,9 @@ impl ParagraphTransformer for TaskListItemParagraphTransformer {
 
         as_kind_data_mut!(arena, list_item, ListItem).set_task(
             if line[pos - 2] == b'x' || line[pos - 2] == b'X' {
-                Some(Task::Checked)
+                Some(Task::Completed)
             } else {
-                Some(Task::Unchecked)
+                Some(Task::Active)
             },
         );
         lines[0] = lines[0].with_start(lines[0].start() + pos);

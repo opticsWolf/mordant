@@ -2,18 +2,15 @@
 
 extern crate alloc;
 
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::ops::Range;
 
 use memchr::memchr;
 
-use crate::util::{self, is_blank, is_space, trim_left_space, utf8_len, TinyVec};
-use alloc::borrow::Cow;
-use alloc::string::String;
-use alloc::vec::Vec;
-
 #[allow(unused_imports)]
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
 use crate::println;
+use crate::util::{self, is_blank, is_space, trim_left_space, utf8_len, TinyVec};
 
 const SPACE: &[u8] = b" ";
 
@@ -1571,7 +1568,6 @@ impl<'a> Reader<'a> for BlockReader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[allow(unused_imports)]
     #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
     use crate::println;

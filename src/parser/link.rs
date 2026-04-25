@@ -1,12 +1,16 @@
 extern crate alloc;
-use crate::ast::{Arena, Image, Link, LinkReferenceKind, NodeRef, Text, TextQualifier};
-use crate::parser::{
-    process_delimiters, Context, InlineParser, LinkLabel, ParseStackElemData, ParseStackElemRef,
-};
-use crate::text::{self, Reader, Segment, EOS};
-use crate::util::{is_blank, is_punct, is_space, to_link_reference};
-use crate::{as_kind_data, matches_kind};
 use alloc::string::String;
+
+use crate::{
+    as_kind_data,
+    ast::{Arena, Image, Link, LinkReferenceKind, NodeRef, Text, TextQualifier},
+    matches_kind,
+    parser::{
+        process_delimiters, Context, InlineParser, LinkLabel, ParseStackElemData, ParseStackElemRef,
+    },
+    text::{self, Reader, Segment, EOS},
+    util::{is_blank, is_punct, is_space, to_link_reference},
+};
 
 /// [`InlineParser`] for links.
 #[derive(Debug, Default)]

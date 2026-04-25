@@ -5,7 +5,6 @@ use rushdown::{
     renderer::html::{self, Options},
     test::{parse_case_env, MarkdownTestCase, MarkdownTestCaseOptions},
 };
-
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

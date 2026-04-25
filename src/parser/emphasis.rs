@@ -1,6 +1,8 @@
-use crate::ast::{Arena, Emphasis, NodeRef};
-use crate::parser::{parse_delimiter, Context, Delimiter, DelimiterProcessor, InlineParser};
-use crate::text::{self};
+use crate::{
+    ast::{Arena, Emphasis, NodeRef},
+    parser::{parse_delimiter, Context, Delimiter, DelimiterProcessor, InlineParser},
+    text::{self},
+};
 
 /// [`InlineParser`] for emphasis.
 #[derive(Debug)]

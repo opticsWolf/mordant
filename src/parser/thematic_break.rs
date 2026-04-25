@@ -1,8 +1,10 @@
-use crate::ast::{Arena, NodeRef, ThematicBreak};
-use crate::parser::{BlockParser, Context, State};
-use crate::text;
-use crate::text::Reader as _;
-use crate::util::{indent_width, is_space};
+use crate::{
+    ast::{Arena, NodeRef, ThematicBreak},
+    parser::{BlockParser, Context, State},
+    text,
+    text::Reader as _,
+    util::{indent_width, is_space},
+};
 
 /// [`BlockParser`] for thematic breaks.
 #[derive(Debug, Default)]

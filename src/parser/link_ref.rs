@@ -2,14 +2,16 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
-use crate::ast::{Arena, LinkReferenceDefinition, NodeRef};
-use crate::parser::{
-    parse_link_destination, parse_link_title, Context, ParagraphTransformer, ParseLinkTitleResult,
+use crate::{
+    as_kind_data, as_type_data_mut,
+    ast::{Arena, LinkReferenceDefinition, NodeRef},
+    parser::{
+        parse_link_destination, parse_link_title, Context, ParagraphTransformer,
+        ParseLinkTitleResult,
+    },
+    text::{self, Reader, EOS},
+    util::{indent_width, is_blank},
 };
-use crate::text::{self, Reader, EOS};
-use crate::util::indent_width;
-use crate::util::is_blank;
-use crate::{as_kind_data, as_type_data_mut};
 
 /// [`ParagraphTransformer`] that extracts link reference definitions from paragraphs.
 #[derive(Debug, Default)]
