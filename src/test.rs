@@ -475,54 +475,50 @@ fn apply_escape_sequence(b: &[u8]) -> Vec<u8> {
                     i += 2;
                     continue;
                 }
-                b'x' => {
+                b'x' if i + 3 < b.len()
+                    && b[i + 2].is_ascii_hexdigit()
+                    && b[i + 3].is_ascii_hexdigit() =>
+                {
                     // Go code: if len(b) >= i+3 ... (note: should be i+3 < len for two digits)
-                    if i + 3 < b.len()
-                        && b[i + 2].is_ascii_hexdigit()
-                        && b[i + 3].is_ascii_hexdigit()
-                    {
-                        let hi = hex_val(b[i + 2]).unwrap();
-                        let lo = hex_val(b[i + 3]).unwrap();
-                        result.push((hi << 4) | lo);
-                        i += 4;
-                        continue;
-                    }
+                    let hi = hex_val(b[i + 2]).unwrap();
+                    let lo = hex_val(b[i + 3]).unwrap();
+                    result.push((hi << 4) | lo);
+                    i += 4;
+                    continue;
                 }
-                b'u' | b'U' => {
-                    if i + 2 < b.len() {
-                        // collect following hex digits
-                        let mut j = i + 2;
-                        while j < b.len() && b[j].is_ascii_hexdigit() {
-                            j += 1;
-                        }
-                        let num = &b[i + 2..j];
+                b'u' | b'U' if i + 2 < b.len() => {
+                    // collect following hex digits
+                    let mut j = i + 2;
+                    while j < b.len() && b[j].is_ascii_hexdigit() {
+                        j += 1;
+                    }
+                    let num = &b[i + 2..j];
 
-                        if num.len() >= 4 && num.len() < 8 {
-                            if let Ok(s) = core::str::from_utf8(&num[..4]) {
-                                if let Ok(v) = u32::from_str_radix(s, 16) {
-                                    if let Some(ch) = char::from_u32(v) {
-                                        let mut buf = [0u8; 4];
-                                        let enc = ch.encode_utf8(&mut buf);
-                                        result.extend_from_slice(enc.as_bytes());
-                                        // Match the Go code's index bump (i += 5 from '\' position)
-                                        i += 6;
-                                        continue;
-                                    }
+                    if num.len() >= 4 && num.len() < 8 {
+                        if let Ok(s) = core::str::from_utf8(&num[..4]) {
+                            if let Ok(v) = u32::from_str_radix(s, 16) {
+                                if let Some(ch) = char::from_u32(v) {
+                                    let mut buf = [0u8; 4];
+                                    let enc = ch.encode_utf8(&mut buf);
+                                    result.extend_from_slice(enc.as_bytes());
+                                    // Match the Go code's index bump (i += 5 from '\' position)
+                                    i += 6;
+                                    continue;
                                 }
                             }
                         }
+                    }
 
-                        if num.len() >= 8 {
-                            if let Ok(s) = core::str::from_utf8(&num[..8]) {
-                                if let Ok(v) = u32::from_str_radix(s, 16) {
-                                    if let Some(ch) = char::from_u32(v) {
-                                        let mut buf = [0u8; 4];
-                                        let enc = ch.encode_utf8(&mut buf);
-                                        result.extend_from_slice(enc.as_bytes());
-                                        // Match the Go code's index bump (i += 9 from '\' position)
-                                        i += 10;
-                                        continue;
-                                    }
+                    if num.len() >= 8 {
+                        if let Ok(s) = core::str::from_utf8(&num[..8]) {
+                            if let Ok(v) = u32::from_str_radix(s, 16) {
+                                if let Some(ch) = char::from_u32(v) {
+                                    let mut buf = [0u8; 4];
+                                    let enc = ch.encode_utf8(&mut buf);
+                                    result.extend_from_slice(enc.as_bytes());
+                                    // Match the Go code's index bump (i += 9 from '\' position)
+                                    i += 10;
+                                    continue;
                                 }
                             }
                         }

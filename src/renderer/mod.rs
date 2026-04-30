@@ -364,6 +364,7 @@ pub struct RendererHelper<'r, W, B: BuiltinNodesRenderer<W>, O: FormatOptions> {
     text_override: bool,
     code_span_override: bool,
     emphasis_override: bool,
+    strong_override: bool,
     link_override: bool,
     image_override: bool,
     raw_html_override: bool,
@@ -405,6 +406,7 @@ impl<'r, W, B: BuiltinNodesRenderer<W>, O: FormatOptions> NodeRendererRegistry<'
             id if id == TypeId::of::<Text>() => self.text_override = true,
             id if id == TypeId::of::<CodeSpan>() => self.code_span_override = true,
             id if id == TypeId::of::<Emphasis>() => self.emphasis_override = true,
+            id if id == TypeId::of::<Strong>() => self.strong_override = true,
             id if id == TypeId::of::<Link>() => self.link_override = true,
             id if id == TypeId::of::<Image>() => self.image_override = true,
             id if id == TypeId::of::<RawHtml>() => self.raw_html_override = true,
@@ -466,6 +468,7 @@ impl<'r, W, B: BuiltinNodesRenderer<W>, O: FormatOptions> RendererHelper<'r, W, 
             text_override: false,
             code_span_override: false,
             emphasis_override: false,
+            strong_override: false,
             link_override: false,
             image_override: false,
             raw_html_override: false,
@@ -871,6 +874,20 @@ impl<'r, W, B: BuiltinNodesRenderer<W>, O: FormatOptions> RendererHelper<'r, W, 
                     context
                 );
             }
+            KindData::Strong(_) => {
+                render_buitin!(
+                    self,
+                    Strong,
+                    strong_override,
+                    render_strong,
+                    writer,
+                    source,
+                    arena,
+                    node_ref,
+                    entering,
+                    context
+                );
+            }
             KindData::Link(_) => {
                 render_buitin!(
                     self,
@@ -1139,8 +1156,19 @@ pub trait BuiltinNodesRenderer<W> {
         context: &mut Context,
     ) -> Result<WalkStatus>;
 
-    /// Renders a emphasis node.
+    /// Renders an emphasis node.
     fn render_emphasis<'a>(
+        &self,
+        writer: &mut W,
+        source: &'a str,
+        arena: &'a Arena,
+        node_ref: NodeRef,
+        entering: bool,
+        context: &mut Context,
+    ) -> Result<WalkStatus>;
+
+    /// Renders a strong node.
+    fn render_strong<'a>(
         &self,
         writer: &mut W,
         source: &'a str,

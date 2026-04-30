@@ -40,9 +40,15 @@ text
 
     test_inline_pos_aux(
         r#"
-***emphasis**
+*emphasis*
 "#,
         "Emphasis",
+    );
+    test_inline_pos_aux(
+        r#"
+**strong**
+"#,
+        "Strong",
     );
 
     test_inline_pos_aux(

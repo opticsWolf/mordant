@@ -310,15 +310,15 @@ macro_rules! as_extension_data_mut {
 ///
 /// # Examples
 /// ```
-/// use rushdown::ast::{Arena, NodeRef, KindData, Emphasis};
+/// use rushdown::ast::{Arena, NodeRef, KindData, List};
 /// use rushdown::as_kind_data;
 ///
 /// let mut arena = Arena::new();
-/// let para_ref: NodeRef = arena.new_node(Emphasis::new(1));
-/// let data = as_kind_data!(arena, para_ref, Emphasis);
-/// assert_eq!(data.level(), 1);
-/// let data = as_kind_data!(arena[para_ref], Emphasis);
-/// assert_eq!(data.level(), 1);
+/// let para_ref: NodeRef = arena.new_node(List::new(b'-'));
+/// let data = as_kind_data!(arena, para_ref, List);
+/// assert_eq!(data.marker(), b'-');
+/// let data = as_kind_data!(arena[para_ref], List);
+/// assert_eq!(data.marker(), b'-');
 /// ```
 #[macro_export]
 macro_rules! as_kind_data {

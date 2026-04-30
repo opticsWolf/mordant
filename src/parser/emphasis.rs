@@ -1,5 +1,5 @@
 use crate::{
-    ast::{Arena, Emphasis, NodeRef},
+    ast::{Arena, Emphasis, NodeRef, Strong},
     parser::{parse_delimiter, Context, Delimiter, DelimiterProcessor, InlineParser},
     text::{self},
 };
@@ -19,7 +19,10 @@ fn can_open_closer(opener: &Delimiter, closer: &Delimiter) -> bool {
 }
 
 fn on_match(arena: &mut Arena, consumes: usize) -> NodeRef {
-    arena.new_node(Emphasis::new(consumes as u8))
+    if consumes == 2 {
+        return arena.new_node(Strong::new());
+    }
+    arena.new_node(Emphasis::new())
 }
 
 impl EmphasisParser {

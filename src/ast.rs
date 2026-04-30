@@ -772,6 +772,7 @@ pub enum KindData {
     Text(Text),
     CodeSpan(CodeSpan),
     Emphasis(Emphasis),
+    Strong(Strong),
     Link(Link),
     Image(Image),
     RawHtml(RawHtml),
@@ -804,6 +805,7 @@ impl KindData {
             KindData::Text(n) => n.typ(),
             KindData::CodeSpan(n) => n.typ(),
             KindData::Emphasis(n) => n.typ(),
+            KindData::Strong(n) => n.typ(),
             KindData::Link(n) => n.typ(),
             KindData::Image(n) => n.typ(),
             KindData::RawHtml(n) => n.typ(),
@@ -836,6 +838,7 @@ impl KindData {
             KindData::Text(n) => n.kind_name(),
             KindData::CodeSpan(n) => n.kind_name(),
             KindData::Emphasis(n) => n.kind_name(),
+            KindData::Strong(n) => n.kind_name(),
             KindData::Link(n) => n.kind_name(),
             KindData::Image(n) => n.kind_name(),
             KindData::RawHtml(n) => n.kind_name(),
@@ -868,6 +871,7 @@ impl KindData {
             KindData::Text(n) => n.pretty_print(w, source, level),
             KindData::CodeSpan(n) => n.pretty_print(w, source, level),
             KindData::Emphasis(n) => n.pretty_print(w, source, level),
+            KindData::Strong(n) => n.pretty_print(w, source, level),
             KindData::Link(n) => n.pretty_print(w, source, level),
             KindData::Image(n) => n.pretty_print(w, source, level),
             KindData::RawHtml(n) => n.pretty_print(w, source, level),
@@ -2697,14 +2701,6 @@ impl CodeSpan {
             }
         }
     }
-
-    /// Returns the string representation of the code span value of this code span.
-    /// If the value contains a newline character, it will be replaced with a space character.
-    /// Deprecated: use [`str`] instead.
-    #[deprecated(since = "1.7.1", note = "Use `str` instead")]
-    pub fn value_str<'a>(&'a self, source: &'a str) -> Cow<'a, str> {
-        self.str(source)
-    }
 }
 
 impl NodeKind for CodeSpan {
@@ -2734,21 +2730,13 @@ impl From<CodeSpan> for KindData {
 //   Emphasis {{{
 
 /// Represents an emphasis node in the document.
-#[derive(Debug)]
-pub struct Emphasis {
-    level: u8,
-}
+#[derive(Debug, Default)]
+pub struct Emphasis {}
 
 impl Emphasis {
     /// Creates a new Emphasis.
-    pub fn new(level: u8) -> Self {
-        Self { level }
-    }
-
-    /// Returns the level of emphasis.
-    #[inline(always)]
-    pub fn level(&self) -> u8 {
-        self.level
+    pub fn new() -> Self {
+        Self {}
     }
 }
 
@@ -2775,6 +2763,43 @@ impl From<Emphasis> for KindData {
 }
 
 //   }}} Emphasis
+
+//   Strong {{{
+
+/// Represents a strong node in the document.
+#[derive(Debug, Default)]
+pub struct Strong {}
+
+impl Strong {
+    /// Creates a new Strong.
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl NodeKind for Strong {
+    fn typ(&self) -> NodeType {
+        NodeType::Inline
+    }
+
+    fn kind_name(&self) -> &'static str {
+        "Strong"
+    }
+}
+
+impl PrettyPrint for Strong {
+    fn pretty_print(&self, _w: &mut dyn Write, _source: &str, _level: usize) -> fmt::Result {
+        Ok(())
+    }
+}
+
+impl From<Strong> for KindData {
+    fn from(data: Strong) -> Self {
+        KindData::Strong(data)
+    }
+}
+
+//   }}} Strong
 
 //   Link {{{
 

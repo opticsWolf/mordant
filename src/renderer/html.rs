@@ -677,21 +677,32 @@ impl<W: TextWrite> renderer::BuiltinNodesRenderer<W> for BuiltinNodesRenderer<W>
         &self,
         w: &mut W,
         _source: &'a str,
-        arena: &'a Arena,
-        node_ref: NodeRef,
+        _arena: &'a Arena,
+        _node_ref: NodeRef,
         entering: bool,
         _context: &mut Context,
     ) -> Result<WalkStatus> {
-        let kd = as_kind_data!(arena, node_ref, Emphasis);
-        let tag = if kd.level() == 1 { "em" } else { "strong" };
         if entering {
-            self.writer.write_safe_str(w, "<")?;
-            self.writer.write_safe_str(w, tag)?;
-            self.writer.write_safe_str(w, ">")?;
+            self.writer.write_safe_str(w, "<em>")?;
         } else {
-            self.writer.write_safe_str(w, "</")?;
-            self.writer.write_safe_str(w, tag)?;
-            self.writer.write_safe_str(w, ">")?;
+            self.writer.write_safe_str(w, "</em>")?;
+        }
+        Ok(WalkStatus::Continue)
+    }
+
+    fn render_strong<'a>(
+        &self,
+        w: &mut W,
+        _source: &'a str,
+        _arena: &'a Arena,
+        _node_ref: NodeRef,
+        entering: bool,
+        _context: &mut Context,
+    ) -> Result<WalkStatus> {
+        if entering {
+            self.writer.write_safe_str(w, "<strong>")?;
+        } else {
+            self.writer.write_safe_str(w, "</strong>")?;
         }
         Ok(WalkStatus::Continue)
     }
