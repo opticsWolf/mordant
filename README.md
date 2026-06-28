@@ -147,19 +147,19 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 
 | Fixture | mordant | mistune | markdown-it-py | python-markdown |
 |---------|---------|---------|----------------|-----------------|
-| Small (400B) | **0.235ms** | 0.435ms | 0.473ms | 2.225ms |
-| Medium (5.4KB) | **0.993ms** | 2.464ms | 3.928ms | 6.367ms |
-| Large (26.7KB) | **3.727ms** | 8.686ms | 16.631ms | 31.066ms |
-| Data (202KB) | **22.210ms** | 41.941ms | 71.450ms | 651.026ms |
+| Small (400B) | **0.240ms** | 0.432ms | 0.477ms | 2.221ms |
+| Medium (5.4KB) | **1.044ms** | 2.476ms | 3.963ms | 6.431ms |
+| Large (26.7KB) | **3.692ms** | 8.566ms | 16.676ms | 30.917ms |
+| Data (202KB) | **22.294ms** | 38.056ms | 66.848ms | 617.221ms |
 
 ### Multi-threaded (4 threads, medium fixture)
 
 | Library | 1-thread | 4-threads | Scaling |
-|---------|----------|-----------|---------|
-| **mordant** | 1,006 docs/s | 3,693 docs/s | **3.7x** |
-| python-markdown | 157 docs/s | 209 docs/s | 1.3x |
-| mistune | 406 docs/s | 448 docs/s | 1.1x |
-| markdown-it-py | 255 docs/s | 287 docs/s | 1.1x |
+|---------|----------|-----------|---------|  
+| **mordant** | 958 docs/s | **3,584 docs/s** | **3.74x** |
+| python-markdown | 155 docs/s | 228 docs/s | 1.47x |
+| mistune | 404 docs/s | 550 docs/s | 1.36x |
+| markdown-it-py | 252 docs/s | 290 docs/s | 1.15x |
 
 ## Node Kind Reference
 
