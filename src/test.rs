@@ -212,9 +212,10 @@ impl MarkdownTestSuite {
                 }
             }
 
-            let mut markdown = parts[1].trim_matches('\n').to_string();
+            // Normalize line endings: convert CRLF to LF for cross-platform compatibility
+            let mut markdown = parts[1].replace("\r\n", "\n").trim_matches('\n').to_string();
             markdown.push('\n');
-            let mut expected = parts[2].trim_matches('\n').to_string();
+            let mut expected = parts[2].replace("\r\n", "\n").trim_matches('\n').to_string();
             expected.push('\n');
 
             let case =
