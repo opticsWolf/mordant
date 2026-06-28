@@ -4,3 +4,7 @@ profile.pb
 benches/cmark-master
 benches/cmark_benchmark*
 lcov.info
+
+extensions/
+
+mordant-py/target/

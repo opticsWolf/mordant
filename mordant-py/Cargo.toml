@@ -1,0 +1,16 @@
+[package]
+name = "mordant"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.87"
+description = "Mordant - A fast CommonMark + GFM Markdown parser for Python, powered by the rushdown Rust library"
+license = "MIT"
+
+[lib]
+name = "mordant"
+crate-type = ["cdylib"]
+
+[dependencies]
+rushdown = { path = "..", default-features = false, features = ["std", "html-entities"] }
+pyo3 = { version = "0.29", features = ["abi3-py39"] }
+yaml-peg = "1.0.9"

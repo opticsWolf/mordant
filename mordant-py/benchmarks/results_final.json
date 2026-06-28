@@ -1,0 +1,293 @@
+{
+  "repeat": 50,
+  "suites": [
+    {
+      "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+      "repeat": 50,
+      "results": [
+        {
+          "name": "small/parse",
+          "library": "mordant",
+          "fixture": "parse",
+          "iterations": 50,
+          "total_seconds": 0.0084,
+          "per_second": 5952.88,
+          "avg_ms": 0.168,
+          "min_ms": 0.155,
+          "max_ms": 0.606
+        },
+        {
+          "name": "small/render",
+          "library": "mordant",
+          "fixture": "render",
+          "iterations": 50,
+          "total_seconds": 0.0119,
+          "per_second": 4217.42,
+          "avg_ms": 0.237,
+          "min_ms": 0.232,
+          "max_ms": 0.315
+        },
+        {
+          "name": "small/total",
+          "library": "mordant",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.0117,
+          "per_second": 4261.85,
+          "avg_ms": 0.235,
+          "min_ms": 0.231,
+          "max_ms": 0.256
+        },
+        {
+          "name": "small/total",
+          "library": "python-markdown",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.1112,
+          "per_second": 449.5,
+          "avg_ms": 2.225,
+          "min_ms": 1.042,
+          "max_ms": 57.525
+        },
+        {
+          "name": "small/total",
+          "library": "mistune",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.0217,
+          "per_second": 2300.35,
+          "avg_ms": 0.435,
+          "min_ms": 0.316,
+          "max_ms": 5.68
+        },
+        {
+          "name": "small/total",
+          "library": "markdown-it-py",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.0237,
+          "per_second": 2112.56,
+          "avg_ms": 0.473,
+          "min_ms": 0.447,
+          "max_ms": 0.781
+        }
+      ]
+    },
+    {
+      "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+      "repeat": 50,
+      "results": [
+        {
+          "name": "medium/parse",
+          "library": "mordant",
+          "fixture": "parse",
+          "iterations": 50,
+          "total_seconds": 0.0319,
+          "per_second": 1568.16,
+          "avg_ms": 0.638,
+          "min_ms": 0.62,
+          "max_ms": 0.829
+        },
+        {
+          "name": "medium/render",
+          "library": "mordant",
+          "fixture": "render",
+          "iterations": 50,
+          "total_seconds": 0.0503,
+          "per_second": 993.81,
+          "avg_ms": 1.006,
+          "min_ms": 0.979,
+          "max_ms": 1.175
+        },
+        {
+          "name": "medium/total",
+          "library": "mordant",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.0497,
+          "per_second": 1006.82,
+          "avg_ms": 0.993,
+          "min_ms": 0.974,
+          "max_ms": 1.103
+        },
+        {
+          "name": "medium/total",
+          "library": "python-markdown",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.3184,
+          "per_second": 157.05,
+          "avg_ms": 6.367,
+          "min_ms": 5.971,
+          "max_ms": 16.118
+        },
+        {
+          "name": "medium/total",
+          "library": "mistune",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.1232,
+          "per_second": 405.88,
+          "avg_ms": 2.464,
+          "min_ms": 2.369,
+          "max_ms": 4.496
+        },
+        {
+          "name": "medium/total",
+          "library": "markdown-it-py",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.1964,
+          "per_second": 254.56,
+          "avg_ms": 3.928,
+          "min_ms": 3.776,
+          "max_ms": 5.135
+        }
+      ]
+    },
+    {
+      "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+      "repeat": 50,
+      "results": [
+        {
+          "name": "large/parse",
+          "library": "mordant",
+          "fixture": "parse",
+          "iterations": 50,
+          "total_seconds": 0.1161,
+          "per_second": 430.59,
+          "avg_ms": 2.322,
+          "min_ms": 2.237,
+          "max_ms": 2.631
+        },
+        {
+          "name": "large/render",
+          "library": "mordant",
+          "fixture": "render",
+          "iterations": 50,
+          "total_seconds": 0.184,
+          "per_second": 271.78,
+          "avg_ms": 3.679,
+          "min_ms": 3.591,
+          "max_ms": 3.881
+        },
+        {
+          "name": "large/total",
+          "library": "mordant",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.1864,
+          "per_second": 268.28,
+          "avg_ms": 3.727,
+          "min_ms": 3.581,
+          "max_ms": 4.023
+        },
+        {
+          "name": "large/total",
+          "library": "python-markdown",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 1.5533,
+          "per_second": 32.19,
+          "avg_ms": 31.066,
+          "min_ms": 30.319,
+          "max_ms": 33.282
+        },
+        {
+          "name": "large/total",
+          "library": "mistune",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.4343,
+          "per_second": 115.13,
+          "avg_ms": 8.686,
+          "min_ms": 8.107,
+          "max_ms": 9.404
+        },
+        {
+          "name": "large/total",
+          "library": "markdown-it-py",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 0.8315,
+          "per_second": 60.13,
+          "avg_ms": 16.631,
+          "min_ms": 15.837,
+          "max_ms": 21.028
+        }
+      ]
+    },
+    {
+      "fixture": "# Introduction\n\n## What is Markdown?\n\nMarkdown is ",
+      "repeat": 50,
+      "results": [
+        {
+          "name": "data/parse",
+          "library": "mordant",
+          "fixture": "parse",
+          "iterations": 50,
+          "total_seconds": 0.6194,
+          "per_second": 80.72,
+          "avg_ms": 12.388,
+          "min_ms": 12.077,
+          "max_ms": 12.744
+        },
+        {
+          "name": "data/render",
+          "library": "mordant",
+          "fixture": "render",
+          "iterations": 50,
+          "total_seconds": 1.1094,
+          "per_second": 45.07,
+          "avg_ms": 22.189,
+          "min_ms": 21.829,
+          "max_ms": 22.69
+        },
+        {
+          "name": "data/total",
+          "library": "mordant",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 1.1105,
+          "per_second": 45.02,
+          "avg_ms": 22.21,
+          "min_ms": 21.725,
+          "max_ms": 25.781
+        },
+        {
+          "name": "data/total",
+          "library": "python-markdown",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 32.5513,
+          "per_second": 1.54,
+          "avg_ms": 651.026,
+          "min_ms": 607.691,
+          "max_ms": 1014.962
+        },
+        {
+          "name": "data/total",
+          "library": "mistune",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 2.097,
+          "per_second": 23.84,
+          "avg_ms": 41.941,
+          "min_ms": 37.217,
+          "max_ms": 58.865
+        },
+        {
+          "name": "data/total",
+          "library": "markdown-it-py",
+          "fixture": "total",
+          "iterations": 50,
+          "total_seconds": 3.5725,
+          "per_second": 14.0,
+          "avg_ms": 71.45,
+          "min_ms": 65.318,
+          "max_ms": 84.513
+        }
+      ]
+    }
+  ]
+}

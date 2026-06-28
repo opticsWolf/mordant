@@ -1,0 +1,411 @@
+{
+  "threads": 4,
+  "iterations": 50,
+  "suites": [
+    {
+      "fixture": "small",
+      "threads": 4,
+      "iterations": 50,
+      "results": [
+        {
+          "thread_id": 3,
+          "library": "mordant",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0144,
+          "avg_ms": 0.287
+        },
+        {
+          "thread_id": 1,
+          "library": "mordant",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0144,
+          "avg_ms": 0.287
+        },
+        {
+          "thread_id": 2,
+          "library": "mordant",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0145,
+          "avg_ms": 0.29
+        },
+        {
+          "thread_id": 0,
+          "library": "mordant",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0146,
+          "avg_ms": 0.292
+        },
+        {
+          "thread_id": 3,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.1416,
+          "avg_ms": 2.832
+        },
+        {
+          "thread_id": 1,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.1534,
+          "avg_ms": 3.068
+        },
+        {
+          "thread_id": 2,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.2069,
+          "avg_ms": 4.139
+        },
+        {
+          "thread_id": 0,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.217,
+          "avg_ms": 4.34
+        },
+        {
+          "thread_id": 1,
+          "library": "mistune",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0158,
+          "avg_ms": 0.315
+        },
+        {
+          "thread_id": 3,
+          "library": "mistune",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.052,
+          "avg_ms": 1.04
+        },
+        {
+          "thread_id": 0,
+          "library": "mistune",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0161,
+          "avg_ms": 0.321
+        },
+        {
+          "thread_id": 2,
+          "library": "mistune",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0586,
+          "avg_ms": 1.172
+        },
+        {
+          "thread_id": 1,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0713,
+          "avg_ms": 1.427
+        },
+        {
+          "thread_id": 3,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0792,
+          "avg_ms": 1.584
+        },
+        {
+          "thread_id": 0,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0498,
+          "avg_ms": 0.996
+        },
+        {
+          "thread_id": 2,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Small Document\nauthor: Benchmark\n---\n\n#",
+          "iterations": 50,
+          "total_seconds": 0.0423,
+          "avg_ms": 0.845
+        }
+      ]
+    },
+    {
+      "fixture": "medium",
+      "threads": 4,
+      "iterations": 50,
+      "results": [
+        {
+          "thread_id": 3,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.0539,
+          "avg_ms": 1.078
+        },
+        {
+          "thread_id": 1,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.054,
+          "avg_ms": 1.079
+        },
+        {
+          "thread_id": 0,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.0543,
+          "avg_ms": 1.087
+        },
+        {
+          "thread_id": 2,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.0544,
+          "avg_ms": 1.088
+        },
+        {
+          "thread_id": 0,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.8388,
+          "avg_ms": 16.777
+        },
+        {
+          "thread_id": 2,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.9774,
+          "avg_ms": 19.547
+        },
+        {
+          "thread_id": 3,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 1.0356,
+          "avg_ms": 20.712
+        },
+        {
+          "thread_id": 1,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.9963,
+          "avg_ms": 19.926
+        },
+        {
+          "thread_id": 2,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.4247,
+          "avg_ms": 8.494
+        },
+        {
+          "thread_id": 0,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.4187,
+          "avg_ms": 8.373
+        },
+        {
+          "thread_id": 3,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.4629,
+          "avg_ms": 9.258
+        },
+        {
+          "thread_id": 1,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.4843,
+          "avg_ms": 9.687
+        },
+        {
+          "thread_id": 1,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.5666,
+          "avg_ms": 11.332
+        },
+        {
+          "thread_id": 2,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.7345,
+          "avg_ms": 14.69
+        },
+        {
+          "thread_id": 3,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.7927,
+          "avg_ms": 15.855
+        },
+        {
+          "thread_id": 0,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 50,
+          "total_seconds": 0.7432,
+          "avg_ms": 14.864
+        }
+      ]
+    },
+    {
+      "fixture": "large",
+      "threads": 4,
+      "iterations": 50,
+      "results": [
+        {
+          "thread_id": 3,
+          "library": "mordant",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 0.1919,
+          "avg_ms": 3.838
+        },
+        {
+          "thread_id": 0,
+          "library": "mordant",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 0.1932,
+          "avg_ms": 3.864
+        },
+        {
+          "thread_id": 1,
+          "library": "mordant",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 0.1948,
+          "avg_ms": 3.895
+        },
+        {
+          "thread_id": 2,
+          "library": "mordant",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 0.1951,
+          "avg_ms": 3.902
+        },
+        {
+          "thread_id": 0,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 4.5915,
+          "avg_ms": 91.831
+        },
+        {
+          "thread_id": 3,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 4.6849,
+          "avg_ms": 93.698
+        },
+        {
+          "thread_id": 2,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 4.9587,
+          "avg_ms": 99.174
+        },
+        {
+          "thread_id": 1,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 4.9502,
+          "avg_ms": 99.004
+        },
+        {
+          "thread_id": 1,
+          "library": "mistune",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 1.3848,
+          "avg_ms": 27.696
+        },
+        {
+          "thread_id": 3,
+          "library": "mistune",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 1.6445,
+          "avg_ms": 32.891
+        },
+        {
+          "thread_id": 2,
+          "library": "mistune",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 1.6644,
+          "avg_ms": 33.288
+        },
+        {
+          "thread_id": 0,
+          "library": "mistune",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 1.6636,
+          "avg_ms": 33.273
+        },
+        {
+          "thread_id": 0,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 3.2317,
+          "avg_ms": 64.634
+        },
+        {
+          "thread_id": 2,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 3.3885,
+          "avg_ms": 67.77
+        },
+        {
+          "thread_id": 1,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 3.3863,
+          "avg_ms": 67.726
+        },
+        {
+          "thread_id": 3,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Large Document\ndescription: A large mar",
+          "iterations": 50,
+          "total_seconds": 3.4626,
+          "avg_ms": 69.252
+        }
+      ]
+    }
+  ]
+}

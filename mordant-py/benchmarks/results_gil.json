@@ -1,0 +1,141 @@
+{
+  "threads": 4,
+  "iterations": 20,
+  "suites": [
+    {
+      "fixture": "medium",
+      "threads": 4,
+      "iterations": 20,
+      "results": [
+        {
+          "thread_id": 2,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.0235,
+          "avg_ms": 1.173
+        },
+        {
+          "thread_id": 1,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.0236,
+          "avg_ms": 1.18
+        },
+        {
+          "thread_id": 3,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.0237,
+          "avg_ms": 1.185
+        },
+        {
+          "thread_id": 0,
+          "library": "mordant",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.0237,
+          "avg_ms": 1.184
+        },
+        {
+          "thread_id": 0,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.3895,
+          "avg_ms": 19.475
+        },
+        {
+          "thread_id": 1,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.4486,
+          "avg_ms": 22.429
+        },
+        {
+          "thread_id": 3,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.4596,
+          "avg_ms": 22.981
+        },
+        {
+          "thread_id": 2,
+          "library": "python-markdown",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.4874,
+          "avg_ms": 24.37
+        },
+        {
+          "thread_id": 0,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.1281,
+          "avg_ms": 6.406
+        },
+        {
+          "thread_id": 1,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.1134,
+          "avg_ms": 5.671
+        },
+        {
+          "thread_id": 2,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.1161,
+          "avg_ms": 5.804
+        },
+        {
+          "thread_id": 3,
+          "library": "mistune",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.2022,
+          "avg_ms": 10.109
+        },
+        {
+          "thread_id": 2,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.2084,
+          "avg_ms": 10.419
+        },
+        {
+          "thread_id": 1,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.2089,
+          "avg_ms": 10.447
+        },
+        {
+          "thread_id": 3,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.3181,
+          "avg_ms": 15.907
+        },
+        {
+          "thread_id": 0,
+          "library": "markdown-it-py",
+          "fixture": "---\ntitle: Medium Document\ndescription: A medium-s",
+          "iterations": 20,
+          "total_seconds": 0.2291,
+          "avg_ms": 11.454
+        }
+      ]
+    }
+  ]
+}

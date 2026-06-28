@@ -3269,11 +3269,11 @@ impl From<Strikethrough> for KindData {
 // ExtensionData {{{
 
 /// A composite trait for nodes will be added from outside of this library.
-pub trait ExtensionData: Debug + PrettyPrint + NodeKind + Any {
+pub trait ExtensionData: Debug + PrettyPrint + NodeKind + Any + Send {
     fn as_any(&self) -> &dyn Any;
 }
 
-impl<T: PrettyPrint + NodeKind + Debug + Any> ExtensionData for T {
+impl<T: PrettyPrint + NodeKind + Debug + Any + Send> ExtensionData for T {
     fn as_any(&self) -> &dyn Any {
         self
     }
