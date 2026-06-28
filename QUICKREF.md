@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.4.0  
+> **Version:** 0.5.0  
 > **Import:** `import mordant`
 
 ---
@@ -17,7 +17,7 @@ cd mordant-py && cargo build --release
 
 ## Core API
 
-### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None) -> str`
+### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None) -> str`
 
 One-call parse + render. GIL is released during the CPU-heavy parse + render phase.
 
@@ -40,7 +40,7 @@ html = mordant.markdown_to_html(
 # '<p>Hello<br />\nWorld</p>\n'
 ```
 
-### `parse(source, gfm=False, parse_opts=None, emoji_opts=None) -> Document`
+### `parse(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None) -> Document`
 
 Parse only. Returns a `Document` with full AST access. GIL is released during parsing.
 
@@ -75,7 +75,7 @@ print(doc.metadata)    # {}
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `node.kind` | `str` | Node kind: `"Heading"`, `"Paragraph"`, `"Link"`, etc. |
+| `node.kind` | `str` | Node kind: `"Heading"`, `"Paragraph"`, `"Link"`, `"Diagram"`, etc. |
 | `node.type` | `str` | `"block"` or `"inline"` |
 | `node.text` | `str` | Resolved text content (recursive from all descendants) |
 | `node.parent` | `Node \| None` | Parent node |
@@ -88,6 +88,8 @@ print(doc.metadata)    # {}
 | `node.emoji` | `str \| None` | Unicode emoji character for emoji nodes |
 | `node.shortcode` | `str \| None` | Shortcode name for emoji nodes (e.g. `"joy"`) |
 | `node.name` | `str \| None` | Full name for emoji nodes (e.g. `"grinning face with smiling eyes"`) |
+| `node.diagram_type` | `str \| None` | Diagram type for diagram nodes (e.g. `"mermaid"`) |
+| `node.diagram_value` | `str` | Diagram source content for diagram nodes |
 | `node.__repr__()` | `str` | `"<Node kind=N ref=R>"` |
 
 ### Kind-Specific Properties
@@ -105,6 +107,8 @@ print(doc.metadata)    # {}
 | ListItem | `is_task` | `bool \| None` | Task list item |
 | ListItem | `task_status` | `str \| None` | `"active"` or `"completed"` |
 | TableCell | `alignment` | `str \| None` | `"left"`, `"center"`, `"right"`, `"none"` |
+| Diagram | `diagram_type` | `str \| None` | Always `"mermaid"` |
+| Diagram | `diagram_value` | `str` | Diagram source content |
 
 ---
 
@@ -186,6 +190,87 @@ opts = mordant.PyEmojiHtmlRendererOptions(template="{name} emoji")
 html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
 # 'grinning face with smiling eyes emoji'
 ```
+
+---
+
+## Diagram Extension
+
+### ` ```mermaid ` code blocks
+
+```python
+import mordant
+
+# Basic Mermaid diagram
+html = mordant.markdown_to_html("""```mermaid
+graph LR
+    A --- B
+```""")
+# '<pre class="mermaid">\ngraph LR\n    A --- B\n</pre>\n<script type="module">...'
+
+# Sequence diagram
+html = mordant.markdown_to_html("""```mermaid
+sequenceDiagram
+    Alice->>Bob: Hello Bob
+    Bob-->>Alice: Hi Alice
+```""")
+
+# Multiple diagrams (single script tag)
+html = mordant.markdown_to_html("""```mermaid
+graph LR
+    A --- B
+```
+
+```mermaid
+sequenceDiagram
+    Alice->>Bob: Hello
+```""")
+# Two <pre class="mermaid"> blocks, one <script> tag
+```
+
+### PyDiagramParserOptions
+
+```python
+opts = mordant.PyDiagramParserOptions(
+    mermaid_enabled=True,   # Enable/disable Mermaid diagram transformation
+)
+
+# Disable diagrams (keeps as regular code block)
+opts = mordant.PyDiagramParserOptions(mermaid_enabled=False)
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_parse_opts=opts)
+# '<pre><code>graph LR\n    A --- B\n</code></pre>\n'
+```
+
+### PyDiagramHtmlRendererOptions
+
+```python
+opts = mordant.PyDiagramHtmlRendererOptions(
+    mermaid_url=None,       # Custom Mermaid.js CDN URL
+)
+
+# Custom URL
+opts = mordant.PyDiagramHtmlRendererOptions(
+    mermaid_url="https://cdn.example.com/mermaid.mjs"
+)
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
+# Script tag uses custom URL
+```
+
+### Diagram AST Access
+
+```python
+doc = mordant.parse("""```mermaid
+graph LR
+    A --- B
+```""")
+
+# Find diagram nodes
+diagram_nodes = [n for n in doc.walk("depth") if n.kind == "Diagram"]
+for node in diagram_nodes:
+    print(node.diagram_type)   # "mermaid"
+    print(node.diagram_value)  # "graph LR\n    A --- B\n"
+```
+
+---
 
 ## Options
 
@@ -347,12 +432,17 @@ def find_all(doc, kind):
 
 headings = find_all(doc, "Heading")
 links = find_all(doc, "Link")
+diagrams = find_all(doc, "Diagram")
 
 # Access emoji node properties
 emoji_nodes = find_all(doc, "Extension")
 for node in emoji_nodes:
     if node.emoji:
         print(f"Emoji: {node.emoji} ({node.shortcode}) - {node.name}")
+
+# Access diagram node properties
+for node in diagrams:
+    print(f"Diagram: {node.diagram_type}\n{node.diagram_value}")
 ```
 
 ---
@@ -419,7 +509,7 @@ def parse_and_render(md):
 docs = [open(f).read() for f in file_list]
 with ThreadPoolExecutor(max_workers=4) as pool:
     results = list(pool.map(parse_and_render, docs))
-# ~3.7x linear scaling vs single-threaded
+# ~4.0x linear scaling vs single-threaded
 ```
 
 ---
@@ -451,6 +541,7 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 | TableRow | block | `<tr>` |
 | TableCell | block | `<td>` |
 | Strikethrough | inline | `~~text~~` |
+| Diagram | block | ` ```mermaid ... ``` ` |
 | Extension | any | Custom nodes |
 
 ---
@@ -490,19 +581,19 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 
 | Fixture | mordant | mistune | markdown-it-py | python-markdown |
 |---------|---------|---------|----------------|-----------------|
-| Small (400B) | **0.235ms** | 0.435ms | 0.473ms | 2.225ms |
-| Medium (5.4KB) | **0.993ms** | 2.464ms | 3.928ms | 6.367ms |
-| Large (26.7KB) | **3.727ms** | 8.686ms | 16.631ms | 31.066ms |
-| Data (202KB) | **22.210ms** | 41.941ms | 71.450ms | 651.026ms |
+| Small (400B) | **0.039ms** | 0.430ms | 0.475ms | 2.301ms |
+| Medium (5.4KB) | **0.155ms** | 2.448ms | 3.940ms | 6.455ms |
+| Large (26.7KB) | **0.410ms** | 8.611ms | 16.743ms | 31.304ms |
+| Data (202KB) | **2.763ms** | 38.152ms | 65.736ms | 621.295ms |
 
 ### Multi-threaded (4 threads, medium fixture)
 
 | Library | 1-thread | 4-threads | Scaling |
 |---------|----------|-----------|---------|
-| **mordant** | 1,006 docs/s | 3,693 docs/s | **3.7x** |
-| python-markdown | 157 docs/s | 209 docs/s | 1.3x |
-| mistune | 406 docs/s | 448 docs/s | 1.1x |
-| markdown-it-py | 255 docs/s | 287 docs/s | 1.1x |
+| **mordant** | ~1,000 docs/s | ~4,000 docs/s | **4.0x** |
+| python-markdown | ~59 docs/s | ~257 docs/s | 4.35x |
+| mistune | ~133 docs/s | ~542 docs/s | 4.07x |
+| markdown-it-py | ~83 docs/s | ~337 docs/s | 4.06x |
 
 ---
 
@@ -591,6 +682,23 @@ def extract_code_blocks(doc):
                 "code": node.code,
             })
     return blocks
+```
+
+### Extract diagrams
+
+```python
+def extract_diagrams(doc):
+    diagrams = []
+    for node in doc.walk("depth"):
+        if node.kind == "Diagram":
+            diagrams.append({
+                "type": node.diagram_type,
+                "value": node.diagram_value,
+            })
+    return diagrams
+
+diagrams = extract_diagrams(mordant.parse("```mermaid\ngraph LR\nA --- B\n```"))
+# [{'type': 'mermaid', 'value': 'graph LR\n    A --- B\n'}]
 ```
 
 ### Walk with indentation tracking

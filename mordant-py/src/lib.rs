@@ -10,8 +10,10 @@ extern crate rushdown as rushdown_lib;
 
 use pyo3::prelude::*;
 use rushdown_lib::parser::ParserExtension;
+use rushdown_lib::renderer::html::RendererExtension;
 
 mod document;
+mod diagram;
 mod emoji;
 mod errors;
 mod meta;
@@ -20,6 +22,7 @@ mod options;
 mod walker;
 
 use document::Document;
+use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
 use node::Node;
 use options::{ArenaOptions, GfmOptions, ParseOptions, RenderOptions};
@@ -36,6 +39,7 @@ struct ParseConfig {
     escaped_space: bool,
     meta_table: bool,
     emoji_options: EmojiParserOptions,
+    diagram_options: DiagramParserOptions,
 }
 
 impl Default for ParseConfig {
@@ -46,6 +50,7 @@ impl Default for ParseConfig {
             escaped_space: false,
             meta_table: false,
             emoji_options: EmojiParserOptions::default(),
+            diagram_options: DiagramParserOptions::default(),
         }
     }
 }
@@ -57,6 +62,7 @@ struct RenderConfig {
     allows_unsafe: bool,
     escaped_space: bool,
     emoji_options: EmojiHtmlRendererOptions,
+    diagram_options: DiagramHtmlRendererOptions,
 }
 
 impl Default for RenderConfig {
@@ -67,6 +73,7 @@ impl Default for RenderConfig {
             allows_unsafe: false,
             escaped_space: false,
             emoji_options: EmojiHtmlRendererOptions::default(),
+            diagram_options: DiagramHtmlRendererOptions::default(),
         }
     }
 }
@@ -83,13 +90,14 @@ fn build_parser(
     let meta_ext = meta::meta_parser_extension(meta_opts);
 
     let emoji_ext = emoji_parser_extension(parse_cfg.emoji_options.clone());
+    let diagram_ext = diagram_parser_extension(parse_cfg.diagram_options.clone());
 
     let mut parser_opts = rushdown_lib::parser::Options::default();
     parser_opts.attributes = parse_cfg.attributes;
     parser_opts.auto_heading_ids = parse_cfg.auto_heading_ids;
     parser_opts.escaped_space = parse_cfg.escaped_space;
 
-    let parser_ext = meta_ext.and(emoji_ext);
+    let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext);
 
     if gfm {
         rushdown_lib::parser::Parser::with_extensions(
@@ -109,7 +117,8 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
     opts.escaped_space = render_cfg.escaped_space;
 
     let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
-    rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext)
+    let diagram_ext = diagram_html_renderer_extension(render_cfg.diagram_options.clone());
+    rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
 }
 
 // Parse + render to HTML string — returns Result<String, String>
@@ -157,6 +166,8 @@ fn parse_only(
 /// * `render_opts` - Optional RenderOptions object
 /// * `emoji_parse_opts` - Optional emoji parser options (blacklist)
 /// * `emoji_render_opts` - Optional emoji renderer options (template)
+/// * `diagram_parse_opts` - Optional diagram parser options
+/// * `diagram_render_opts` - Optional diagram renderer options (mermaid_url)
 ///
 /// # Returns
 /// HTML string
@@ -167,8 +178,8 @@ fn parse_only(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>) -> PyResult<String> {
+#[pyo3(signature = (source, gfm = false, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None))]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
     let parse_cfg = if let Some(opts) = parse_opts {
         ParseConfig {
@@ -177,6 +188,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
             escaped_space: opts.escaped_space,
             meta_table: opts.meta_table,
             emoji_options: emoji_parse_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_parse_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
         }
     } else {
         ParseConfig {
@@ -185,6 +197,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
             escaped_space: false,
             meta_table: false,
             emoji_options: emoji_parse_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_parse_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
         }
     };
 
@@ -195,6 +208,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
             allows_unsafe: opts.allows_unsafe,
             escaped_space: opts.escaped_space,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
         }
     } else {
         RenderConfig {
@@ -203,6 +217,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
             allows_unsafe: false,
             escaped_space: false,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
         }
     };
 
@@ -220,6 +235,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
 /// * `gfm` - Whether to enable GFM extensions (default: false)
 /// * `parse_opts` - Optional ParseOptions object
 /// * `emoji_opts` - Optional emoji parser options (blacklist)
+/// * `diagram_opts` - Optional diagram parser options
 ///
 /// # Returns
 /// Document object containing the parsed AST
@@ -231,8 +247,8 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
 /// print(doc.source)
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None))]
-fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>) -> PyResult<Document> {
+#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None))]
+fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>) -> PyResult<Document> {
     // Extract plain-Rust config (no Python references — safe for detach)
     let parse_cfg = if let Some(opts) = parse_opts {
         ParseConfig {
@@ -241,6 +257,7 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
             escaped_space: opts.escaped_space,
             meta_table: opts.meta_table,
             emoji_options: emoji_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
         }
     } else {
         ParseConfig {
@@ -249,6 +266,7 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
             escaped_space: false,
             meta_table: false,
             emoji_options: emoji_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
         }
     };
 
@@ -279,6 +297,8 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ArenaOptions>()?;
     m.add_class::<PyEmojiParserOptions>()?;
     m.add_class::<PyEmojiHtmlRendererOptions>()?;
+    m.add_class::<PyDiagramParserOptions>()?;
+    m.add_class::<PyDiagramHtmlRendererOptions>()?;
     m.add_class::<Document>()?;
     m.add_class::<Node>()?;
     m.add_class::<Walker>()?;

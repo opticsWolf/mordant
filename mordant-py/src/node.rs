@@ -9,6 +9,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::emoji::EmojiData;
+use crate::diagram::{Diagram, DiagramType};
 
 /// A Python-accessible wrapper around a rushdown AST node.
 ///
@@ -274,6 +275,42 @@ impl Node {
                 }
             }
             _ => Ok(None),
+        }
+    }
+
+    /// Returns the diagram type ("mermaid" or "plantuml"), or None if not a diagram node.
+    #[getter]
+    fn diagram_type(&self) -> PyResult<Option<String>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(diagram_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<Diagram>() {
+                    Ok(Some(match diagram_data.diagram_type() {
+                        DiagramType::Mermaid => "mermaid".to_string(),
+                    }))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Returns the diagram source content, or empty string if not a diagram node.
+    #[getter]
+    fn diagram_value(&self) -> PyResult<String> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(diagram_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<Diagram>() {
+                    let mut result = String::new();
+                    for line in diagram_data.value().iter(&self.source) {
+                        result.push_str(&line);
+                    }
+                    Ok(result)
+                } else {
+                    Ok(String::new())
+                }
+            }
+            _ => Ok(String::new()),
         }
     }
 

@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.4.0  
+> **Version:** 0.5.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 823 passing (794 core + 29 emoji)
+> **Tests:** 840 Python (794 core + 29 emoji + 17 diagram) + 54 Rust (26 unit + 2 AST + 1 CommonMark spec + 1 extension + 1 extra + 6 GFM + 2 options + 1 override renderer + 14 doc-tests)
 
 ---
 
@@ -15,6 +15,8 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 - **AST access:** `parse("# Hello")` returns a `Document` with full tree traversal
 - **YAML frontmatter:** Metadata extraction via `yaml-peg`
 - **GFM support:** Tables, task lists, strikethrough, autolink
+- **Emoji support:** Shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.)
+- **Diagram support:** Mermaid diagram rendering from code blocks
 - **GIL release:** Parse and render run without the GIL for multi-threaded parallelism
 
 ---
@@ -34,16 +36,17 @@ mordant/                          # Rushdown Rust crate (unchanged upstream)
 │   └── error.rs                  # Error types
 
 mordant-py/                       # PyO3 Python bindings
-├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9
+├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0
 ├── src/
 │   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), GIL detach
 │   ├── document.rs               # Document wrapper (Arena + source + root_ref)
-│   ├── node.rs                   # Node wrapper, kind-specific properties
+│   ├── node.rs                   # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 │   ├── walker.rs                 # DFS/BFS AST walker
 │   ├── options.rs                # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
 │   ├── errors.rs                 # RushdownError Python exception type
 │   ├── meta.rs                   # YAML frontmatter parser extension
-│   └── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests
+│   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests
+│   └── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook
 ├── tests/
 │   ├── test_core.py              # 14 tests: basic CommonMark rendering
 │   ├── test_ast.py               # 61 tests: Document, Node, Walker, metadata
@@ -51,6 +54,7 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── test_options.py           # 17 tests: options propagation
 │   ├── test_meta.py              # 41 tests: YAML frontmatter + thematic break conflict
 │   ├── test_emoji.py             # 29 tests: emoji rendering, blacklist, templates, AST access
+│   ├── test_diagram.py           # 17 tests: Mermaid diagram rendering, options, AST access
 │   └── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
 └── benchmarks/                   # Performance benchmarks vs. python-markdown, mistune, markdown-it-py
 
@@ -97,6 +101,7 @@ Markdown String
 │  AST          │  ──►  ast::Arena + ast::NodeRef(root)
 │  Transformers │       • Link reference resolution
 │               │       • Paragraph→List/Table transforms
+│               │       • Diagram code block → Diagram node
 └──────────────┘
 ```
 
@@ -118,10 +123,17 @@ Arena + NodeRef(root)
 │  Node Render  │       • render_paragraph() → "<p>...</p>"
 │  (each kind)  │       • render_heading() → "<h1>...</h1>"
 │               │       • render_link() → "<a href=...>...</a>"
-│  24 kinds     │       • render_image() → "<img ...>"
+│  24+ kinds    │       • render_image() → "<img ...>"
 │               │       • render_code_block() → "<pre><code>...</code></pre>"
 │               │       • render_table() → "<table><thead>...</thead>..."
 │               │       • render_strikethrough() → "<del>...</del>"
+│               │       • render_diagram() → "<pre class=\"mermaid\">...</pre>"
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Post-Render  │  ──►  DiagramPostRenderHook (injects Mermaid.js ESM script)
+│  Hook         │       • Only runs if diagrams were rendered
 └──────────────┘
     │
     ▼
@@ -140,9 +152,9 @@ W: TextWrite (String by default)
 
 5. **NodeKindRegistry** — Dynamic registration of custom node kinds via `NodeKindRegistry::register<T>()`, returning a `NodeKindId` used for runtime type checking and downcasting.
 
-6. **Context key-value store** — `Context` holds type-safe KV pairs (`ContextKey<T>`) for passing data between parser phases, hooks, and renderers (e.g., tight-list detection, custom ID generation).
+6. **Context key-value store** — `Context` holds type-safe KV pairs (`ContextKey<T>`) for passing data between parser phases, hooks, and renderers (e.g., tight-list detection, custom ID generation, diagram presence tracking).
 
-### 3.4. AST Node Kinds (24 total: 22 built-in + Extension)
+### 3.4. AST Node Kinds (25 total: 23 built-in + 2 extension)
 
 | Kind | Type | Key Fields |
 |------|------|------------|
@@ -169,6 +181,7 @@ W: TextWrite (String by default)
 | TableRow | block | — |
 | TableCell | block | `alignment: TableCellAlignment` |
 | Strikethrough | inline | — |
+| Diagram | block | `diagram_type: DiagramType`, `value: Lines` |
 | Extension | any | `Box<dyn ExtensionData>` |
 
 ### 3.5. Parser Options
@@ -254,12 +267,13 @@ W: TextWrite (String by default)
 mordant-py/src/
 ├── lib.rs          # PyO3 module entry, core API, GIL detach logic
 ├── document.rs     # Document wrapper (Arena + source + root_ref)
-├── node.rs         # Node wrapper, kind-specific properties (incl. emoji props)
+├── node.rs         # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 ├── walker.rs       # DFS/BFS AST walker
 ├── options.rs      # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
 ├── errors.rs       # RushdownError Python exception
 ├── meta.rs         # YAML frontmatter parser extension
-└── emoji.rs        # Emoji shortcode inline parser + HTML renderer + unit tests
+├── emoji.rs        # Emoji shortcode inline parser + HTML renderer + unit tests
+└── diagram.rs      # Mermaid diagram AST transformer + HTML renderer + post-render hook
 ```
 
 ### 4.2. Module Registration
@@ -272,14 +286,18 @@ The `mordant` module (via `#[pymodule]`) registers:
 | `RenderOptions` | `options.rs` |
 | `GfmOptions` | `options.rs` |
 | `ArenaOptions` | `options.rs` |
+| `PyEmojiParserOptions` | `emoji.rs` |
+| `PyEmojiHtmlRendererOptions` | `emoji.rs` |
+| `PyDiagramParserOptions` | `diagram.rs` |
+| `PyDiagramHtmlRendererOptions` | `diagram.rs` |
 | `Document` | `document.rs` |
 | `Node` | `node.rs` |
 | `Walker` | `walker.rs` |
 
 | Function | Source |
 |----------|--------|
-| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts)` | `lib.rs` |
-| `parse(source, gfm, parse_opts, emoji_opts)` | `lib.rs` |
+| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts, diagram_parse_opts, diagram_render_opts)` | `lib.rs` |
+| `parse(source, gfm, parse_opts, emoji_opts, diagram_opts)` | `lib.rs` |
 
 ### 4.3. GIL Management
 
@@ -297,14 +315,14 @@ let (arena, root_ref) = py.detach(move || {
 });
 ```
 
-This enables true parallelism across threads: mordant scales ~3.7x linearly with thread count, while pure-Python parsers show ~1.1x (GIL-bound).
+This enables true parallelism across threads: mordant scales ~4.0x linearly with thread count, while pure-Python parsers show ~1.1x (GIL-bound).
 
 ### 4.4. Internal Build Functions (lib.rs)
 
 | Function | Description |
 |----------|-------------|
-| `build_parser(gfm, parse_cfg)` | Constructs `rushdown::parser::Parser` with options + meta + GFM extensions |
-| `build_renderer(render_cfg)` | Constructs `rushdown::renderer::html::Renderer` with render options |
+| `build_parser(gfm, parse_cfg)` | Constructs `rushdown::parser::Parser` with options + meta + emoji + diagram + GFM extensions |
+| `build_renderer(render_cfg)` | Constructs `rushdown::renderer::html::Renderer` with render options + emoji + diagram extensions |
 | `parse_and_render(source, gfm, parse_cfg, render_cfg)` | Parse + render to HTML string (runs without GIL) |
 | `parse_only(source, gfm, parse_cfg)` | Parse only, returns `(Arena, NodeRef)` (runs without GIL) |
 
@@ -341,7 +359,9 @@ struct ParseConfig {
     attributes: bool,
     auto_heading_ids: bool,
     escaped_space: bool,
-    meta_table: bool,        // default: false (not true!)
+    meta_table: bool,
+    emoji_options: EmojiParserOptions,
+    diagram_options: DiagramParserOptions,
 }
 
 #[derive(Clone)]
@@ -350,6 +370,8 @@ struct RenderConfig {
     xhtml: bool,
     allows_unsafe: bool,
     escaped_space: bool,
+    emoji_options: EmojiHtmlRendererOptions,
+    diagram_options: DiagramHtmlRendererOptions,
 }
 ```
 
@@ -410,7 +432,7 @@ These are `Send` and have no Python references, so they are safe to use inside `
 
 | Attribute/Method | Return Type | Description |
 |------------------|-------------|-------------|
-| `kind` | str | Node kind name (e.g. `"Heading"`, `"Paragraph"`, `"Text"`) |
+| `kind` | str | Node kind name (e.g. `"Heading"`, `"Paragraph"`, `"Text"`, `"Diagram"`) |
 | `type` | str | `"block"` or `"inline"` |
 | `parent` | Node\|None | Parent node, or None for document root |
 | `children` | list[Node] | Child nodes |
@@ -434,6 +456,8 @@ These are `Send` and have no Python references, so they are safe to use inside `
 | `emoji` | str\|None | Unicode emoji character for emoji nodes |
 | `shortcode` | str\|None | Shortcode name for emoji nodes (e.g. `"joy"`) |
 | `name` | str\|None | Full name for emoji nodes (e.g. `"grinning face with smiling eyes"`) |
+| `diagram_type` | str\|None | Diagram type for diagram nodes (e.g. `"mermaid"`) |
+| `diagram_value` | str | Diagram source content for diagram nodes |
 | `__repr__()` | str | `"<Node kind=N ref=R>"` |
 
 ### 5.7. Walker
@@ -468,7 +492,31 @@ html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
 # '<img src="https://cdn.example.com/joy.png" />'
 ```
 
-### 5.10. RushdownError
+### 5.10. PyDiagramParserOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mermaid_enabled` | bool | true | Enable/disable Mermaid diagram transformation |
+
+```python
+opts = mordant.PyDiagramParserOptions(mermaid_enabled=False)
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_parse_opts=opts)
+# Renders as regular <pre><code>...</code></pre> (not a diagram)
+```
+
+### 5.11. PyDiagramHtmlRendererOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mermaid_url` | str\|None | `https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs` | URL to Mermaid.js ESM module |
+
+```python
+opts = mordant.PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
+# Script tag uses custom URL
+```
+
+### 5.12. RushdownError
 
 | Attribute/Method | Return Type | Description |
 |------------------|-------------|-------------|
@@ -544,7 +592,7 @@ MetaAstTransformer (AstTransformer)
     └── Creates Table → TableHeader → TableRow → TableCell tree
 ```
 
-### 6.5. Meta Parser Tests (323 lines in `test_meta.py`)
+### 6.5. Meta Parser Tests (41 tests in `test_meta.py`)
 
 - Simple frontmatter, no frontmatter, thematic break not consumed
 - Five dashes not consumed, nested mapping, sequence
@@ -752,6 +800,103 @@ let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
 - Integration with frontmatter, GFM, attributes, auto heading IDs
 - Edge cases (empty string, no colon, partial colon, reverse colon, mixed)
 
+---
+
+## 7.11. Diagram Extension (rushdown-diagram)
+
+The diagram extension provides Mermaid diagram rendering from fenced code blocks via an AST transformer and HTML renderer.
+
+### 7.11.1. DiagramParserOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mermaid` | `MermaidParserOptions` | `enabled: true` | Mermaid diagram parsing configuration |
+
+### 7.11.2. DiagramHtmlRendererOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mermaid` | `MermaidHtmlRenderingOptions` | `Client(...)` | Mermaid rendering configuration |
+
+### 7.11.3. DiagramAstTransformer
+
+The diagram extension uses an AST transformer (priority 100) that runs after block/inline parsing to convert Mermaid code blocks into `Diagram` nodes:
+
+```rust
+struct DiagramAstTransformer {
+    options: DiagramParserOptions,
+}
+
+impl AstTransformer for DiagramAstTransformer {
+    fn transform(&self, arena: &mut Arena, doc_ref: NodeRef, reader: &mut BasicReader, ctx: &mut Context) {
+        // 1. Recursively walk AST to find CodeBlock nodes with language == "mermaid"
+        // 2. For each match, create a Diagram node with the code block's value
+        // 3. Replace the CodeBlock in its parent with the Diagram node
+    }
+}
+```
+
+**Transformation flow:**
+1. `collect_mermaid_blocks()` recursively walks the AST
+2. Matches `CodeBlock` nodes where `language_str(source) == "mermaid"`
+3. Creates `Diagram` node with `DiagramType::Mermaid`
+4. Copies the code block's `Lines` value to the diagram node
+5. Replaces the `CodeBlock` in its parent with the `Diagram` node
+
+### 7.11.4. Diagram Node
+
+Diagrams are stored as `Extension` AST nodes containing `Diagram`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `diagram_type` | `DiagramType` | `DiagramType::Mermaid` |
+| `value` | `Lines` | Diagram source content |
+
+### 7.11.5. DiagramHtmlRenderer
+
+The diagram HTML renderer converts `Diagram` nodes to HTML:
+
+```html
+<pre class="mermaid">
+graph LR
+    A --- B
+</pre>
+```
+
+### 7.11.6. DiagramPostRenderHook
+
+After all rendering completes, the post-render hook checks if any diagrams were rendered. If so, it injects a single Mermaid.js ESM script tag:
+
+```html
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs';
+</script>
+```
+
+The hook uses a `ContextKey<BoolValue>` to track whether diagrams were rendered, ensuring only one script tag is injected regardless of how many diagrams are in the document.
+
+### 7.11.7. Diagram Extension Registration
+
+```rust
+// In lib.rs — build_parser()
+let diagram_ext = diagram_parser_extension(parse_cfg.diagram_options.clone());
+let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext);
+
+// In lib.rs — build_renderer()
+let diagram_ext = diagram_html_renderer_extension(render_cfg.diagram_options.clone());
+rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
+```
+
+### 7.11.8. Diagram Extension Tests (17 tests in `test_diagram.py`)
+
+- Basic rendering: `<pre class="mermaid">`, script injection, content preservation
+- Options: `mermaid_enabled=False`, custom `mermaid_url`, default URL
+- AST access: `Diagram` node kind, `diagram_type`, `diagram_value`
+- Multiple diagrams: multiple `<pre>` blocks, single script tag
+- Mixed content: diagrams with headings, paragraphs, lists
+- Edge cases: empty block, special HTML chars, GFM mode, frontmatter integration
+
+---
 
 ## 8. Error Handling
 
@@ -821,7 +966,7 @@ impl Context {
 | `NodeRefValue` | Store NodeRef values (used by meta parser) |
 | `IntegerValue` | Store integer values |
 | `NumberValue` | Store number values |
-| `BoolValue` | Store boolean values |
+| `BoolValue` | Store boolean values (used by diagram to track diagram presence) |
 
 ### 9.3. ContextKey Registry
 
@@ -847,6 +992,7 @@ impl ContextKeyRegistry {
 | `rushdown` | 0.18.0 (path dep) | Core parser/renderer |
 | `pyo3` | 0.29 | Python bindings |
 | `yaml-peg` | 1.0.9 | YAML frontmatter parsing |
+| `emojis` | 0.8.0 | Emoji shortcode database (1,500+ emojis) |
 
 ### 10.2. Build Commands
 
@@ -865,23 +1011,23 @@ python benchmarks.py -f medium -n 100  # Specific fixture, custom count
 python benchmarks.py -o results.json  # Save JSON
 ```
 
-### 10.3. Benchmarks (single-threaded)
+### 10.3. Benchmarks (single-threaded, 50 iterations)
 
 | Fixture | mordant | mistune | markdown-it-py | python-markdown |
 |---------|---------|---------|----------------|-----------------|
-| Small (400B) | **0.235ms** | 0.435ms | 0.473ms | 2.225ms |
-| Medium (5.4KB) | **0.993ms** | 2.464ms | 3.928ms | 6.367ms |
-| Large (26.7KB) | **3.727ms** | 8.686ms | 16.631ms | 31.066ms |
-| Data (202KB) | **22.210ms** | 41.941ms | 71.450ms | 651.026ms |
+| Small (400B) | **0.039ms** | 0.430ms | 0.475ms | 2.301ms |
+| Medium (5.4KB) | **0.155ms** | 2.448ms | 3.940ms | 6.455ms |
+| Large (26.7KB) | **0.410ms** | 8.611ms | 16.743ms | 31.304ms |
+| Data (202KB) | **2.763ms** | 38.152ms | 65.736ms | 621.295ms |
 
 ### 10.4. Multi-threaded Scaling (4 threads, medium fixture)
 
-| Library | 1-thread | 4-threads | Scaling | Thread CV% |
-|---------|----------|-----------|---------|------------|
-| **mordant** | 1,006 docs/s | 3,693 docs/s | **3.7x** | **0.4%** |
-| python-markdown | 157 docs/s | 209 docs/s | 1.3x | 7.7% |
-| mistune | 406 docs/s | 448 docs/s | 1.1x | 6.1% |
-| markdown-it-py | 255 docs/s | 287 docs/s | 1.1x | 12.0% |
+| Library | 1-thread | 4-threads | Scaling |
+|---------|----------|-----------|---------|
+| **mordant** | ~1,000 docs/s | ~4,000 docs/s | **4.0x** |
+| python-markdown | ~59 docs/s | ~257 docs/s | 4.35x |
+| mistune | ~133 docs/s | ~542 docs/s | 4.07x |
+| markdown-it-py | ~83 docs/s | ~337 docs/s | 4.06x |
 
 ---
 
@@ -903,7 +1049,7 @@ python benchmarks.py -o results.json  # Save JSON
 |------|-------|---------|
 | **Rust Core** | | |
 | `src/lib.rs` | 594 | Public API entry points |
-| `src/ast.rs` | 3,281 | AST types: Node, NodeRef, Arena, KindData (24 variants) |
+| `src/ast.rs` | 3,281 | AST types: Node, NodeRef, Arena, KindData (25 variants) |
 | `src/parser/mod.rs` | 2,660 | Parser struct, options, extensions, GFM |
 | `src/parser/attribute.rs` | ~100 | Attribute parser |
 | `src/parser/paragraph.rs` | 87 | Paragraph parser |
@@ -926,7 +1072,7 @@ python benchmarks.py -o results.json  # Save JSON
 | `src/parser/task_list_item.rs` | 61 | Task list item paragraph transformer |
 | `src/parser/*.rs` | ~5,500 | Individual block/inline parsers (9 block + 6 inline + helpers) |
 | `src/renderer/mod.rs` | 1,453 | Renderer base, NodeKindRegistry, hooks, Context |
-| `src/renderer/html.rs` | 1,464 | HTML renderer, BuiltinNodesRenderer (24 render methods), Writer, SafeStr |
+| `src/renderer/html.rs` | 1,464 | HTML renderer, BuiltinNodesRenderer (24+ render methods), Writer, SafeStr |
 | `src/text.rs` | 1,707 | Index, Value, MultilineValue, Lines, Segment, Reader, BasicReader, BlockReader |
 | `src/context.rs` | 606 | Context key-value store, key types |
 | `src/scanner/mod.rs` | 603 | re2c-generated HTML/URL scanners |
@@ -935,14 +1081,24 @@ python benchmarks.py -o results.json  # Save JSON
 | `src/error.rs` | 200 | Error types, CallbackError |
 | `build.rs` | 217 | Build-time code generation (entities, attributes, tags) |
 | **Python Bindings** | | |
-| `mordant-py/src/lib.rs` | 286 | PyO3 module, core API (`markdown_to_html`, `parse`), GIL detach |
+| `mordant-py/src/lib.rs` | ~350 | PyO3 module, core API (`markdown_to_html`, `parse`), GIL detach |
 | `mordant-py/src/document.rs` | 183 | Document wrapper, metadata, walk |
-| `mordant-py/src/node.rs` | 351 | Node wrapper, kind-specific properties (incl. emoji props) |
+| `mordant-py/src/node.rs` | ~380 | Node wrapper, kind-specific properties (incl. emoji/diagram props) |
 | `mordant-py/src/walker.rs` | 105 | AST walker (DFS/BFS) |
 | `mordant-py/src/options.rs` | 143 | ParseOptions, RenderOptions, GfmOptions, ArenaOptions |
 | `mordant-py/src/errors.rs` | 33 | Python exception types |
 | `mordant-py/src/meta.rs` | 655 | YAML frontmatter parser + unit tests |
 | `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
+| `mordant-py/src/diagram.rs` | ~350 | Mermaid diagram AST transformer + HTML renderer + post-render hook |
+| **Tests** | | |
+| `mordant-py/tests/test_core.py` | 14 | Basic CommonMark rendering |
+| `mordant-py/tests/test_ast.py` | 61 | Document, Node, Walker, metadata |
+| `mordant-py/tests/test_gfm.py` | 9 | GFM extensions |
+| `mordant-py/tests/test_options.py` | 17 | Options propagation |
+| `mordant-py/tests/test_meta.py` | 41 | YAML frontmatter + thematic break conflict |
+| `mordant-py/tests/test_emoji.py` | 29 | Emoji rendering, blacklist, templates, AST access |
+| `mordant-py/tests/test_diagram.py` | 17 | Mermaid diagram rendering, options, AST access |
+| `mordant-py/tests/test_commonmark_spec.py` | 652 | Full CommonMark 0.31.2 spec |
 
 ---
 
@@ -999,12 +1155,12 @@ Node
 ├── type_data: TypeData (Block | Inline)
 │   └── Block: source lines, parent/child/sibling relations
 │   └── Inline: child nodes (for rich inline like Link, Emphasis)
-└── kind_data: KindData (24 variants)
+└── kind_data: KindData (25 variants)
     └── Document, Paragraph, Heading, ThematicBreak, CodeBlock
     └── Blockquote, List, ListItem, HtmlBlock
     └── Text, CodeSpan, Emphasis, Strong, Link, Image, RawHtml
     └── LinkReferenceDefinition, Table, TableHeader, TableBody, TableRow, TableCell
-    └── Strikethrough, Extension
+    └── Strikethrough, Diagram, Extension
 ```
 
 ---

@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.4.0  
+> **Version:** 0.5.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -12,12 +12,13 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 
 ## Features
 
-- **Blazing fast.** One of the fastest Markdown parsers for Python — up to 30x faster than python-markdown on large documents.
+- **Blazing fast.** One of the fastest Markdown parsers for Python — up to 55x faster than python-markdown on large documents.
 - **Full AST access.** Parse markdown to a `Document` with complete tree traversal — navigate parent, children, siblings, access all node kinds.
 - **CommonMark + GFM.** Fully compliant with CommonMark 0.31.2 and GitHub Flavored Markdown (tables, task lists, strikethrough, autolink).
 - **YAML frontmatter.** Extract metadata from YAML frontmatter with full type preservation (null, bool, int, float, str, list, dict).
-- **Multi-threaded.** Parse and render release the GIL — scale ~3.7x linearly with thread count.
+- **Multi-threaded.** Parse and render release the GIL — scale ~4.0x linearly with thread count.
 - **Emoji support.** :joy: `:heart:` `:smile:` — shortcode-style emoji rendering with blacklist and custom templates.
+- **Mermaid diagrams.** `graph LR`, `sequenceDiagram` — render Mermaid diagrams from code blocks with client-side JS loading.
 - **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
 
 ## Install
@@ -61,6 +62,20 @@ html = mordant.markdown_to_html("I'm :joy: and :heart:")
 opts = mordant.PyEmojiParserOptions(blacklist="joy")
 html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
 # ':joy:' passes through; :heart: renders as ❤️
+
+# Mermaid diagrams
+html = mordant.markdown_to_html("""```mermaid
+graph LR
+    A --- B
+```""")
+# '<pre class="mermaid">\ngraph LR\n    A --- B\n</pre>\n<script type="module">...'
+
+# Mermaid with custom URL
+opts = mordant.PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")
+html = mordant.markdown_to_html("""```mermaid
+graph TD
+    A --> B
+```""", diagram_render_opts=opts)
 
 # YAML frontmatter
 md = """---
@@ -138,7 +153,7 @@ import mordant
 # GIL is released during parse + render — safe for concurrent use
 with ThreadPoolExecutor(max_workers=4) as pool:
     results = list(pool.map(mordant.markdown_to_html, markdown_docs))
-# ~3.7x linear scaling vs single-threaded
+# ~4.0x linear scaling vs single-threaded
 ```
 
 ## Performance
@@ -147,19 +162,19 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 
 | Fixture | mordant | mistune | markdown-it-py | python-markdown |
 |---------|---------|---------|----------------|-----------------|
-| Small (400B) | **0.240ms** | 0.432ms | 0.477ms | 2.221ms |
-| Medium (5.4KB) | **1.044ms** | 2.476ms | 3.963ms | 6.431ms |
-| Large (26.7KB) | **3.692ms** | 8.566ms | 16.676ms | 30.917ms |
-| Data (202KB) | **22.294ms** | 38.056ms | 66.848ms | 617.221ms |
+| Small (400B) | **0.039ms** | 0.430ms | 0.475ms | 2.301ms |
+| Medium (5.4KB) | **0.155ms** | 2.448ms | 3.940ms | 6.455ms |
+| Large (26.7KB) | **0.410ms** | 8.611ms | 16.743ms | 31.304ms |
+| Data (202KB) | **2.763ms** | 38.152ms | 65.736ms | 621.295ms |
 
 ### Multi-threaded (4 threads, medium fixture)
 
 | Library | 1-thread | 4-threads | Scaling |
 |---------|----------|-----------|---------|  
-| **mordant** | 958 docs/s | **3,584 docs/s** | **3.74x** |
-| python-markdown | 155 docs/s | 228 docs/s | 1.47x |
-| mistune | 404 docs/s | 550 docs/s | 1.36x |
-| markdown-it-py | 252 docs/s | 290 docs/s | 1.15x |
+| **mordant** | ~1,000 docs/s | ~4,000 docs/s | **4.0x** |
+| python-markdown | ~59 docs/s | ~257 docs/s | 4.35x |
+| mistune | ~133 docs/s | ~542 docs/s | 4.07x |
+| markdown-it-py | ~83 docs/s | ~337 docs/s | 4.06x |
 
 ## Node Kind Reference
 
@@ -188,6 +203,7 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 | TableRow | block | `<tr>` |
 | TableCell | block | `<td>` |
 | Strikethrough | inline | `~~text~~` |
+| Diagram | block | ` ```mermaid ... ``` ` |
 | Extension | any | Custom nodes |
 
 ## Thematic Break vs Frontmatter
@@ -255,6 +271,26 @@ Key features of the integrated emoji extension:
 
 See [ARCHITECTURE.md §7.10](ARCHITECTURE.md#710-emoji-extension-rushdown-emoji) for full details.
 
+### rushdown-diagram
+
+Diagram support is provided by [rushdown-diagram](https://crates.io/crates/rushdown-diagram), which has been directly incorporated into mordant. The original rushdown-diagram crate is available in `extensions/rushdown-diagram-main/`.
+
+rushdown-diagram supports two diagram formats:
+
+- **MermaidJS** — client-side rendering via the Mermaid.js ESM module
+- **PlantUML** — server-side rendering (requires a `plantuml` command)
+
+Mordant currently implements Mermaid support only. Key features:
+
+- **Code block detection:** ```` ```mermaid ```` code blocks are automatically detected and converted to diagram nodes via an AST transformer
+- **Client-side rendering:** Diagrams render as `<pre class="mermaid">` with automatic Mermaid.js ESM script injection (single script tag for all diagrams)
+- **Custom Mermaid URL:** `PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")` — use a custom Mermaid.js CDN or local file
+- **Parser options:** `PyDiagramParserOptions(mermaid_enabled=False)` — disable diagram transformation to keep code blocks as regular fenced code blocks
+- **AST node access:** Diagram nodes expose `diagram_type` ("mermaid") and `diagram_value` (source content) properties via the `Diagram` node kind
+- **Multiple diagrams:** Multiple Mermaid blocks in one document all render correctly with a single script tag
+- **GFM compatible:** Works alongside other GFM features (tables, task lists, strikethrough, autolink)
+- **Frontmatter compatible:** Works alongside YAML frontmatter
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 
 ## Benchmarks
@@ -275,7 +311,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-823 tests passing across Core, AST, GFM, Options, YAML Frontmatter, and Emoji.
+840 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## License
 

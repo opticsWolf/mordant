@@ -1,0 +1,425 @@
+//! Diagram extension for mordant.
+//!
+//! Parses ```mermaid code blocks and renders them as Mermaid diagrams
+//! with client-side rendering via the Mermaid.js ESM module.
+
+use pyo3::prelude::*;
+use rushdown_lib::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
+use rushdown_lib::parser::{self, AnyAstTransformer, AstTransformer, ParserOptions};
+use rushdown_lib::renderer::{self, html, PostRender, Render, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode, NodeRenderer, RendererOptions};
+use rushdown_lib::renderer::html::{RendererExtension, RendererExtensionFn};
+
+use rushdown_lib::text::{Lines, Reader};
+use rushdown_lib::context::{BoolValue, ContextKey, ContextKeyRegistry};
+use rushdown_lib::{as_extension_data, as_extension_data_mut, as_kind_data, matches_kind, Result};
+use std::fmt;
+use std::fmt::Write as FmtWrite;
+use std::rc::Rc;
+use std::cell::RefCell;
+use core::any::TypeId;
+
+// ---------------------------------------------------------------------------
+// AST Node Data
+// ---------------------------------------------------------------------------
+
+/// Diagram node data stored in the arena.
+#[derive(Debug)]
+pub struct Diagram {
+    diagram_type: DiagramType,
+    value: Lines,
+}
+
+/// An enum representing the type of a diagram.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiagramType {
+    #[default]
+    Mermaid,
+}
+
+impl Diagram {
+    pub fn new(diagram_type: DiagramType) -> Self {
+        Self {
+            diagram_type,
+            value: Lines::default(),
+        }
+    }
+
+    pub fn diagram_type(&self) -> DiagramType {
+        self.diagram_type
+    }
+
+    pub fn value(&self) -> &Lines {
+        &self.value
+    }
+
+    pub fn set_value(&mut self, value: impl Into<Lines>) {
+        self.value = value.into();
+    }
+}
+
+impl NodeKind for Diagram {
+    fn typ(&self) -> NodeType {
+        NodeType::LeafBlock
+    }
+
+    fn kind_name(&self) -> &'static str {
+        "Diagram"
+    }
+}
+
+impl PrettyPrint for Diagram {
+    fn pretty_print(&self, w: &mut dyn FmtWrite, source: &str, level: usize) -> fmt::Result {
+        writeln!(w, "{}DiagramType: {:?}", pp_indent(level), self.diagram_type())?;
+        write!(w, "{}Value: ", pp_indent(level))?;
+        writeln!(w, "[ ")?;
+        for line in self.value.iter(source) {
+            write!(w, "{}{}", pp_indent(level + 1), line)?;
+        }
+        writeln!(w)?;
+        writeln!(w, "{}]", pp_indent(level))
+    }
+}
+
+impl From<Diagram> for KindData {
+    fn from(d: Diagram) -> Self {
+        KindData::Extension(Box::new(d))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Parser Options
+// ---------------------------------------------------------------------------
+
+/// Options for the diagram parser.
+#[derive(Debug, Clone, Default)]
+pub struct DiagramParserOptions {
+    #[allow(dead_code)]
+    pub mermaid: MermaidParserOptions,
+}
+
+/// Options for the Mermaid diagram parser.
+#[derive(Debug, Clone)]
+pub struct MermaidParserOptions {
+    #[allow(dead_code)]
+    pub enabled: bool,
+}
+
+impl ParserOptions for DiagramParserOptions {}
+
+impl Default for MermaidParserOptions {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+/// Options for the diagram parser (Python-exposed).
+#[pyclass(module = "mordant")]
+pub struct PyDiagramParserOptions {
+    #[pyo3(get, set)]
+    #[allow(dead_code)]
+    mermaid_enabled: bool,
+}
+
+#[pymethods]
+impl PyDiagramParserOptions {
+    #[new]
+    #[pyo3(signature = (mermaid_enabled = true))]
+    fn new(mermaid_enabled: bool) -> Self {
+        PyDiagramParserOptions { mermaid_enabled }
+    }
+}
+
+impl PyDiagramParserOptions {
+    pub fn to_rushdown(&self) -> DiagramParserOptions {
+        DiagramParserOptions {
+            mermaid: MermaidParserOptions {
+                enabled: self.mermaid_enabled,
+            },
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AST Transformer
+// ---------------------------------------------------------------------------
+
+#[derive(Debug)]
+struct DiagramAstTransformer {
+    options: DiagramParserOptions,
+}
+
+impl DiagramAstTransformer {
+    pub fn with_options(options: DiagramParserOptions) -> Self {
+        Self { options }
+    }
+}
+
+impl AstTransformer for DiagramAstTransformer {
+    fn transform(
+        &self,
+        arena: &mut Arena,
+        doc_ref: NodeRef,
+        reader: &mut rushdown_lib::text::BasicReader,
+        _ctx: &mut parser::Context,
+    ) {
+        let source = reader.source();
+        let mut target_codes: Vec<NodeRef> = Vec::new();
+
+        // Collect code blocks with mermaid language using recursive walk
+        DiagramAstTransformer::collect_mermaid_blocks(arena, doc_ref, source, &mut target_codes, &self.options);
+
+        // Replace mermaid code blocks with Diagram nodes
+        for code_ref in target_codes {
+            let _code_block = as_kind_data!(arena[code_ref], CodeBlock);
+            let lines = _code_block.value().clone();
+            let diagram = arena.new_node(Diagram::new(DiagramType::Mermaid));
+            as_extension_data_mut!(arena, diagram, Diagram).set_value(lines);
+            arena[code_ref]
+                .parent()
+                .unwrap()
+                .replace_child(arena, code_ref, diagram);
+        }
+    }
+}
+
+impl DiagramAstTransformer {
+    fn collect_mermaid_blocks(
+        arena: &Arena,
+        node_ref: NodeRef,
+        source: &str,
+        target_codes: &mut Vec<NodeRef>,
+        options: &DiagramParserOptions,
+    ) {
+        if matches_kind!(arena[node_ref], CodeBlock) {
+            let code_block = as_kind_data!(arena[node_ref], CodeBlock);
+            if let Some(lang) = code_block.language_str(source) {
+                if lang == "mermaid" && options.mermaid.enabled {
+                    target_codes.push(node_ref);
+                }
+            }
+        }
+
+        // Recurse into children
+        let mut child = arena[node_ref].first_child();
+        while let Some(child_ref) = child {
+            DiagramAstTransformer::collect_mermaid_blocks(arena, child_ref, source, target_codes, options);
+            child = arena[child_ref].next_sibling();
+        }
+    }
+}
+
+impl From<DiagramAstTransformer> for AnyAstTransformer {
+    fn from(t: DiagramAstTransformer) -> Self {
+        AnyAstTransformer::Extension(Box::new(t))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Renderer Options
+// ---------------------------------------------------------------------------
+
+/// Options for the diagram HTML renderer.
+#[derive(Debug, Clone, Default)]
+pub struct DiagramHtmlRendererOptions {
+    pub mermaid: MermaidHtmlRenderingOptions,
+}
+
+impl RendererOptions for DiagramHtmlRendererOptions {}
+
+/// Options for the Mermaid diagram HTML renderer.
+#[derive(Debug, Clone)]
+pub enum MermaidHtmlRenderingOptions {
+    /// Use client-side rendering for Mermaid diagrams.
+    Client(ClientSideMermaidHtmlRenderingOptions),
+}
+
+impl Default for MermaidHtmlRenderingOptions {
+    fn default() -> Self {
+        Self::Client(ClientSideMermaidHtmlRenderingOptions::default())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ClientSideMermaidHtmlRenderingOptions {
+    /// URL to the Mermaid JavaScript module.
+    pub mermaid_url: String,
+}
+
+impl Default for ClientSideMermaidHtmlRenderingOptions {
+    fn default() -> Self {
+        Self {
+            mermaid_url: "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string(),
+        }
+    }
+}
+
+/// Options for the diagram HTML renderer (Python-exposed).
+#[pyclass(module = "mordant")]
+pub struct PyDiagramHtmlRendererOptions {
+    #[pyo3(get, set)]
+    mermaid_url: Option<String>,
+}
+
+#[pymethods]
+impl PyDiagramHtmlRendererOptions {
+    #[new]
+    #[pyo3(signature = (mermaid_url = None))]
+    fn new(mermaid_url: Option<String>) -> Self {
+        PyDiagramHtmlRendererOptions { mermaid_url }
+    }
+}
+
+impl PyDiagramHtmlRendererOptions {
+    pub fn to_rushdown(&self) -> DiagramHtmlRendererOptions {
+        DiagramHtmlRendererOptions {
+            mermaid: MermaidHtmlRenderingOptions::Client(ClientSideMermaidHtmlRenderingOptions {
+                mermaid_url: self.mermaid_url.clone().unwrap_or_else(|| {
+                    "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string()
+                }),
+            }),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Renderer
+// ---------------------------------------------------------------------------
+
+const HAS_MERMAID_DIAGRAM: &str = "mordant-diagram-hmd";
+
+struct DiagramHtmlRenderer<W: TextWrite> {
+    _phantom: core::marker::PhantomData<W>,
+    _options: DiagramHtmlRendererOptions,
+    writer: html::Writer,
+    has_mermaid_diagram: ContextKey<BoolValue>,
+}
+
+impl<W: TextWrite> DiagramHtmlRenderer<W> {
+    fn new(
+        html_opts: html::Options,
+        options: DiagramHtmlRendererOptions,
+        reg: Rc<RefCell<ContextKeyRegistry>>,
+    ) -> Self {
+        let has_mermaid_diagram = reg
+            .borrow_mut()
+            .get_or_create::<BoolValue>(HAS_MERMAID_DIAGRAM);
+        Self {
+            _phantom: core::marker::PhantomData,
+            _options: options,
+            writer: html::Writer::with_options(html_opts),
+            has_mermaid_diagram,
+        }
+    }
+}
+
+impl<W: TextWrite> RenderNode<W> for DiagramHtmlRenderer<W> {
+    fn render_node<'a>(
+        &self,
+        w: &mut W,
+        source: &'a str,
+        arena: &'a Arena,
+        node_ref: NodeRef,
+        entering: bool,
+        ctx: &mut renderer::Context,
+    ) -> Result<WalkStatus> {
+        let kd = as_extension_data!(arena, node_ref, Diagram);
+        if entering {
+            ctx.insert(self.has_mermaid_diagram, true);
+            self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
+            for line in kd.value().iter(source) {
+                self.writer.raw_write(w, &line)?;
+            }
+        } else {
+            self.writer.write_safe_str(w, "</pre>\n")?;
+        }
+        Ok(WalkStatus::Continue)
+    }
+}
+
+struct DiagramPostRenderHook<W: TextWrite> {
+    _phantom: core::marker::PhantomData<W>,
+    writer: html::Writer,
+    options: DiagramHtmlRendererOptions,
+    has_mermaid_diagram: ContextKey<BoolValue>,
+}
+
+impl<W: TextWrite> DiagramPostRenderHook<W> {
+    pub fn new(
+        html_opts: html::Options,
+        options: DiagramHtmlRendererOptions,
+        reg: Rc<RefCell<ContextKeyRegistry>>,
+    ) -> Self {
+        let has_mermaid_diagram = reg
+            .borrow_mut()
+            .get_or_create::<BoolValue>(HAS_MERMAID_DIAGRAM);
+        Self {
+            _phantom: core::marker::PhantomData,
+            writer: html::Writer::with_options(html_opts),
+            options,
+            has_mermaid_diagram,
+        }
+    }
+}
+
+impl<W: TextWrite> PostRender<W> for DiagramPostRenderHook<W> {
+    fn post_render(
+        &self,
+        w: &mut W,
+        _source: &str,
+        _arena: &Arena,
+        _node_ref: NodeRef,
+        _render: &dyn Render<W>,
+        ctx: &mut renderer::Context,
+    ) -> Result<()> {
+        if *ctx.get(self.has_mermaid_diagram).unwrap_or(&false) {
+            let client_opts = match &self.options.mermaid {
+                MermaidHtmlRenderingOptions::Client(opts) => opts,
+            };
+            self.writer.write_html(
+                w,
+                &format!(
+                    r#"<script type="module">
+import mermaid from '{}';
+</script>
+"#,
+                    client_opts.mermaid_url
+                ),
+            )?;
+        }
+        Ok(())
+    }
+}
+
+impl<'cb, W> NodeRenderer<'cb, W> for DiagramHtmlRenderer<W>
+where
+    W: TextWrite + 'cb,
+{
+    fn register_node_renderer_fn(self, nrr: &mut impl NodeRendererRegistry<'cb, W>) {
+        nrr.register_node_renderer_fn(TypeId::of::<Diagram>(), BoxRenderNode::new(self));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Extension Functions
+// ---------------------------------------------------------------------------
+
+/// Returns a parser extension that parses diagrams.
+pub fn diagram_parser_extension(options: impl Into<DiagramParserOptions>) -> impl parser::ParserExtension {
+    parser::ParserExtensionFn::new(|p: &mut parser::Parser| {
+        p.add_ast_transformer(DiagramAstTransformer::with_options, options.into(), 100);
+    })
+}
+
+/// Returns a renderer extension that renders diagrams in HTML.
+pub fn diagram_html_renderer_extension<'cb, W>(
+    options: impl Into<DiagramHtmlRendererOptions>,
+) -> impl RendererExtension<'cb, W>
+where
+    W: TextWrite + 'cb,
+{
+    RendererExtensionFn::new(move |r: &mut html::Renderer<'cb, W>| {
+        let options = options.into();
+        r.add_post_render_hook(DiagramPostRenderHook::new, options.clone(), 500);
+        r.add_node_renderer(DiagramHtmlRenderer::new, options);
+    })
+}
