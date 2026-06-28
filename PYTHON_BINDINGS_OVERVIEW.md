@@ -712,7 +712,7 @@ fn markdown_to_html(source: &str, gfm: bool) -> PyResult<String> {
 2. ✅ **Benchmarks** — Single-threaded (2-5x vs Python parsers, 6-29x vs python-markdown) + multi-threaded GIL benchmark (~3.7x scaling)
 3. ⏳ **Documentation** — API docs, examples, CommonMark compliance table
 4. ⏳ **Publish** — PyPI package, wheels for Linux/macOS/Windows
-5. ✅ **Tests** — 142 tests passing (95 original + 41 new)
+5. ✅ **Tests** — 794 tests passing (95 original + 41 new)
 
 ---
 
@@ -824,7 +824,7 @@ rushdown's key advantage: **speed** + **full CommonMark + GFM** compliance + **c
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Test suite | ✅ Complete | 142 tests passing |
+| Test suite | ✅ Complete | 794 tests passing |
 | Benchmark suite | ✅ | mordant-py/benchmarks/benchmarks.py, benchmarks_gil.py, fixtures, README |
 | API documentation | ⏳ | Not yet written |
 | Cross-platform wheels | ⏳ | Not yet built |

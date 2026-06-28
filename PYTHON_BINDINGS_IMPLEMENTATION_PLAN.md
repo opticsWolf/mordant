@@ -4,7 +4,7 @@
 > **Target:** CommonMark 0.31.2 + GFM compliant Markdown parser/renderer for Python
 > **MSRV:** Rust 1.87
 > **Binding strategy:** PyO3 (native extension)
-> **Status:** ✅ All core phases complete — 142 tests passing
+> **Status:** ✅ All core phases complete — 794 tests passing
 
 ---
 
@@ -16,7 +16,7 @@
 | Phase 1: Core API | ✅ Complete | 95 original | `markdown_to_html()`, `parse()`, GFM |
 | Phase 2: AST API | ✅ Complete | — | Document, Node, Walker classes |
 | Phase 3: Extensions & Metadata | ✅ Complete | 41 new | YAML frontmatter, yaml-peg, thematic break fix |
-| Phase 4: Polish & Distribution | ⏳ Partial | 142 total | Tests ✅, Benchmarks ✅, Wheels ❌ |
+| Phase 4: Polish & Distribution | ⏳ Partial | 794 total | Tests ✅, Benchmarks ✅, Wheels ❌ |
 
 ---
 
@@ -1535,7 +1535,7 @@ python benchmarks/benchmarks_gil.py --threads 4 --iterations 50
 ### Acceptance Criteria
 - ✅ All CommonMark spec tests pass (via rushdown core)
 - ✅ All GFM tests pass
-- ✅ 142 tests passing (95 original + 41 new)
+- ✅ 794 tests passing (142 existing + 652 CommonMark spec)
 - ✅ Benchmarks show 2-5x speedup over python-native parsers (1.85-4.58x across fixtures)
 - ✅ Benchmarks show 6-29x speedup over python-markdown (9.47-29.31x across fixtures)
 - ✅ GIL release enables ~3.7x linear scaling in multi-threaded scenarios
@@ -1686,7 +1686,7 @@ urls =
 ### Acceptance Criteria (continued)
 - ✅ All CommonMark spec tests pass (via rushdown core)
 - ✅ All GFM tests pass
-- ✅ 142 tests passing (95 original + 41 new)
+- ✅ 794 tests passing (142 existing + 652 CommonMark spec)
 - ✅ Benchmarks show 2-5x speedup over python-native parsers (1.85-4.58x across fixtures)
 - ✅ Benchmarks show 6-29x speedup over python-markdown (9.47-29.31x across fixtures)
 - ✅ GIL release enables ~3.7x linear scaling in multi-threaded scenarios
@@ -1744,7 +1744,7 @@ urls =
 
 | Task | Status | Notes |
 |------|--------|-------|
-| Full CommonMark spec test suite | ⏳ | Rushdown core handles this; Python tests cover key cases |
+| Full CommonMark spec test suite | ✅ | mordant-py/tests/test_commonmark_spec.py — 652 cases |
 | Benchmark suite | ✅ | mordant-py/benchmarks/benchmarks.py, benchmarks_gil.py, fixtures, README |
 | API documentation | ⏳ | Not yet written |
 | Cross-platform wheels | ⏳ | Not yet built |
