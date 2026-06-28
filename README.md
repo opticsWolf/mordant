@@ -1,472 +1,261 @@
-# rushdown
-[![Tests](https://github.com/yuin/rushdown/actions/workflows/test.yml/badge.svg)](https://github.com/yuin/rushdown/actions/workflows/test.yml) [![Docs](https://docs.rs/rushdown/badge.svg)](https://docs.rs/rushdown) [![Crates.io](https://img.shields.io/crates/v/rushdown.svg?maxAge=1800)](https://crates.io/crates/rushdown) ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/yuin/3c122e76a86b680d04700e14b3161f04/raw/rushdown-coverage.json)
+# Mordant
 
-A markdown parser written in Rust. Fast, Easy to extend, Standards-compliant.
+> **Version:** 0.3.0  
+> **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
+> **Python:** 3.9+  
+> **Bindings:** PyO3 0.29
 
-rushdown is compliant with CommonMark 0.31.2 & [GitHub Flavored Markdown](https://github.github.com/gfm/)[^gfm-support].
+A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library.
 
-- [rushdown playground](https://yuin.github.io/rushdown/playground/) : Try rushdown online
-
-[^gfm-support]: rushdown does not support [Disallowed Raw HTML](https://github.github.com/gfm/#disallowed-raw-html-extension-). 
-
-## Motivation
-I needed a Markdown parser that met the following requirements:
-
-- Written in Rust
-- Compliant with CommonMark
-- Fast
-- Extensible from the outside of the crate
-- AST-based
-
-In short, I wanted something like [goldmark](https://github.com/yuin/goldmark) written in Rust. However, no existing library satisfied these requirements.
+- [Architecture](ARCHITECTURE.md) — Full architecture documentation
+- [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
 ## Features
-- **Standards-compliant.**  rushdown is fully compliant with the latest [CommonMark](https://commonmark.org/) specification.
-- **Extensible.**  Do you want to add a `@username` mention syntax to Markdown?
-  You can easily do so in rushdown. You can add your AST nodes,
-  parsers for block-level elements, parsers for inline-level elements,
-  transformers for paragraphs, transformers for the whole AST structure, and
-  renderers.
-- **Performance.**  rushdown is one of the fastest CommonMark parser Rust implementations compared to [pulldown-cmark](https://docs.rs/pulldown-cmark/latest/pulldown_cmark/), [comrak](https://docs.rs/comrak/latest/comrak/), and [markdown-rs](https://docs.rs/markdown/latest/markdown/).
-- **Robust.**  rushdown is tested with `cargo fuzz`.
-- **Built-in extensions.**  rushdown ships with GFM extensions.
 
-## Benchmark
-You can run this benchmark by `make bench`
+- **Blazing fast.** One of the fastest Markdown parsers for Python — up to 30x faster than python-markdown on large documents.
+- **Full AST access.** Parse markdown to a `Document` with complete tree traversal — navigate parent, children, siblings, access all node kinds.
+- **CommonMark + GFM.** Fully compliant with CommonMark 0.31.2 and GitHub Flavored Markdown (tables, task lists, strikethrough, autolink).
+- **YAML frontmatter.** Extract metadata from YAML frontmatter with full type preservation (null, bool, int, float, str, list, dict).
+- **Multi-threaded.** Parse and render release the GIL — scale ~3.7x linearly with thread count.
+- **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
 
-rushdown builds a clean, extensible AST structure, achieves full compliance with CommonMark, all while being one of the fastest CommonMark parser implementation written in Rust.
+## Install
 
-```text
-rushdown-cached         time: 3.1845 ms
-rushdown                time: 3.3427 ms
-markdown-rs             time: 89.692 ms
-comrak                  time: 4.2451 ms
-pulldown-cmark          time: 6.0037 ms
-cmark                   time: 3.6439 ms
-goldmark                time: 5.6161 ms
+```bash
+pip install mordant
 ```
 
-## Security
-By default, rushdown does not render raw HTML or potentially-dangerous URLs.
-If you need to gain more control over untrusted contents, it is recommended that you
-use an HTML sanitizer such as [ammonia](https://docs.rs/ammonia/latest/ammonia/).
+Or from source:
 
-## Installation
-Add dependency to your `Cargo.toml`:
-
-```toml
-[dependencies]
-rushdown = "x.y.z"
+```bash
+cd mordant-py
+cargo build --release
+pip install -e .
 ```
 
-CommonMark defines that parsers should handle [HTML entities](https://spec.commonmark.org/0.31.2/#entity-and-numeric-character-references) correctly. But this requires a large map that maps entity names to their corresponding Unicode code points. If you don't need this feature, you can disable it by adding the following line to your `Cargo.toml`:
+## Quick Start
 
-```toml
-rushdown = { version = "x.y.z", default-features = false, features = ["std"] }
+```python
+import mordant
+
+# Parse + render in one call
+html = mordant.markdown_to_html("# Hello\n\n**World**")
+# '<h1>Hello</h1>\n<p><strong>World</strong></p>\n'
+
+# GFM support
+html = mordant.markdown_to_html("~~deleted~~", gfm=True)
+# '<p><del>deleted</del></p>\n'
+
+# Full AST access
+doc = mordant.parse("# Hello\n\n**World**")
+print(doc.kind)        # "Document"
+print(doc.children)    # [Heading, Paragraph]
+print(doc.text)        # "HelloWorld"
+
+# YAML frontmatter
+md = """---
+title: My Doc
+author: Jane
+tags: [rust, markdown]
+---
+
+Body
+"""
+doc = mordant.parse(md)
+print(doc.metadata)
+# {'title': 'My Doc', 'author': 'Jane', 'tags': ['rust', 'markdown']}
 ```
 
-In this case, the parser will only support numeric character references and some predefined entities (like `&amp;`, `&lt;`, `&gt;`, `&quot;`, etc).
+## AST Traversal
 
-rushdown can also be used in `no_std` environments. To enable this feature, add the following line to your `Cargo.toml`:
+```python
+doc = mordant.parse("# Title\n\n**Bold** and *italic*")
 
-```toml
-rushdown = { version = "x.y.z", default-features = false, features = ["no-std"] }
+# Navigate tree
+heading = doc.children[0]
+print(heading.level)       # 1
+print(heading.text)        # "Title"
+
+# Walk all nodes
+for node in doc.walk("depth"):
+    print(f"{node.kind}: {node.text}")
+
+# Find by kind
+links = [n for n in doc.walk("depth") if n.kind == "Link"]
 ```
 
-## Usage
-### Basic Usage
+## Options
 
-Render Markdown(CommonMark, without GFM) to HTML string:
+```python
+# Parse options
+parse_opts = mordant.ParseOptions(
+    attributes=False,
+    auto_heading_ids=False,
+    escaped_space=False,
+    meta_table=False,
+)
 
-```rust
-use rushdown::markdown_to_html_string;
-let mut output = String::new();
-let input = "# Hello, World!\n\nThis is a **Markdown** document.";
-match markdown_to_html_string(&mut output, input) {
-    Ok(_) => {
-        println!("HTML output:\n{}", output);
-    }
-    Err(e) => {
-    println!("Error: {:?}", e);
-    }
- };
+# Render options
+render_opts = mordant.RenderOptions(
+    hard_wraps=False,
+    xhtml=False,
+    allows_unsafe=False,
+    escaped_space=False,
+)
+
+# GFM options
+gfm_opts = mordant.GfmOptions(
+    tables=True,
+    strikethrough=True,
+    task_lists=True,
+    linkify=True,
+)
+
+html = mordant.markdown_to_html(
+    "Hello\nWorld",
+    gfm=True,
+    parse_opts=parse_opts,
+    render_opts=render_opts,
+)
 ```
 
-Render Markdown with GFM extensions to HTML string:
+## Multi-threaded Usage
 
-```rust
-use core::fmt::Write;
-use rushdown::{
-    new_markdown_to_html,
-    parser::{self, ParserExtension, GfmOptions},
-    renderer::html::{self, RendererExtension},
-    Result,
-};
+```python
+from concurrent.futures import ThreadPoolExecutor
+import mordant
 
-let markdown_to_html = new_markdown_to_html(
-    parser::Options::default(),
-    html::Options::default(),
-    parser::gfm(GfmOptions::default()),
-    html::NO_EXTENSIONS,
-);
-let mut output = String::new();
-let input = "# Hello, World!\n\nThis is a ~~Markdown~~ document.";
-match markdown_to_html(&mut output, input) {
-    Ok(_) => {
-        println!("HTML output:\n{}", output);
-    }
-    Err(e) => {
-        println!("Error: {:?}", e);
-    }
-}
+# GIL is released during parse + render — safe for concurrent use
+with ThreadPoolExecutor(max_workers=4) as pool:
+    results = list(pool.map(mordant.markdown_to_html, markdown_docs))
+# ~3.7x linear scaling vs single-threaded
 ```
 
-You can use subset of the GFM extensions:
+## Performance
 
-```rust
-use core::fmt::Write;
-use rushdown::{
-    new_markdown_to_html,
-    parser::{self, ParserExtension},
-    renderer::html::{self, RendererExtension},
-    Result,
-};
+### Single-threaded (50 iterations)
 
-let markdown_to_html = new_markdown_to_html(
-    parser::Options::default(),
-    html::Options::default(),
-    parser::gfm_table().and(parser::gfm_task_list_item()),
-    html::NO_EXTENSIONS,
-);
-let mut output = String::new();
-let input = "# Hello, World!\n\nThis is a **Markdown** document.";
-match markdown_to_html(&mut output, input) {
-    Ok(_) => {
-        println!("HTML output:\n{}", output);
-    }
-    Err(e) => {
-        println!("Error: {:?}", e);
-    }
-}
+| Fixture | mordant | mistune | markdown-it-py | python-markdown |
+|---------|---------|---------|----------------|-----------------|
+| Small (400B) | **0.235ms** | 0.435ms | 0.473ms | 2.225ms |
+| Medium (5.4KB) | **0.993ms** | 2.464ms | 3.928ms | 6.367ms |
+| Large (26.7KB) | **3.727ms** | 8.686ms | 16.631ms | 31.066ms |
+| Data (202KB) | **22.210ms** | 41.941ms | 71.450ms | 651.026ms |
+
+### Multi-threaded (4 threads, medium fixture)
+
+| Library | 1-thread | 4-threads | Scaling |
+|---------|----------|-----------|---------|
+| **mordant** | 1,006 docs/s | 3,693 docs/s | **3.7x** |
+| python-markdown | 157 docs/s | 209 docs/s | 1.3x |
+| mistune | 406 docs/s | 448 docs/s | 1.1x |
+| markdown-it-py | 255 docs/s | 287 docs/s | 1.1x |
+
+## Node Kind Reference
+
+| Kind | Type | Example |
+|------|------|---------|
+| Document | block | Root node |
+| Paragraph | block | `Hello world` |
+| Heading | block | `# Title` |
+| ThematicBreak | block | `---` |
+| CodeBlock | block | ` ```python ... ``` ` |
+| Blockquote | block | `> quoted` |
+| List | block | `- item` |
+| ListItem | block | `- [x] done` |
+| HtmlBlock | block | `<div>...</div>` |
+| Text | inline | Plain text |
+| CodeSpan | inline | `` `code` `` |
+| Emphasis | inline | `*italic*` |
+| Strong | inline | `**bold**` |
+| Link | inline | `[text](url)` |
+| Image | inline | `![alt](url)` |
+| RawHtml | inline | `<span>` |
+| LinkReferenceDefinition | block | `[ref]: url` |
+| Table | block | `| A | B |` |
+| TableHeader | block | Header row |
+| TableBody | block | Body rows |
+| TableRow | block | `<tr>` |
+| TableCell | block | `<td>` |
+| Strikethrough | inline | `~~text~~` |
+| Extension | any | Custom nodes |
+
+## Thematic Break vs Frontmatter
+
+The meta parser uses lookahead to distinguish `---` (thematic break) from frontmatter:
+
+```python
+# Thematic break
+mordant.parse("---").metadata == {}
+
+# Frontmatter
+mordant.parse("---\ntitle: Test\n---").metadata["title"] == "Test"
+
+# Five dashes is thematic break
+mordant.parse("-----").metadata == {}
 ```
 
-You can use subset of the GFM extensions conditionally:
+## Error Handling
 
-```rust
-use core::fmt::Write;
-use rushdown::{
-    new_markdown_to_html,
-    parser::{self, empty_parser_extension, parser_extension, ParserExtension},
-    renderer::html::{self, RendererExtension},
-    Result,
-};
+```python
+import mordant
 
-let ext = empty_parser_extension()
-    .and(parser_extension(|p| {
-        if true { // conditionally apply gfm_table extension
-            parser::gfm_table().apply(p)
-        }
-     }));
-
-let markdown_to_html = new_markdown_to_html(
-    parser::Options::default(),
-    html::Options::default(),
-    ext,
-    html::NO_EXTENSIONS,
-);
-let mut output = String::new();
-let input = "# Hello, World!\n\nThis is a **Markdown** document.";
-match markdown_to_html(&mut output, input) {
-    Ok(_) => {
-        println!("HTML output:\n{}", output);
-    }
-    Err(e) => {
-        println!("Error: {:?}", e);
-    }
-}
+try:
+    doc = mordant.parse("---\ninvalid: yaml: [broken")
+    doc.metadata  # Raises ValueError on access
+except ValueError as e:
+    print(e)  # YAML parsing error message
 ```
 
+## Architecture
 
-### Parser options
+Mordant wraps the [rushdown](https://github.com/yuin/rushdown) Rust library (CommonMark 0.31.2 + GFM) via PyO3 bindings:
 
-| Option | Default value | Description |
-| --- | --- | --- |
-| `attributes` | `false` | Whether to parse attributes. |
-| `auto_heading_ids` | `false` | Whether to automatically generate heading IDs. |
-| `without_default_parsers` | `false` | Whether to disable default parsers. |
-| `arena` | `ArenaOptions::default()` | Options for the arena allocator. |
-| `escaped_space` | `false` | If true, a '\' escaped half-space(0x20) will not trigger parsers. |
-| `id_generator` | `None`(BasicNodeIdGenerator) | An ID generator for generating node IDs. |
+- **Rust core:** rushdown v0.18.0 — arena-allocated AST, priority-based parser dispatch, HTML renderer
+- **Python bindings:** PyO3 0.29 — `Document`, `Node`, `Walker` classes with shared `Rc<RefCell<Arena>>` memory model
+- **GIL release:** Parse and render release the GIL via `Python::detach()` for multi-threaded parallelism
+- **Frontmatter:** YAML parsing via `yaml-peg` with thematic break conflict resolution
 
-Currently only headings support attributes.
-Attributes are being discussed in the [CommonMark forum](https://talk.commonmark.org/t/consistent-attribute-syntax/272). This syntax may possibly change in the future.
+### rushdown-meta
 
-```markdown
-## heading ## {#id .className attrName=attrValue class="class1 class2"}
+YAML frontmatter support is provided by [rushdown-meta](https://crates.io/crates/rushdown-meta), which has been directly incorporated into mordant. The original rushdown-meta crate is available in `extensions/rushdown-meta-main/`.
 
-## heading {#id .className attrName=attrValue class="class1 class2"}
+Key features of the integrated meta parser:
 
-heading {#id .className attrName=attrValue}
-============
+- **Thematic break conflict resolution:** `---` alone is a thematic break; `---\n` + YAML-like content is frontmatter
+- **Full YAML subset:** null, bool, int, float, str, list, dict (via `yaml-peg`)
+- **AST table rendering:** Optional `meta_table` option renders metadata as an HTML table in the AST
+- **Error handling:** YAML parse errors are inserted as HTML comments in the AST; Python raises `ValueError` on `doc.metadata` access
+
+See [ARCHITECTURE.md §5](ARCHITECTURE.md#5-yaml-frontmatter-meta-rs) for full details.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
+
+## Benchmarks
+
+Run benchmarks:
+
+```bash
+cd mordant-py
+python benchmarks.py              # All fixtures, 50 iterations
+python benchmarks.py -f medium -n 100  # Specific fixture, custom count
+python benchmarks.py -o results.json  # Save JSON
 ```
 
-#### Arena options
+## Tests
 
-| Option | Default value | Description |
-| --- | --- | --- |
-| `initial_size` | `1024` | The initial capacity of the arena. |
-
-### GFM Parser options
-
-| Option | Default value | Description |
-| --- | --- | --- |
-| `linkify` | `LinkifyOptions::default()` | Options for linkify extension. |
-
-#### Linkify options
-
-| Option | Default value | Description |
-| --- | --- | --- |
-| `allowed_protocols` | `["http", "https", "ftp", "mailto"]` | A list of allowed protocols for linkification. |
-| `url_scanner` | default function | A function that scans a string for URLs. |
-| `www_scanner` | default function | A function that scans a string for www links. |
-| `email_scanner` | default function | A function that scans a string for email addresses. |
-
-### HTML Renderer options
-
-| Option | Default value | Description |
-| --- | --- | --- |
-| `hard_wrap` | `false` | Renders soft line breaks as hard line breaks (`<br />`). |
-| `xhtml` | `false` | Whether to render HTML in XHTML style. |
-| `allows_unsafe` | `false` | Whether to allow rendering raw HTML and potentially-dangerous URLs. |
-| `escaped_space` | `false` | Indicates that a '\' escaped half-space(0x20) should not be rendered. |
-| `attribute_filters` | default filters | A list of filters for rendering attributes as HTML tag attributes. |
-
-#### Customize Task list item rendering
-[GFM](https://github.github.com/gfm/#task-list-items-extension-) does not define details how task list items should be rendered. 
-
-You can customize the rendering of task list items by implementing a function:
-
-```rust
-use rushdown::{
-    ast, new_markdown_to_html_string,
-    parser::{self, GfmOptions},
-    renderer,
-    renderer::html,
-};
-
-let markdown_to_html = new_markdown_to_html_string(
-    parser::Options::default(),
-    html::Options::default(),
-    parser::gfm(GfmOptions::default()),
-    html::paragraph_renderer(html::ParagraphRendererOptions {
-        render_task_list_item: Some(Box::new(
-            |w, source, arena, node_ref, ctx, pctx| {
-                // do stuff
-                Ok(())
-            },
-        )),
-        ..Default::default()
-    }),
-);
-let input = r#"
-- [ ] Item
-- [x] Item
-"#;
-let mut output = String::new();
-match markdown_to_html(&mut output, input) {
-    Ok(_) => {
-        println!("HTML output:\n{}", output);
-    }
-    Err(e) => {
-        println!("Error: {:?}", e);
-    }
-}
+```bash
+cd mordant-py
+python -m pytest tests/ -v
 ```
 
-## AST
-rushdown builds a clean AST structure that is easy to traverse and manipulate. The AST is built on top of an arena allocator, which allows for efficient memory management and fast node access.
-
-Each node belongs to a specific type and kind.
-
-- Node
-   - has a `type_data`: node type(block or inline) specific data
-   - has a `kind_data`: node kind(e.g. Text, Paragraph) specific data
-   - has a `parent`, `first_child`, `next_sibling`... : relationships
-
-These macros can be used to access node data.
-
-- `matches_kind!` - Helper macro to match kind data.
-- `as_type_data!` - Helper macro to downcast type data.
-- `as_type_data_mut!` - Helper macro to downcast mutable type data.
-- `as_kind_data!` - Helper macro to downcast kind data.
-- `as_kind_data_mut!` - Helper macro to downcast mutable kind data.
-- `matches_extension_kind!` - Helper macro to match extension kind.
-- `as_extension_data!` - Helper macro to downcast extension data.
-- `as_extension_data_mut!` - Helper macro to downcast mutable extension data.
-
-`*kind*` and `*type*` macros are defined for rushdown builtin nodes.
-`*extension*` macros are defined for [extension](#extending-rushdown) nodes.
-
-Nodes are stored in an arena for efficient memory management and access.
-Each node is identified by a `NodeRef`, which contains the index and unique ID of the node.
-
-You can get and manipulate nodes using the `Arena` and its methods.
-
-```rust
-use rushdown::ast::*;
-use rushdown::{as_type_data_mut, as_type_data, as_kind_data};
-use rushdown::text::Segment;
-
-let mut arena = Arena::new();
-let source = "Hello, World!";
-let doc_ref = arena.new_node(Document::new());
-let paragraph_ref = arena.new_node(Paragraph::new());
-let seg = Segment::new(0, source.len());
-as_type_data_mut!(&mut arena[paragraph_ref], Block).append_source_line(seg);
-let text_ref = arena.new_node(Text::new(seg));
-paragraph_ref.append_child(&mut arena, text_ref);
-doc_ref.append_child(&mut arena, paragraph_ref);
-
-assert_eq!(arena[paragraph_ref].first_child().unwrap(), text_ref);
-assert_eq!(
-    as_kind_data!(&arena[text_ref], Text).str(source),
-    "Hello, World!"
-);
-assert_eq!(
-    as_type_data!(&arena[paragraph_ref], Block)
-        .source()
-        .first()
-        .unwrap()
-        .str(source),
-    "Hello, World!"
-);
-```
-
-Walkng the AST: You can not mutate the AST while walking it. If you want to mutate the AST, collect the node refs and mutate them after walking.
-
-`md_ast` macro can be used to build AST more easily.
-
-```rust
-use core::result::Result;
-use core::error::Error;
-use core::fmt::{self, Display, Formatter};
-use rushdown::ast::*;
-use rushdown::md_ast;
-use rushdown::matches_kind;
-
-#[derive(Debug)]
-enum UserError { SomeError(&'static str) }
-
-impl Error for UserError {}
-
-impl Display for UserError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self { UserError::SomeError(msg) => write!(f, "UserError: {}", msg) }
-    }
-}
-
-let mut arena = Arena::default();
-let doc_ref = md_ast!(&mut arena, Document::new() => {
-    Blockquote::new() => {
-        Paragraph::new(); { |node: &mut Node| {
-            node.attributes_mut().insert("class", "paragraph".into());
-        } } => {
-            Text::new("Hello, World!")
-        },
-        Paragraph::new() => {
-            Text::new("This is a test.")
-        }
-    }
-});
-
-let mut target: Option<NodeRef> = None;
-
-walk(&arena, doc_ref, &mut |arena: &Arena,
-                            node_ref: NodeRef,
-                            entering: bool| -> Result<WalkStatus, UserError > {
-    if entering {
-        if let Some(fc) = arena[node_ref].first_child() {
-            if let KindData::Text(t) = &arena[fc].kind_data() {
-                if t.str("").contains("test") {
-                    target = Some(node_ref);
-                }
-                if t.str("").contains("error") {
-                    return Err(UserError::SomeError("Some error occurred"));
-                }
-            }
-        }
-    }
-    Ok(WalkStatus::Continue)
-}).ok();
-assert_eq!(target, Some(arena[arena[doc_ref].first_child().unwrap()].last_child().unwrap()) );
-```
-
-
-## Extending rushdown <a name="extending-rushdown"></a>
-See `tests/extension.rs` and `override_renderer.rs` for examples of how to extend rushdown.
-
-You can extend rushdown by implementing AST nodes, custom block/inline parsers, transformers, and renderers.
-
-The key point of rushdown extensibility is 'dynamic parser/renderer constructor injection'.
-
-You can add parsers and renderers like the following:
-
-```text
-fn user_mention_parser_extension() -> impl ParserExtension {
-    parser_extension(|p| {
-        p.add_inline_parser(
-            UserMentionParser::new,
-            NoParserOptions, // no options for this parser
-            PRIORITY_EMPHASIS + 100,
-        );
-    })
-}
-
-fn user_mention_html_renderer_extension<'cb, W>(
-    options: UserMentionOptions,
-) -> impl RendererExtension<'cb, W>
-where
-    W: TextWrite + 'cb,
-{
-    renderer_extension(move |r| {
-        r.add_node_renderer(UserMentionHtmlRenderer::with_options, options);
-    })
-}
-```
-
-`UserMentionParser::new` is a constructor function that returns a `UserMentionParser` instance. rushdown will call this function with the necessary arguments.
-
-Parser/Transformer constructor function can take these arguments if needed, in any order:
-
-- `rushdown::parser::Options`
-- parser options defined by the user
-- `Rc<RefCell<rushdown::parser::ContextKeyRegistry>>`
-
-HtmlRenderer constructor function can take these arguments if needed, in any order:
-
-- `rushdown::renderer::html::Options`
-- renderer options defined by the user
-- `Rc<RefCell<rushdown::renderer::ContextKeyRegistry>>`
-- `Rc<RefCell<rushdown::renderer::NodeKindRegistry>>`
-
-## Extensions
-
-- [rushdown-footnote](https://crates.io/crates/rushdown-footnote): A footnote extension for rushdown.
-- [rushdown-meta](https://crates.io/crates/rushdown-meta): A meta(YAML frontmatter) extension for rushdown.
-- [rushdown-emoji](https://crates.io/crates/rushdown-emoji): An emoji extension for rushdown.
-- [rushdown-highlighting](https://crates.io/crates/rushdown-highlighting): A syntax highlight extension for rushdown.
-- [rushdown-diagram](https://crates.io/crates/rushdown-diagram): A diagram visualization(e.g. MermaidJS) extension for rushdown.
-- [rushdown-fenced-div](https://github.com/growler/rushdown-fenced-div): Fenced div extension for rushdown markdown parser.
-- [rushdown-definition-list](https://crates.io/crates/rushdown-definition-list): A definition list extension for rushdown.
-- [rushdown-link-attribute](https://crates.io/crates/rushdown-link-attribute): A link attribute extension for rushdown.
-
-## Donation
-BTC: 1NEDSyUmo4SMTDP83JJQSWi1MvQUGGNMZB
-
-Github sponsors also welcome.
+794 tests passing across Core, AST, GFM, Options, and YAML Frontmatter.
 
 ## License
+
 MIT
 
 ## Author
-Yusuke Inuzuka
+
+Mordant: Python bindings by [your name]  
+Rushdown: Rust core by [Yusuke Inuzuka](https://github.com/yuin)
