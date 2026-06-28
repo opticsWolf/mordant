@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.3.0  
+> **Version:** 0.4.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -17,6 +17,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **CommonMark + GFM.** Fully compliant with CommonMark 0.31.2 and GitHub Flavored Markdown (tables, task lists, strikethrough, autolink).
 - **YAML frontmatter.** Extract metadata from YAML frontmatter with full type preservation (null, bool, int, float, str, list, dict).
 - **Multi-threaded.** Parse and render release the GIL — scale ~3.7x linearly with thread count.
+- **Emoji support.** :joy: `:heart:` `:smile:` — shortcode-style emoji rendering with blacklist and custom templates.
 - **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
 
 ## Install
@@ -51,6 +52,15 @@ doc = mordant.parse("# Hello\n\n**World**")
 print(doc.kind)        # "Document"
 print(doc.children)    # [Heading, Paragraph]
 print(doc.text)        # "HelloWorld"
+
+# Emoji support
+html = mordant.markdown_to_html("I'm :joy: and :heart:")
+# '<p>I'm 😀 and ❤️</p>\n'
+
+# Emoji blacklist
+opts = mordant.PyEmojiParserOptions(blacklist="joy")
+html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
+# ':joy:' passes through; :heart: renders as ❤️
 
 # YAML frontmatter
 md = """---
@@ -227,7 +237,23 @@ Key features of the integrated meta parser:
 - **AST table rendering:** Optional `meta_table` option renders metadata as an HTML table in the AST
 - **Error handling:** YAML parse errors are inserted as HTML comments in the AST; Python raises `ValueError` on `doc.metadata` access
 
-See [ARCHITECTURE.md §5](ARCHITECTURE.md#5-yaml-frontmatter-meta-rs) for full details.
+See [ARCHITECTURE.md §6](ARCHITECTURE.md#6-yaml-frontmatter-meta-rs) for full details.
+
+### rushdown-emoji
+
+Emoji shortcode support (`:joy:`, `:heart:`, `:smile:`, etc.) is provided by [rushdown-emoji](https://crates.io/crates/rushdown-emoji), which has been directly incorporated into mordant. The original rushdown-emoji crate is available in `extensions/rushdown-emoji-main/`.
+
+Key features of the integrated emoji extension:
+
+- **Shortcode parsing:** `:joy:` → 😀, `:heart:` → ❤️, 1,500+ emojis from the `emojis` crate (v0.8.0)
+- **Blacklist support:** `PyEmojiParserOptions(blacklist="joy,heart")` — blacklisted shortcodes pass through as literal text
+- **Custom HTML templates:** `PyEmojiHtmlRendererOptions(template='<img src="{shortcode}.png" />')` — render emojis as `<img>` tags or any custom format
+- **Template placeholders:** `{emoji}` (Unicode char), `{shortcode}` (e.g. `"joy"`), `{name}` (e.g. `"grinning face with smiling eyes"`)
+- **Code span protection:** Emojis inside `` `code` `` are not parsed — `:joy:` stays literal in code spans
+- **AST node access:** Emoji nodes expose `emoji`, `shortcode`, and `name` properties via the `Extension` node kind
+- **Error handling:** Unknown shortcodes pass through as-is (`:invalid:` → `:invalid:`)
+
+See [ARCHITECTURE.md §7.10](ARCHITECTURE.md#710-emoji-extension-rushdown-emoji) for full details.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 
@@ -249,7 +275,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-794 tests passing across Core, AST, GFM, Options, and YAML Frontmatter.
+823 tests passing across Core, AST, GFM, Options, YAML Frontmatter, and Emoji.
 
 ## License
 

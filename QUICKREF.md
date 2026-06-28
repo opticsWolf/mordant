@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.3.0  
+> **Version:** 0.4.0  
 > **Import:** `import mordant`
 
 ---
@@ -17,7 +17,7 @@ cd mordant-py && cargo build --release
 
 ## Core API
 
-### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None) -> str`
+### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None) -> str`
 
 One-call parse + render. GIL is released during the CPU-heavy parse + render phase.
 
@@ -40,7 +40,7 @@ html = mordant.markdown_to_html(
 # '<p>Hello<br />\nWorld</p>\n'
 ```
 
-### `parse(source, gfm=False, parse_opts=None) -> Document`
+### `parse(source, gfm=False, parse_opts=None, emoji_opts=None) -> Document`
 
 Parse only. Returns a `Document` with full AST access. GIL is released during parsing.
 
@@ -85,6 +85,9 @@ print(doc.metadata)    # {}
 | `node.has_children` | `bool` | Has child nodes |
 | `node.attributes` | `dict` | HTML attributes |
 | `node.line` | `int \| None` | Byte offset for Text nodes; line number for others |
+| `node.emoji` | `str \| None` | Unicode emoji character for emoji nodes |
+| `node.shortcode` | `str \| None` | Shortcode name for emoji nodes (e.g. `"joy"`) |
+| `node.name` | `str \| None` | Full name for emoji nodes (e.g. `"grinning face with smiling eyes"`) |
 | `node.__repr__()` | `str` | `"<Node kind=N ref=R>"` |
 
 ### Kind-Specific Properties
@@ -125,6 +128,64 @@ for node in doc.walk("breadth"):
 | `__next__()` | `Node \| None` | Next node in traversal order |
 
 ---
+
+## Emoji Extension
+
+### `:joy:`, `:heart:`, `:smile:` etc.
+
+```python
+import mordant
+
+# Basic emoji rendering
+html = mordant.markdown_to_html("I'm :joy:")
+# '<p>I'm 😀</p>\n'
+
+# Multiple emojis
+html = mordant.markdown_to_html(":heart: :smile: :joy:")
+# '<p>❤️ 😊 😀</p>\n'
+
+# Invalid shortcode passes through
+html = mordant.markdown_to_html(":invalid:")
+# '<p>:invalid:</p>\n'
+
+# Inside code spans (not parsed)
+html = mordant.markdown_to_html("` :joy: `")
+# '<p><code> :joy: </code></p>\n'
+```
+
+### PyEmojiParserOptions
+
+```python
+opts = mordant.PyEmojiParserOptions(
+    blacklist=None,       # Comma-separated shortcodes to ignore
+)
+
+# Blacklist example
+opts = mordant.PyEmojiParserOptions(blacklist="joy,heart")
+html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
+# ':joy:' passes through (blacklisted)
+# :heart: renders as ❤️ (if not blacklisted)
+```
+
+### PyEmojiHtmlRendererOptions
+
+```python
+opts = mordant.PyEmojiHtmlRendererOptions(
+    template=None,        # Custom template: {emoji}, {shortcode}, {name}
+)
+
+# Custom HTML img tag
+opts = mordant.PyEmojiHtmlRendererOptions(
+    template='<img src="https://cdn.example.com/{shortcode}.png" />'
+)
+html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
+# '<img src="https://cdn.example.com/joy.png" />'
+
+# Name-based template
+opts = mordant.PyEmojiHtmlRendererOptions(template="{name} emoji")
+html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
+# 'grinning face with smiling eyes emoji'
+```
 
 ## Options
 
@@ -286,6 +347,12 @@ def find_all(doc, kind):
 
 headings = find_all(doc, "Heading")
 links = find_all(doc, "Link")
+
+# Access emoji node properties
+emoji_nodes = find_all(doc, "Extension")
+for node in emoji_nodes:
+    if node.emoji:
+        print(f"Emoji: {node.emoji} ({node.shortcode}) - {node.name}")
 ```
 
 ---

@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.3.0  
+> **Version:** 0.4.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 794 passing
+> **Tests:** 823 passing (794 core + 29 emoji)
 
 ---
 
@@ -42,13 +42,15 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── walker.rs                 # DFS/BFS AST walker
 │   ├── options.rs                # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
 │   ├── errors.rs                 # RushdownError Python exception type
-│   └── meta.rs                   # YAML frontmatter parser extension
+│   ├── meta.rs                   # YAML frontmatter parser extension
+│   └── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests
 ├── tests/
 │   ├── test_core.py              # 14 tests: basic CommonMark rendering
 │   ├── test_ast.py               # 61 tests: Document, Node, Walker, metadata
 │   ├── test_gfm.py               # 9 tests: GFM extensions
 │   ├── test_options.py           # 17 tests: options propagation
 │   ├── test_meta.py              # 41 tests: YAML frontmatter + thematic break conflict
+│   ├── test_emoji.py             # 29 tests: emoji rendering, blacklist, templates, AST access
 │   └── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
 └── benchmarks/                   # Performance benchmarks vs. python-markdown, mistune, markdown-it-py
 
@@ -252,11 +254,12 @@ W: TextWrite (String by default)
 mordant-py/src/
 ├── lib.rs          # PyO3 module entry, core API, GIL detach logic
 ├── document.rs     # Document wrapper (Arena + source + root_ref)
-├── node.rs         # Node wrapper, kind-specific properties
+├── node.rs         # Node wrapper, kind-specific properties (incl. emoji props)
 ├── walker.rs       # DFS/BFS AST walker
 ├── options.rs      # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
 ├── errors.rs       # RushdownError Python exception
-└── meta.rs         # YAML frontmatter parser extension
+├── meta.rs         # YAML frontmatter parser extension
+└── emoji.rs        # Emoji shortcode inline parser + HTML renderer + unit tests
 ```
 
 ### 4.2. Module Registration
@@ -275,8 +278,8 @@ The `mordant` module (via `#[pymodule]`) registers:
 
 | Function | Source |
 |----------|--------|
-| `markdown_to_html(source, gfm, parse_opts, render_opts)` | `lib.rs` |
-| `parse(source, gfm, parse_opts)` | `lib.rs` |
+| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts)` | `lib.rs` |
+| `parse(source, gfm, parse_opts, emoji_opts)` | `lib.rs` |
 
 ### 4.3. GIL Management
 
@@ -428,6 +431,9 @@ These are `Send` and have no Python references, so they are safe to use inside `
 | `is_task` | bool\|None | Whether list item is a task list item |
 | `task_status` | str\|None | Task status (`"active"` or `"completed"`) |
 | `line` | int\|None | Source line number (0-indexed) |
+| `emoji` | str\|None | Unicode emoji character for emoji nodes |
+| `shortcode` | str\|None | Shortcode name for emoji nodes (e.g. `"joy"`) |
+| `name` | str\|None | Full name for emoji nodes (e.g. `"grinning face with smiling eyes"`) |
 | `__repr__()` | str | `"<Node kind=N ref=R>"` |
 
 ### 5.7. Walker
@@ -437,7 +443,32 @@ These are `Send` and have no Python references, so they are safe to use inside `
 | `__iter__()` | Walker | Returns self (iterator protocol) |
 | `__next__()` | Node\|None | Next node in traversal order |
 
-### 5.8. RushdownError
+### 5.8. PyEmojiParserOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `blacklist` | str\|None | None | Comma-separated shortcodes to ignore (e.g. `"joy,heart"`) |
+
+```python
+opts = mordant.PyEmojiParserOptions(blacklist="joy,heart")
+html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
+# ':joy:' passes through as-is (blacklisted)
+# :heart: renders as ❤️
+```
+
+### 5.9. PyEmojiHtmlRendererOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `template` | str\|None | None | Custom template: `{emoji}`, `{shortcode}`, `{name}` |
+
+```python
+opts = mordant.PyEmojiHtmlRendererOptions(template='<img src="https://cdn.example.com/{shortcode}.png" />')
+html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
+# '<img src="https://cdn.example.com/joy.png" />'
+```
+
+### 5.10. RushdownError
 
 | Attribute/Method | Return Type | Description |
 |------------------|-------------|-------------|
@@ -626,6 +657,102 @@ pub fn paragraph_renderer(opts: ParagraphRendererOptions) -> impl RendererExtens
 
 ---
 
+## 7.10. Emoji Extension (rushdown-emoji)
+
+The emoji extension provides shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.) via an inline parser and HTML renderer.
+
+### 7.10.1. EmojiParserOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `blacklist` | Vec\<String\> | `[]` | Shortcodes to skip during parsing |
+
+### 7.10.2. EmojiHtmlRendererOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `template` | Option\<String\> | `None` | Custom render template: `{emoji}`, `{shortcode}`, `{name}` |
+
+### 7.10.3. EmojiInlineParser
+
+The emoji inline parser is a rushdown `InlineParser` that triggers on `:` and parses emoji shortcodes:
+
+```rust
+struct EmojiInlineParser {
+    options: EmojiParserOptions,
+}
+
+impl EmojiInlineParser {
+    fn trigger(&self) -> &[u8]      // ":"
+    fn parse(&self, ...) -> Option<NodeRef>
+    fn close_block(&self, ...) -> ()
+    fn is_blacklisted(&self, shortcode: &str) -> bool
+}
+```
+
+**Parsing flow:**
+1. Trigger on `:` character
+2. Look ahead for `shortcode:` pattern
+3. Check blacklist — if blacklisted, pass through as-is
+4. Look up shortcode in `emojis` crate database (v0.8.0)
+5. If found, create `Extension` node with `EmojiData`
+6. If not found, pass through as literal `:shortcode:`
+
+### 7.10.4. EmojiData (Extension Node)
+
+Emojis are stored as `Extension` AST nodes containing `EmojiData`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `emoji` | String | Unicode emoji character (e.g. `"😀"`) |
+| `shortcode` | String | Shortcode name (e.g. `"joy"`) |
+| `name` | String | Full name (e.g. `"grinning face with smiling eyes"`) |
+
+### 7.10.5. EmojiHtmlRenderer
+
+The emoji HTML renderer converts `EmojiData` nodes to HTML:
+
+| Template | Output |
+|----------|--------|
+| `None` (default) | Unicode character: `<p>😀</p>` |
+| `"<img src=\"{shortcode}.png\">" ` | `<img src="joy.png">` |
+| `"{name} emoji"` | `grinning face with smiling eyes emoji` |
+
+### 7.10.6. Emoji Extension Registration
+
+```rust
+// In lib.rs — build_parser()
+let emoji_ext = emoji_parser_extension(parse_cfg.emoji_options.clone());
+let parser_ext = meta_ext.and(emoji_ext);
+
+// In lib.rs — build_renderer()
+let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
+```
+
+### 7.10.7. Emoji Extension Tests
+
+**Rust unit tests** (in `mordant-py/src/emoji.rs`):
+- `test_emoji_basic` — Basic emoji rendering
+- `test_emoji_not_exists` — Invalid shortcode passes through
+- `test_emoji_blacklist` — Blacklist prevents parsing
+- `test_emoji_render_unicode` — Unicode rendering
+- `test_emoji_render_template` — Custom HTML template
+- `test_emoji_render_template_name` — Template with {name}
+- `test_emoji_inside_code_span` — Emojis in code spans not parsed
+- `test_emoji_multiple` — Multiple emojis
+- `test_emoji_emoji_data` — Emoji node data access
+
+**Python tests** (in `mordant-py/tests/test_emoji.py`):
+- Basic rendering, multiple emojis, paragraph text
+- Code span/block protection
+- Invalid shortcodes, empty shortcodes
+- Blacklist (single, multiple, empty, whitespace)
+- Custom HTML templates (default, custom, name, emoji, unknown)
+- AST node access (emoji, shortcode, name properties)
+- Integration with frontmatter, GFM, attributes, auto heading IDs
+- Edge cases (empty string, no colon, partial colon, reverse colon, mixed)
+
+
 ## 8. Error Handling
 
 ### 8.1. Rust Error Types
@@ -808,13 +935,14 @@ python benchmarks.py -o results.json  # Save JSON
 | `src/error.rs` | 200 | Error types, CallbackError |
 | `build.rs` | 217 | Build-time code generation (entities, attributes, tags) |
 | **Python Bindings** | | |
-| `mordant-py/src/lib.rs` | 251 | PyO3 module, core API (`markdown_to_html`, `parse`), GIL detach |
+| `mordant-py/src/lib.rs` | 286 | PyO3 module, core API (`markdown_to_html`, `parse`), GIL detach |
 | `mordant-py/src/document.rs` | 183 | Document wrapper, metadata, walk |
-| `mordant-py/src/node.rs` | 304 | Node wrapper, kind-specific properties |
+| `mordant-py/src/node.rs` | 351 | Node wrapper, kind-specific properties (incl. emoji props) |
 | `mordant-py/src/walker.rs` | 105 | AST walker (DFS/BFS) |
 | `mordant-py/src/options.rs` | 143 | ParseOptions, RenderOptions, GfmOptions, ArenaOptions |
 | `mordant-py/src/errors.rs` | 33 | Python exception types |
 | `mordant-py/src/meta.rs` | 655 | YAML frontmatter parser + unit tests |
+| `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
 
 ---
 

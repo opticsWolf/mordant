@@ -8,6 +8,8 @@ use rushdown_lib::ast::{Arena, KindData, NodeRef, Task, TableCellAlignment};
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use crate::emoji::EmojiData;
+
 /// A Python-accessible wrapper around a rushdown AST node.
 ///
 /// Holds a shared reference to the Arena (via Rc<RefCell>) and the source string.
@@ -227,6 +229,51 @@ impl Node {
             }))
         } else {
             Ok(None)
+        }
+    }
+
+    /// Returns the emoji character (Unicode string), or None if not an emoji node.
+    #[getter]
+    fn emoji(&self) -> PyResult<Option<String>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(emoji_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<EmojiData>() {
+                    Ok(Some(emoji_data.as_str().to_string()))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Returns the first GitHub shortcode for this emoji, or None if not an emoji node.
+    #[getter]
+    fn shortcode(&self) -> PyResult<Option<String>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(emoji_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<EmojiData>() {
+                    Ok(emoji_data.shortcode().map(|s| s.to_string()))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Returns the emoji name (e.g., "joy" for :joy:), or None if not an emoji node.
+    #[getter]
+    fn name(&self) -> PyResult<Option<String>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(emoji_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<EmojiData>() {
+                    Ok(Some(emoji_data.name().to_string()))
+                } else {
+                    Ok(None)
+                }
+            }
+            _ => Ok(None),
         }
     }
 

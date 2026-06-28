@@ -26,6 +26,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
 
 [[package]]
+name = "emojis"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a4d5d50b0b58df5173d8ff1192b4d1422ceae5d981b30d4b6f8ed1d673a2bc4"
+dependencies = [
+ "phf",
+]
+
+[[package]]
 name = "fastrand"
 version = "2.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -81,8 +90,9 @@ checksum = "88904434abc2901f197fe8cc55f0445e7ded921dba5911dad2e2b39b48e663c4"
 
 [[package]]
 name = "mordant"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
+ "emojis",
  "pyo3",
  "rushdown",
  "yaml-peg",
@@ -229,6 +239,7 @@ name = "rushdown"
 version = "0.18.0"
 dependencies = [
  "bitflags",
+ "emojis",
  "memchr",
  "phf",
  "phf_codegen",

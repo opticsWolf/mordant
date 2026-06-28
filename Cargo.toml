@@ -44,6 +44,7 @@ bitflags = "2.9.3"
 memchr = { version = "2", default-features = false, optional = true }
 phf = { version = "0.13.1", default-features = false }
 pprof = { version = "0.15", features = ["criterion", "protobuf", "flamegraph", "prost-codec"], optional = true }
+emojis = "0.8.0"
 
 [build-dependencies]
 phf = { version = "0.13.1", default-features = false }
