@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.5.0  
+> **Version:** 0.6.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -9,6 +9,15 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
+
+## What's New in 0.6.0
+
+- **Lint engine** — 25 lint rules (MD001, MD003, MD009, MD010, MD012, MD013, MD018–MD022, MD024, MD025, MD026, MD031, MD032, MD034, MD040, MD042, MD045–MD048, MD049, MD050) with diagnostics, fix engine, and configuration
+- **Batch API** — `lint_many()` and `fix_many()` for parallel file processing via `rayon`, with GIL release for the entire batch
+- **CLI** — `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`, `--default-language`, glob/directory recursion
+- **Phase 8 accuracy polish** — emoji text in heading comparison (MD024), frontmatter `title:` support (MD025), fragment anchor validation for links (MD042)
+- **Inline suppression** — `<!-- markdownlint-disable MD001 -->` comments supported
+- **973 tests** passing (up from 840)
 
 ## Features
 
@@ -311,7 +320,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-840 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+973 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Lint engine, CLI, batch API, Phase 8 accuracy) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## License
 

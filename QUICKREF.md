@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.5.0  
+> **Version:** 0.6.0  
 > **Import:** `import mordant`
 
 ---
@@ -53,6 +53,232 @@ print(doc.text)        # "HelloWorld"
 print(doc.children)    # [Heading, Paragraph]
 print(doc.metadata)    # {}
 ```
+
+---
+
+## Lint API
+
+### `lint(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, lint_config=None) -> list[Diagnostic]`
+
+Lint a markdown string and return diagnostics. GIL is released during linting.
+
+```python
+import mordant
+
+# Basic lint
+diagnostics = mordant.lint("# Hello\n\n### Jump\n")
+# [Diagnostic(rule='MD001', name='heading-increment', ...)]
+
+# With options
+diagnostics = mordant.lint(
+    "# Hello\n\n### Jump\n",
+    parse_opts=mordant.ParseOptions(meta_table=True),
+    lint_opts=mordant.LintOptions(disable=["MD040"]),
+    lint_config=mordant.LintConfig(
+        disable=["MD040"],
+        params=mordant.RuleParams(heading_style="atx"),
+    ),
+)
+
+for d in diagnostics:
+    print(f"{d.rule}:{d.line} {d.name}: {d.message}")
+# MD001:1 heading-increment: Heading incremented by more than 1
+```
+
+### `fix(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, default_language=None, lint_config=None) -> FixResult`
+
+Lint and auto-fix a markdown string. Returns the fixed output and any remaining diagnostics.
+
+```python
+result = mordant.fix("# Title  \n\n\nText")
+print(result.output)       # Fixed source
+print(result.fixed)        # Diagnostics that were auto-corrected
+print(result.unfixable)    # Diagnostics that could not be fixed
+print(result.remaining)    # Diagnostics remaining after re-linting
+
+# With options
+result = mordant.fix(
+    "trailing   \n\n\ncontent\n",
+    lint_config=mordant.LintConfig(
+        params=mordant.RuleParams(default_language="python"),
+    ),
+)
+print(result.output)
+# 'trailing\n\ncontent\n'
+```
+
+---
+
+## Batch API
+
+### `lint_many(files) -> list[tuple[str, list[Diagnostic]]]`
+
+Lint multiple files in parallel. Each file is `("filename", source)` tuple. GIL is released for the entire batch.
+
+```python
+results = mordant.lint_many([
+    ("file1.md", "# Hello\n\n### Jump\n"),
+    ("file2.md", "# Hi\n\n## Hello\n"),
+])
+# [("file1.md", [Diagnostic(...)]), ("file2.md", [])]
+
+for name, diags in results:
+    for d in diags:
+        print(f"{name}:{d.rule}:{d.line} {d.name}")
+```
+
+### `fix_many(files) -> list[tuple[str, FixResult]]`
+
+Fix multiple files in parallel.
+
+```python
+results = mordant.fix_many([
+    ("file1.md", "trailing   \n"),
+    ("file2.md", "more trailing  \n"),
+])
+# [("file1.md", FixResult(output='trailing\n', remaining=[])), ...]
+```
+
+---
+
+## CLI Usage
+
+```bash
+# Basic lint
+python -m mordant file1.md file2.md
+
+# Fix in place
+python -m mordant --fix file.md
+
+# Dry run (show what would be fixed)
+python -m mordant --fix --dry-run file.md
+
+# Output format: human (default), json, github
+python -m mordant --format json file.md
+python -m mordant --format github file.md
+
+# Config file (.markdownlint.json)
+python -m mordant --config .markdownlint.json file.md
+
+# Enable/disable specific rules
+python -m mordant --enable MD001,MD009 file.md
+python -m mordant --disable MD040 file.md
+
+# Default language for code blocks
+python -m mordant --fix --default-language python file.md
+
+# Glob patterns
+python -m mordant "*.md"
+
+# Directory recursion
+python -m mordant ./docs/
+
+# Exit codes
+# 0 = no issues found
+# 1 = issues found
+```
+
+### Output Formats
+
+**Human** (default):
+```
+file.md:1:1 MD001 [warning] heading-increment: Heading incremented by more than 1
+file.md:5:1 MD042 [warning] no-empty-links: Link has an empty destination
+```
+
+**JSON**:
+```json
+[
+  {
+    "file": "file.md",
+    "rule": "MD001",
+    "name": "heading-increment",
+    "message": "Heading incremented by more than 1",
+    "line": 1,
+    "severity": "warning",
+    "column": 1
+  }
+]
+```
+
+**GitHub Actions**:
+```
+::warning file=file.md,line=1,col=1::MD001: heading-increment - Heading incremented by more than 1
+```
+
+---
+
+## Suppression
+
+Inline suppression comments are supported:
+
+```markdown
+<!-- markdownlint-disable MD001 -->
+# H1
+
+### H3 jump
+
+<!-- markdownlint-enable MD001 -->
+```
+
+Multiple rules:
+```markdown
+<!-- markdownlint-disable MD001 MD042 -->
+<!-- markdownlint-disable-next-line MD009 -->
+```
+
+---
+
+## Lint Classes
+
+### Diagnostic
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `rule` | `str` | Rule ID (e.g., `"MD001"`) |
+| `name` | `str` | Rule name (e.g., `"heading-increment"`) |
+| `message` | `str` | Human-readable description |
+| `line` | `int \| None` | Source line number (1-indexed) |
+| `severity` | `str` | `"warning"` or `"error"` |
+| `column` | `int \| None` | Byte offset within line |
+| `span` | `tuple[int, int] \| None` | `[start_byte, end_byte)` in source |
+| `fixable` | `bool` | True if diagnostic has an auto-fix |
+
+### FixResult
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `output` | `str` | Fixed source text |
+| `fixed` | `list[Diagnostic]` | Diagnostics that were auto-corrected |
+| `unfixable` | `list[Diagnostic]` | Diagnostics that could not be auto-fixed |
+| `remaining` | `list[Diagnostic]` | Diagnostics remaining after re-linting output |
+
+### LintConfig
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `disable` | `list[str]` | `[]` | Rule IDs to disable |
+| `enable` | `list[str] \| None` | `None` | If set, ONLY these rules run |
+| `suppressions` | `list[SuppressionDirective]` | `[]` | Parsed from inline comments |
+| `params` | `RuleParams` | defaults | Per-rule parameters |
+
+### RuleParams
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `heading_style` | `str` | `"consistent"` | MD003: heading style |
+| `line_length` | `int` | `80` | MD013: max line length |
+| `line_length_ignore_threshold` | `int` | `0` | MD013: ignore lines below this |
+| `spaces_per_tab` | `int` | `4` | MD010: spaces per tab |
+| `siblings_only` | `bool` | `False` | MD024: only compare sibling headings |
+| `default_language` | `str \| None` | `None` | MD040: default language for fixes |
+
+### LintOptions
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `disable` | `list[str]` | `[]` | Rule IDs to disable |
+| `enable` | `list[str] \| None` | `None` | If set, only these rules run |
 
 ---
 
@@ -471,6 +697,38 @@ except Exception as e:
 
 ---
 
+## Rule Catalog
+
+| ID | Name | Description | Fixable |
+|----|------|-------------|---------|
+| MD001 | heading-increment | Headings increment by 1 | no |
+| MD003 | heading-style | Heading style consistency | no |
+| MD009 | no-trailing-spaces | No trailing whitespace | yes |
+| MD010 | no-hard-tabs | No hard tabs (spaces preferred) | yes |
+| MD012 | no-multiple-blanks | No multiple blank lines | yes |
+| MD013 | line-length | Lines should not exceed max length | no |
+| MD018 | atx-spacing | ATX heading space after # | no |
+| MD019 | atx-closing-spaces | ATX leaf headings no closing # | no |
+| MD020 | atx-spacing | ATX heading space before closing # | no |
+| MD021 | atx-heading-space | Multiple spaces inside ATX heading | no |
+| MD022 | heading-blank-lines | Headings should have blank lines around them | yes |
+| MD024 | no-duplicate-heading | No duplicate headings | no |
+| MD025 | single-h1 | Single H1 per document | no |
+| MD026 | no-trailing-punctuation | Headings should not end with trailing punctuation | yes |
+| MD031 | fenced-code-blocks-working | Fenced code blocks should have blank lines around them | yes |
+| MD032 | indented-code-block | Indented code blocks should have blank lines around them | no |
+| MD034 | no-bare-urls | Bare URLs should be in angle brackets | no |
+| MD040 | fenced-code-language | Fenced code blocks should specify a language | yes |
+| MD042 | no-empty-links | Links should have a non-empty destination | no |
+| MD045 | no-alt-text | Images should have alt text | no |
+| MD046 | code-block-indentation | Fenced code blocks should use 4-space indentation | no |
+| MD047 | single-trailing-newline | Files should end with a single trailing newline | yes |
+| MD048 | fenced-code-block-punctuation | Fenced code blocks should use backticks, not tildes | no |
+| MD049 | emphasis-style | Emphasis style consistency | no |
+| MD050 | strong-style | Strong style consistency | no |
+
+---
+
 ## GFM Examples
 
 ```python
@@ -511,6 +769,8 @@ with ThreadPoolExecutor(max_workers=4) as pool:
     results = list(pool.map(parse_and_render, docs))
 # ~4.0x linear scaling vs single-threaded
 ```
+
+> **Tip:** For batch linting/fixing, prefer the built-in `lint_many()` / `fix_many()` API — it handles parallelism internally via `rayon` and releases the GIL for the entire batch, which is simpler and faster than manual threading.
 
 ---
 
@@ -621,12 +881,14 @@ When `Document` is garbage-collected, the `Rc` reference count drops to 0, freei
 
 ## GIL Release
 
-Parse and render operations release the GIL via `Python::detach()`:
+Parse, render, lint, and fix operations release the GIL via `Python::detach()`:
 
 ```python
 # These calls release the GIL internally:
 mordant.markdown_to_html(source, gfm=True)   # GIL released during parse + render
-mordant.parse(source)                         # GIL released during parse
+mordant.parse(source)                          # GIL released during parse
+mordant.lint(source)                           # GIL released during linting
+mordant.fix(source)                            # GIL released during linting + fixing
 ```
 
 This enables true multi-threaded parallelism. Use `ThreadPoolExecutor` or `threading` for concurrent processing:
@@ -636,6 +898,22 @@ from concurrent.futures import ThreadPoolExecutor
 
 with ThreadPoolExecutor(max_workers=4) as pool:
     results = list(pool.map(mordant.markdown_to_html, markdown_docs))
+```
+
+Or use the built-in batch API for parallel file processing:
+
+```python
+# Batch lint — GIL released for entire batch
+results = mordant.lint_many([
+    ("file1.md", open("file1.md").read()),
+    ("file2.md", open("file2.md").read()),
+])
+
+# Batch fix — GIL released for entire batch
+results = mordant.fix_many([
+    ("file1.md", open("file1.md").read()),
+    ("file2.md", open("file2.md").read()),
+])
 ```
 
 ---

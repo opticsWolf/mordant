@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.5.0  
+> **Version:** 0.6.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 840 Python (794 core + 29 emoji + 17 diagram) + 54 Rust (26 unit + 2 AST + 1 CommonMark spec + 1 extension + 1 extra + 6 GFM + 2 options + 1 override renderer + 14 doc-tests)
+> **Tests:** 973 Python (806 core + 29 emoji + 17 diagram + 121 lint + 12 phase8) + 54 Rust (26 unit + 2 AST + 1 CommonMark spec + 1 extension + 1 extra + 6 GFM + 2 options + 1 override renderer + 14 doc-tests)
 
 ---
 
@@ -17,7 +17,10 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 - **GFM support:** Tables, task lists, strikethrough, autolink
 - **Emoji support:** Shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.)
 - **Diagram support:** Mermaid diagram rendering from code blocks
-- **GIL release:** Parse and render run without the GIL for multi-threaded parallelism
+- **Lint engine:** 25 rules (MD001, MD009, MD012, MD024, MD025, MD040, MD042, MD045, MD047, MD010, MD018–MD021, MD030, MD031, MD032, MD033, MD034, MD036, MD037, MD038, MD039, MD041, MD043, MD044, MD046, MD048, MD049) with diagnostics, fix engine, config, and suppression
+- **Batch API:** `lint_many()` / `fix_many()` for parallel file processing via `rayon`
+- **CLI:** `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`
+- **GIL release:** Parse, render, and batch lint/fix operations run without the GIL for multi-threaded parallelism
 
 ---
 
@@ -36,9 +39,9 @@ mordant/                          # Rushdown Rust crate (unchanged upstream)
 │   └── error.rs                  # Error types
 
 mordant-py/                       # PyO3 Python bindings
-├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0
+├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json
 ├── src/
-│   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), GIL detach
+│   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), lint(), fix(), lint_many(), fix_many(), GIL detach
 │   ├── document.rs               # Document wrapper (Arena + source + root_ref)
 │   ├── node.rs                   # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 │   ├── walker.rs                 # DFS/BFS AST walker
@@ -46,7 +49,12 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── errors.rs                 # RushdownError Python exception type
 │   ├── meta.rs                   # YAML frontmatter parser extension
 │   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests
-│   └── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook
+│   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook
+│   ├── linter.rs                 # Lint engine: 25 rules (MD001, MD009, MD012, MD024, MD025, MD040, MD042, MD045, MD047+), diagnostics, fix engine, config, suppression, batch API
+│   └── fix_engine.rs             # Fix engine: FixOp, FixResult, fixpoint checking
+├── mordant/
+│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, FixOp, RuleParams, PyRuleConfig, PyEnable, PyDisable, PySuppression, PyLintResult
+│   └── __main__.py               # CLI: argparse, formatters (human/json/github), config loading, glob expansion, exit codes
 ├── tests/
 │   ├── test_core.py              # 14 tests: basic CommonMark rendering
 │   ├── test_ast.py               # 61 tests: Document, Node, Walker, metadata
@@ -55,7 +63,8 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── test_meta.py              # 41 tests: YAML frontmatter + thematic break conflict
 │   ├── test_emoji.py             # 29 tests: emoji rendering, blacklist, templates, AST access
 │   ├── test_diagram.py           # 17 tests: Mermaid diagram rendering, options, AST access
-│   └── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
+│   ├── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
+│   └── test_lint.py              # 133 tests: 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors
 └── benchmarks/                   # Performance benchmarks vs. python-markdown, mistune, markdown-it-py
 
 pyproject/                        # Python package project (setuptools/pip install)
@@ -1081,7 +1090,7 @@ python benchmarks.py -o results.json  # Save JSON
 | `src/error.rs` | 200 | Error types, CallbackError |
 | `build.rs` | 217 | Build-time code generation (entities, attributes, tags) |
 | **Python Bindings** | | |
-| `mordant-py/src/lib.rs` | ~350 | PyO3 module, core API (`markdown_to_html`, `parse`), GIL detach |
+| `mordant-py/src/lib.rs` | ~500 | PyO3 module, core API, lint/fix/batch API, GIL detach |
 | `mordant-py/src/document.rs` | 183 | Document wrapper, metadata, walk |
 | `mordant-py/src/node.rs` | ~380 | Node wrapper, kind-specific properties (incl. emoji/diagram props) |
 | `mordant-py/src/walker.rs` | 105 | AST walker (DFS/BFS) |
@@ -1090,6 +1099,10 @@ python benchmarks.py -o results.json  # Save JSON
 | `mordant-py/src/meta.rs` | 655 | YAML frontmatter parser + unit tests |
 | `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
 | `mordant-py/src/diagram.rs` | ~350 | Mermaid diagram AST transformer + HTML renderer + post-render hook |
+| `mordant-py/src/linter.rs` | ~1,800 | Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API |
+| `mordant-py/src/fix_engine.rs` | ~200 | Fix engine: FixOp, FixResult, fixpoint checking |
+| `mordant-py/mordant/__init__.py` | ~100 | Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, etc. |
+| `mordant-py/mordant/__main__.py` | ~300 | CLI: argparse, formatters (human/json/github), config loading, glob expansion |
 | **Tests** | | |
 | `mordant-py/tests/test_core.py` | 14 | Basic CommonMark rendering |
 | `mordant-py/tests/test_ast.py` | 61 | Document, Node, Walker, metadata |
@@ -1099,6 +1112,394 @@ python benchmarks.py -o results.json  # Save JSON
 | `mordant-py/tests/test_emoji.py` | 29 | Emoji rendering, blacklist, templates, AST access |
 | `mordant-py/tests/test_diagram.py` | 17 | Mermaid diagram rendering, options, AST access |
 | `mordant-py/tests/test_commonmark_spec.py` | 652 | Full CommonMark 0.31.2 spec |
+| `mordant-py/tests/test_lint.py` | 133 | 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors |
+| `mordant-py/tests/test_lint.py` | 133 | 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors |
+
+---
+
+## 13. Linter Module
+
+The linter module provides a 25-rule Markdown linting engine with diagnostics, fix engine, configuration, suppression, and batch processing. It operates on the parsed AST to detect issues and produce actionable diagnostics.
+
+### 13.1. Architecture Overview
+
+```
+Source String
+    │
+    ▼
+┌──────────────┐
+│  Rushdown     │  ──►  (Arena, NodeRef)
+│  Parser       │       Parse-only (no render)
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  AST          │  ──►  Collected struct (headings, links, code_blocks, etc.)
+│  Traversal    │       Single DFS walk collecting rule-relevant data
+│  (build())    │
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Rule         │  ──►  25 lint rules, each a function(Collected, &mut Vec<Violation>)
+│  Engine       │       MD001 (heading-increment), MD009 (no-trailing-spaces),
+│               │       MD012 (no-multiple-blanks), MD024 (no-duplicate-heading),
+│               │       MD025 (single-h1), MD040 (fenced-code-language),
+│               │       MD042 (no-empty-links), MD045 (no-alt-text),
+│               │       MD047 (single-trailing-newline), MD010 (no-hard-tabs),
+│               │       MD018/MD019/MD020/MD021 (atx/setext spacing),
+│               │       MD030/MD031 (proper list spacing), MD032 (bq-spaces),
+│               │       MD033/MD034 (no-unbalanced), MD036/MD037/MD038/MD039,
+│               │       MD041 (no-repeated), MD043 (no-html), MD044 (no-dup-id),
+│               │       MD046 (no-inline-html), MD048 (no-hard-tabs-alt), MD049
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Diagnostics  │  ──►  Diagnostic { rule, name, message, line, severity, column, span, fix }
+│  Output       │       Fixable flag derived from fix field
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Fix Engine   │  ──►  apply_fixes(source, diagnostics) → FixResult
+│               │       Applies FixOp (Insert, Delete, Replace) on source lines
+│               │       Re-lints to verify fixpoint (no new violations)
+└──────────────┘
+```
+
+### 13.2. Diagnostic Model
+
+```rust
+struct Diagnostic {
+    rule: String,         // e.g., "MD001"
+    name: String,         // e.g., "heading-increment"
+    message: String,      // Human-readable description
+    line: Option<usize>,  // Source line number (1-indexed)
+    severity: Severity,   // Severity::Warning | Severity::Error | Severity::Info
+    column: Option<usize>,// Byte offset within line
+    span: Option<(usize, usize)>, // [start_byte, end_byte) in source
+    fix: Option<FixOp>,   // Auto-fix operation (None if not fixable)
+}
+```
+
+### 13.3. Fix Model
+
+```rust
+struct FixOp {
+    line: usize,          // 1-indexed source line
+    column: Option<usize>,// Byte offset within line
+    replacement: String,  // Text to insert/replace
+    kind: FixKind,        // Insert | Delete | Replace
+}
+
+struct FixResult {
+    output: String,       // Fixed source text
+    remaining: Vec<Diagnostic>, // Diagnostics that could not be auto-fixed
+}
+```
+
+### 13.4. Configuration System
+
+Rules are configured via `LintConfig` / `RuleParams`:
+
+```rust
+struct RuleParams {
+    heading_style: String,           // MD003: "consistent" | "atx" | "setext"
+    line_length: usize,              // MD013: max line length (default 80)
+    line_length_ignore_threshold: usize,  // MD013: ignore lines below this
+    spaces_per_tab: usize,           // MD010: spaces per tab (default 4)
+    siblings_only: bool,             // MD024: only compare sibling headings
+    default_language: Option<String>, // MD040: default language for fixes
+}
+
+struct LintConfig {
+    disable: Vec<String>,            // Rule IDs to disable
+    enable: Option<Vec<String>>,     // If set, only these rules run
+    _enabled_when_default_false: Option<Vec<String>>,
+    suppressions: Vec<SuppressionDirective>,  // Parsed from inline comments
+    params: RuleParams,              // Per-rule parameters
+}
+```
+
+### 13.5. Suppression System
+
+Inline suppression comments are parsed at lint time:
+
+```markdown
+<!-- markdownlint-disable MD001 -->
+# H1
+
+### H3 jump
+
+<!-- markdownlint-enable MD001 -->
+
+<!-- markdownlint-disable-next-line MD009 -->
+```
+
+The `SuppressionDirective` struct captures line number, affected rules (or all if unspecified), and action (`disable`, `enable`, `disable-next-line`).
+
+### 13.6. Batch API
+
+Uses `rayon` for thread-parallel processing of multiple files:
+
+```rust
+fn lint_many(files: Vec<(String, String)>, cfg: &LintConfig) -> Vec<(String, Vec<Violation>)>
+fn fix_many(files: Vec<(String, String)>, cfg: &LintConfig, default_language: Option<&str>) -> Vec<(String, FixOutcome)>
+```
+
+- Each file is processed independently on a separate rayon thread
+- GIL is released via `py.detach()` for the entire batch operation
+- Returns `[(filename, diagnostics), ...]` or `[(filename, FixOutcome), ...]`
+
+### 13.7. Collected Data Structure
+
+Single DFS walk collects all rule-relevant data:
+
+```rust
+struct Collected {
+    headings: Vec<HeadingInfo>,   // level, line, text
+    links: Vec<LinkInfo>,         // destination, line
+    images: Vec<ImageInfo>,       // alt, line
+    code_blocks: Vec<CodeBlockInfo>, // language, fenced, line
+    code_regions: Vec<CodeRegion>,   // start, end, fenced — for line-based rules
+    // Phase 8 additions:
+    frontmatter_title: Option<String>,  // Extracted from YAML frontmatter
+    heading_anchors: Vec<String>,       // Canonical slug anchors for fragment validation
+}
+```
+
+### 13.8. Phase 8 Accuracy Polish
+
+- **R8.1**: `collect_text()` handles `KindData::Extension` nodes by downcasting to `EmojiData` — emoji shortcode headings now correctly compared by MD024
+- **R8.2**: `build()` extracts `title` from YAML frontmatter metadata — MD025 respects frontmatter title
+- **R8.3**: Canonical heading anchors (lowercase, hyphenated, no special chars) generated during AST traversal — MD042 validates `#fragment` links against known anchors
+
+### 13.9. Rule Catalog
+
+| ID | Name | Source | Fixable | Description |
+|----|------|--------|---------|-------------|
+| MD001 | heading-increment | AST | no | Headings increment by 1 |
+| MD003 | heading-style | AST | no | Heading style consistency |
+| MD009 | no-trailing-spaces | line | yes | No trailing whitespace |
+| MD010 | no-hard-tabs | line | yes | No hard tabs (spaces preferred) |
+| MD012 | no-multiple-blanks | line | yes | No multiple blank lines |
+| MD013 | line-length | line | no | Lines should not exceed max length |
+| MD018 | atx-spacing | line | no | ATX heading space after # |
+| MD019 | atx-closing-spaces | line | no | ATX leaf headings no closing # |
+| MD020 | atx-spacing | line | no | ATX heading space before closing # |
+| MD021 | atx-heading-space | line | no | Multiple spaces inside ATX heading |
+| MD022 | heading-blank-lines | AST | yes | Headings should have blank lines around them |
+| MD024 | no-duplicate-heading | AST | no | No duplicate headings |
+| MD025 | single-h1 | AST | no | Single H1 per document |
+| MD026 | no-trailing-punctuation | AST | yes | Headings should not end with trailing punctuation |
+| MD031 | fenced-code-blocks-working | AST | yes | Fenced code blocks should have blank lines around them |
+| MD032 | indented-code-block | AST | no | Indented code blocks should have blank lines around them |
+| MD034 | no-bare-urls | AST | no | Bare URLs should be in angle brackets |
+| MD040 | fenced-code-language | AST | yes | Fenced code blocks should specify a language |
+| MD042 | no-empty-links | AST | no | Links should have a non-empty destination |
+| MD045 | no-alt-text | AST | no | Images should have alternate text |
+| MD046 | code-block-indentation | AST | no | Fenced code blocks should use 4-space indentation |
+| MD047 | single-trailing-newline | line | yes | Files should end with a single trailing newline |
+| MD048 | fenced-code-block-punctuation | AST | no | Fenced code blocks should use backticks, not tildes |
+| MD049 | emphasis-style | AST | no | Emphasis style consistency |
+| MD050 | strong-style | AST | no | Strong style consistency |
+
+### 13.10. Python Bindings — Linter Classes
+
+#### Diagnostic
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `rule` | `str` | Rule ID (e.g., `"MD001"`) |
+| `name` | `str` | Rule name (e.g., `"heading-increment"`) |
+| `message` | `str` | Human-readable description |
+| `line` | `int \| None` | Source line number (1-indexed) |
+| `severity` | `str` | `"warning"` or `"error"` |
+| `column` | `int \| None` | Byte offset within line |
+| `span` | `tuple[int, int] \| None` | `[start_byte, end_byte)` in source |
+| `fixable` | `bool` | True if diagnostic has an auto-fix (ReplaceLine, DeleteLine, EnsureFinalNewline) |
+
+#### FixResult
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `output` | `str` | Fixed source text |
+| `fixed` | `list[Diagnostic]` | Diagnostics that were auto-corrected |
+| `unfixable` | `list[Diagnostic]` | Diagnostics that could not be auto-fixed |
+| `remaining` | `list[Diagnostic]` | Diagnostics remaining after re-linting output |
+
+#### LintConfig
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `disable` | `list[str]` | `[]` | Rule IDs to disable |
+| `enable` | `list[str] \| None` | `None` | If set, ONLY these rules run |
+| `suppressions` | `list[SuppressionDirective]` | `[]` | Parsed from inline comments |
+| `params` | `RuleParams` | defaults | Per-rule parameters |
+
+#### RuleParams
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `heading_style` | `str` | `"consistent"` | MD003: heading style |
+| `line_length` | `int` | `80` | MD013: max line length |
+| `line_length_ignore_threshold` | `int` | `0` | MD013: ignore lines below this |
+| `spaces_per_tab` | `int` | `4` | MD010: spaces per tab |
+| `siblings_only` | `bool` | `False` | MD024: only compare sibling headings |
+| `default_language` | `str \| None` | `None` | MD040: default language for fixes |
+
+#### LintOptions
+
+| Attribute | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `disable` | `list[str]` | `[]` | Rule IDs to disable |
+| `enable` | `list[str] \| None` | `None` | If set, only these rules run |
+
+#### FixOp (internal, not exposed to Python)
+
+| Variant | Fields | Description |
+|---------|--------|-------------|
+| `ReplaceLine` | `line: int, text: str` | Replace entire line content |
+| `DeleteLine` | `line: int` | Delete entire line |
+| `EnsureFinalNewline` | — | Ensure document ends with single newline |
+| `SetCodeLanguage` | `line: int` | Insert language on fence line |
+
+#### Severity (internal, not exposed to Python)
+
+| Value | Description |
+|-------|-------------|
+| `Warning` | Warning severity |
+| `Error` | Error severity |
+
+#### SuppressionDirective (internal)
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `line` | `int` | 0-indexed line number |
+| `rules` | `list[str] \| None` | Affected rules (None = all) |
+| `action` | `str` | `"disable"`, `"enable"`, `"disable-next-line"` |
+
+### 13.11. Python API
+
+```python
+import mordant
+
+# Lint a single document
+diagnostics = mordant.lint("# Hello\n\n### Jump\n")
+# [Diagnostic(rule='MD001', name='heading-increment', ...)]
+
+# Lint with options
+diagnostics = mordant.lint(
+    "# Hello\n\n### Jump\n",
+    parse_opts=mordant.ParseOptions(meta_table=True),
+    lint_opts=mordant.LintOptions(disable=["MD040"]),
+    lint_config=mordant.LintConfig(
+        disable=["MD040"],
+        enable=None,
+        params=mordant.RuleParams(heading_style="atx", spaces_per_tab=4),
+    ),
+)
+
+# Fix a single document
+result = mordant.fix("# Title  \n\n\nText")
+print(result.output)       # Fixed source
+print(result.fixed)        # Diagnostics that were auto-corrected
+print(result.unfixable)    # Diagnostics that could not be fixed
+print(result.remaining)    # Diagnostics remaining after re-linting
+
+# Fix with options
+result = mordant.fix(
+    "content",
+    parse_opts=mordant.ParseOptions(meta_table=True),
+    lint_opts=mordant.LintOptions(disable=["MD040"]),
+    default_language="python",
+    lint_config=mordant.LintConfig(
+        disable=["MD040"],
+        params=mordant.RuleParams(default_language="python"),
+    ),
+)
+
+# Batch lint (parallel)
+results = mordant.lint_many([
+    ("file1.md", "# Hello\n"),
+    ("file2.md", "# Hi\n"),
+])
+# [("file1.md", [Diagnostic(...)]), ("file2.md", [])]
+
+# Batch fix (parallel)
+results = mordant.fix_many([
+    ("file1.md", "trailing   \n"),
+    ("file2.md", "more trailing  \n"),
+])
+# [("file1.md", FixResult(output='trailing\n', fixed=[...], unfixable=[], remaining=[])), ...]
+```
+
+### 13.12. CLI Usage
+
+```bash
+# Basic lint
+python -m mordant file1.md file2.md
+
+# Fix in place
+python -m mordant --fix file.md
+
+# Dry run (show what would be fixed)
+python -m mordant --fix --dry-run file.md
+
+# Output format
+python -m mordant --format human file.md    # Default
+python -m mordant --format json file.md     # JSON array
+python -m mordant --format github file.md   # GitHub Actions annotations
+
+# Config file
+python -m mordant --config .markdownlint.json file.md
+
+# Enable/disable specific rules
+python -m mordant --enable MD001,MD009 file.md
+python -m mordant --disable MD040 file.md
+
+# Default language for code blocks
+python -m mordant --fix --default-language python file.md
+
+# Glob patterns
+python -m mordant "*.md"
+
+# Directory recursion
+python -m mordant ./docs/
+
+# Exit codes
+# 0 = no issues found
+# 1 = issues found
+```
+
+### 13.13. Output Formats
+
+**Human** (default):
+```
+file.md:1:1 MD001 [warning] heading-increment: Heading incremented by more than 1
+file.md:5:1 MD042 [warning] no-empty-links: Link has an empty destination
+```
+
+**JSON**:
+```json
+[
+  {
+    "file": "file.md",
+    "rule": "MD001",
+    "name": "heading-increment",
+    "message": "Heading incremented by more than 1",
+    "line": 1,
+    "severity": "warning",
+    "column": 1
+  }
+]
+```
+
+**GitHub Actions**:
+```
+::warning file=file.md,line=1,col=1::MD001: heading-increment - Heading incremented by more than 1
+```
 
 ---
 
