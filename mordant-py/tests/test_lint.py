@@ -17,6 +17,12 @@ The linter walks the rushdown AST and reports markdownlint-style diagnostics
     MD047  single-trailing-newline  file must end with a newline
 """
 
+import json
+import subprocess
+import sys
+import os
+
+import pytest
 import mordant
 
 
@@ -626,3 +632,485 @@ def test_enable_only_new_rule():
     md = "# Title.\n\ntext\n"
     diags = mordant.lint(md, lint_opts=mordant.LintOptions(enable=["MD026"]))
     assert rules(diags) == {"MD026"}
+
+
+# ===========================================================================
+# Phase 6 — Configuration, suppression & introspection
+# ===========================================================================
+
+# --- lint_rules() introspection ---
+
+def test_lint_rules_returns_all_rules():
+    rules_list = mordant.lint_rules()
+    assert len(rules_list) == 25
+    ids = [r.id for r in rules_list]
+    assert "MD001" in ids
+    assert "MD009" in ids
+    assert "MD040" in ids
+    assert "MD047" in ids
+    # Check attributes
+    md009 = [r for r in rules_list if r.id == "MD009"][0]
+    assert md009.fixable is True
+    assert "trailing" in md009.description.lower()
+
+
+def test_lint_rules_all_have_names():
+    rules_list = mordant.lint_rules()
+    for r in rules_list:
+        assert r.id.startswith("MD")
+        assert r.name
+        assert r.description
+        assert r.default_params
+
+
+# --- LintConfig from dict ---
+
+def test_lint_config_from_dict_basic():
+    # Disable specific rules, others should still run
+    config = mordant.LintConfig.from_dict({
+        "MD009": False,
+        "MD010": False,
+    })
+    # Use a document with violations
+    md = "# Title  \n\n\nText\n"  # has MD009 and MD012 violations
+    diags = mordant.lint(md, lint_config=config)
+    rule_names = [d.rule for d in diags]
+    assert "MD009" not in rule_names
+    assert "MD010" not in rule_names
+    # MD012 should still run
+    assert "MD012" in rule_names
+
+
+def test_lint_config_default_false():
+    config = mordant.LintConfig.from_dict({
+        "default": False,
+        "MD025": True,
+    })
+    diags = mordant.lint("# A\n\n# B\n\n# C\n", lint_config=config)
+    # Only MD025 should run
+    rule_names = [d.rule for d in diags]
+    assert "MD025" in rule_names
+    assert "MD001" not in rule_names
+
+
+def test_lint_config_disable_list():
+    config = mordant.LintConfig.from_dict({
+        "disable": ["MD001", "MD024", "MD025"],
+    })
+    diags = mordant.lint("# A\n\n### C\n\n# A\n", lint_config=config)
+    rule_names = [d.rule for d in diags]
+    assert "MD001" not in rule_names
+    assert "MD024" not in rule_names
+    assert "MD025" not in rule_names
+
+
+def test_lint_config_params_getter():
+    config = mordant.LintConfig.from_dict({})
+    params = config.params
+    assert "line_length" in params
+
+
+# --- Inline suppression comments ---
+
+def test_inline_suppression_disable_next_line():
+    md = "# Title\n<!-- markdownlint-disable-next-line MD025 -->\n# Another\n"
+    diags = mordant.lint(md)
+    # MD025 should NOT be reported for the second heading
+    md025_diags = [d for d in diags if d.rule == "MD025"]
+    assert len(md025_diags) == 0
+
+
+def test_inline_suppression_disable_enable_block():
+    md = """# Title
+<!-- markdownlint-disable MD025 -->
+# Another
+# Third
+<!-- markdownlint-enable MD025 -->
+# Fourth
+"""
+    diags = mordant.lint(md)
+    # MD025 should only be reported for the last heading (after enable)
+    md025_diags = [d for d in diags if d.rule == "MD025"]
+    # Should have at most one (the last h1 after enable)
+    assert len(md025_diags) <= 1
+
+
+# --- Document.lint() / Document.fix() with LintConfig ---
+
+def test_document_lint_with_config():
+    doc = mordant.parse("# A\n\n# B\n\n# C\n")
+    config = mordant.LintConfig.from_dict({
+        "default": False,
+        "MD025": True,
+    })
+    diags = doc.lint(lint_config=config)
+    rule_names = [d.rule for d in diags]
+    assert "MD025" in rule_names
+    assert "MD001" not in rule_names
+
+
+def test_document_fix_with_config():
+    doc = mordant.parse("# Title  \n\n\nText\n")
+    config = mordant.LintConfig.from_dict({
+        "default": True,
+    })
+    result = doc.fix(lint_config=config)
+    assert "MD012" not in [d.rule for d in result.remaining]
+    assert "MD009" not in [d.rule for d in result.remaining]
+
+
+# ===========================================================================
+# Phase 7 — CLI, batch API, and output formats
+# ===========================================================================
+
+# --- CLI helper ---
+
+def _run_cli(*args, tmp_dir=None):
+    """Helper to run the CLI and capture output."""
+    cmd = [sys.executable, "-m", "mordant"] + list(args)
+    if tmp_dir:
+        env = os.environ.copy()
+        env["PYTHONPATH"] = str(tmp_dir.parent)
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=str(tmp_dir),
+            env=env,
+        )
+    else:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+        )
+    return result
+
+
+# ===========================================================================
+# Batch API — lint_many()
+# ===========================================================================
+
+def test_lint_many_empty():
+    """Empty file list returns empty results."""
+    results = mordant.lint_many([])
+    assert results == []
+
+
+def test_lint_many_single_file():
+    """Single file returns one result tuple."""
+    files = [("test.md", "# Title\n\n## Section\n")]
+    results = mordant.lint_many(files)
+    assert len(results) == 1
+    name, diags = results[0]
+    assert name == "test.md"
+    assert diags == []
+
+
+def test_lint_many_multiple_files():
+    """Multiple files returns results for each."""
+    files = [
+        ("clean.md", "# Clean\n\n## OK\n"),
+        ("bad.md", "# A\n\n### Skips H2\n"),
+    ]
+    results = mordant.lint_many(files)
+    assert len(results) == 2
+
+    # Clean file has no issues
+    assert results[0][0] == "clean.md"
+    assert results[0][1] == []
+
+    # Bad file has MD001
+    assert results[1][0] == "bad.md"
+    assert any(d.rule == "MD001" for d in results[1][1])
+
+
+def test_lint_many_with_config():
+    """LintConfig is applied to all files in the batch."""
+    files = [
+        ("a.md", "# A\n\n# B\n"),
+        ("b.md", "# C\n\n# D\n"),
+    ]
+    # Disable MD025 (single-h1)
+    config = mordant.LintConfig.from_dict({"disable": ["MD025"]})
+    results = mordant.lint_many(files, lint_config=config)
+
+    for name, diags in results:
+        assert not any(d.rule == "MD025" for d in diags), f"{name} should not have MD025"
+
+
+def test_lint_many_preserves_order():
+    """Results are returned in the same order as input files."""
+    names = [f"file_{i}.md" for i in range(5)]
+    files = [(n, "# Clean\n") for n in names]
+    results = mordant.lint_many(files)
+
+    result_names = [name for name, _ in results]
+    assert result_names == names
+
+
+def test_lint_many_parallel_independence():
+    """Each file is linted independently; issues in one don't affect others."""
+    files = [
+        ("issues.md", "# A\n\n# B\n\n# C\n"),  # MD025
+        ("clean.md", "# Single\n\n## Sub\n"),   # clean
+    ]
+    results = mordant.lint_many(files)
+
+    issues_diags = results[0][1]
+    clean_diags = results[1][1]
+
+    assert any(d.rule == "MD025" for d in issues_diags)
+    assert clean_diags == []
+
+
+# ===========================================================================
+# Batch API — fix_many()
+# ===========================================================================
+
+def test_fix_many_empty():
+    """Empty file list returns empty results."""
+    results = mordant.fix_many([])
+    assert results == []
+
+
+def test_fix_many_clean_file():
+    """Clean file returns no fixed, no remaining."""
+    files = [("clean.md", "# Title\n\n## Section\n")]
+    results = mordant.fix_many(files)
+
+    assert len(results) == 1
+    name, result = results[0]
+    assert name == "clean.md"
+    assert len(result.fixed) == 0
+    assert len(result.remaining) == 0
+    assert result.output == "# Title\n\n## Section\n"
+
+
+def test_fix_many_fixes_trailing_spaces():
+    """MD009 trailing spaces are auto-fixed."""
+    files = [("trailing.md", "hello   \nworld   \n")]
+    results = mordant.fix_many(files)
+
+    name, result = results[0]
+    assert result.output == "hello\nworld\n"
+    assert len(result.fixed) >= 1
+
+
+def test_fix_many_fixes_multiple_blanks():
+    """MD012 multiple blank lines are auto-fixed."""
+    files = [("blanks.md", "a\n\n\n\nb\n")]
+    results = mordant.fix_many(files)
+
+    name, result = results[0]
+    assert result.output == "a\n\nb\n"
+
+
+def test_fix_many_fixes_final_newline():
+    """MD047 missing final newline is auto-fixed."""
+    files = [("no_nl.md", "no newline")]
+    results = mordant.fix_many(files)
+
+    name, result = results[0]
+    assert result.output == "no newline\n"
+
+
+def test_fix_many_with_default_language():
+    """MD040 fenced code blocks get the default language."""
+    files = [("code.md", "```\ncode\n```\n")]
+    results = mordant.fix_many(files, default_language="python")
+
+    name, result = results[0]
+    assert "```python" in result.output
+
+
+def test_fix_many_with_config():
+    """LintConfig is applied to all files in the batch fix."""
+    files = [("test.md", "# Title  \n\n\nText\n")]
+    # Disable MD009 (trailing spaces)
+    config = mordant.LintConfig.from_dict({"disable": ["MD009"]})
+    results = mordant.fix_many(files, lint_config=config)
+
+    name, result = results[0]
+    # MD009 should not be in fixed or remaining
+    fixed_rules = [d.rule for d in result.fixed]
+    remaining_rules = [d.rule for d in result.remaining]
+    assert "MD009" not in fixed_rules
+    assert "MD009" not in remaining_rules
+
+
+def test_fix_many_multiple_files():
+    """Multiple files are fixed independently."""
+    files = [
+        ("a.md", "trailing   \n"),
+        ("b.md", "clean\n"),
+        ("c.md", "no newline"),
+    ]
+    results = mordant.fix_many(files)
+
+    assert len(results) == 3
+    assert results[0][1].output == "trailing\n"
+    assert results[1][1].output == "clean\n"
+    assert results[2][1].output == "no newline\n"
+
+
+# ===========================================================================
+# CLI — python -m mordant
+# ===========================================================================
+
+def test_cli_clean_file(tmp_path):
+    """Clean file exits with code 0 and no output."""
+    md = tmp_path / "clean.md"
+    md.write_text("# Title\n\n## Section\n")
+    result = _run_cli(str(md), tmp_dir=tmp_path)
+    assert result.returncode == 0
+    assert result.stdout.strip() == ""
+
+
+def test_cli_issues_found(tmp_path):
+    """File with issues exits with code 1."""
+    md = tmp_path / "bad.md"
+    md.write_text("# A\n\n# B\n\n# C\n")
+    result = _run_cli(str(md), tmp_dir=tmp_path)
+    assert result.returncode == 1
+    assert "MD025" in result.stdout
+
+
+def test_cli_human_format(tmp_path):
+    """Human format shows filename:line: rule."""
+    md = tmp_path / "test.md"
+    md.write_text("# Title  \n\n\nText\n")
+    result = _run_cli(str(md), tmp_dir=tmp_path)
+    assert "test.md" in result.stdout
+    assert ":" in result.stdout
+
+
+def test_cli_json_format(tmp_path):
+    """JSON format outputs valid JSON."""
+    md = tmp_path / "test.md"
+    md.write_text("# A\n\n# B\n")
+    result = _run_cli("--format", "json", str(md), tmp_dir=tmp_path)
+    data = json.loads(result.stdout)
+    assert isinstance(data, list)
+    assert len(data) >= 1
+    assert "file" in data[0]
+    assert "diagnostics" in data[0]
+
+
+def test_cli_github_format(tmp_path):
+    """GitHub format outputs ::warning annotations."""
+    md = tmp_path / "test.md"
+    md.write_text("# A\n\n# B\n")
+    result = _run_cli("--format", "github", str(md), tmp_dir=tmp_path)
+    assert "::warning" in result.stdout
+
+
+def test_cli_fix_flag(tmp_path):
+    """--fix flag corrects files in-place."""
+    md = tmp_path / "test.md"
+    md.write_text("trailing   \n\n\nmore   \n")
+    result = _run_cli("--fix", str(md), tmp_dir=tmp_path)
+    # File should be corrected
+    content = md.read_text()
+    assert "   " not in content
+    assert content.count("\n\n\n") == 0
+
+
+def test_cli_fix_dry_run(tmp_path):
+    """--fix --dry-run doesn't modify files."""
+    md = tmp_path / "test.md"
+    original = "trailing   \n"
+    md.write_text(original)
+    result = _run_cli("--fix", "--dry-run", str(md), tmp_dir=tmp_path)
+    # File should be unchanged
+    assert md.read_text() == original
+
+
+def test_cli_disable_flag(tmp_path):
+    """--disable flag suppresses specific rules."""
+    md = tmp_path / "test.md"
+    md.write_text("# Title  \n\n\nText\n")
+    result = _run_cli("--disable", "MD009,MD012", str(md), tmp_dir=tmp_path)
+    assert "MD009" not in result.stdout
+    assert "MD012" not in result.stdout
+
+
+def test_cli_enable_flag(tmp_path):
+    """--enable flag runs only specified rules."""
+    md = tmp_path / "test.md"
+    md.write_text("# Title\n\n# Another\n\n# Third\n")
+    result = _run_cli("--enable", "MD025", str(md), tmp_dir=tmp_path)
+    # Only MD025 should appear
+    for line in result.stdout.strip().split("\n"):
+        if line.strip():
+            assert "MD025" in line
+
+
+def test_cli_multiple_files(tmp_path):
+    """Multiple files are linted together."""
+    (tmp_path / "a.md").write_text("# Clean\n\n## OK\n")
+    (tmp_path / "b.md").write_text("# A\n\n# B\n")
+    result = _run_cli(str(tmp_path / "a.md"), str(tmp_path / "b.md"), tmp_dir=tmp_path)
+    assert "b.md" in result.stdout
+    assert "a.md" not in result.stdout  # clean file not mentioned
+
+
+def test_cli_no_files_found(tmp_path):
+    """No matching files exits cleanly."""
+    result = _run_cli("nonexistent_pattern_*.md", tmp_dir=tmp_path)
+    assert result.returncode == 0
+
+
+def test_cli_config_file(tmp_path):
+    """--config flag loads .markdownlint.json config."""
+    config = tmp_path / ".markdownlint.json"
+    config.write_text(json.dumps({"disable": ["MD025"]}))
+    md = tmp_path / "test.md"
+    md.write_text("# A\n\n# B\n")
+    result = _run_cli("--config", str(config), str(md), tmp_dir=tmp_path)
+    assert "MD025" not in result.stdout
+
+
+def test_cli_default_language(tmp_path):
+    """--default-language flag sets language for MD040 fixes."""
+    md = tmp_path / "test.md"
+    md.write_text("```\ncode\n```\n")
+    result = _run_cli("--fix", "--default-language", "python", str(md), tmp_dir=tmp_path)
+    content = md.read_text()
+    assert "```python" in content
+
+
+def test_cli_glob_pattern(tmp_path):
+    """Glob patterns are expanded correctly."""
+    (tmp_path / "a.md").write_text("# A\n")
+    (tmp_path / "b.md").write_text("# B\n")
+    result = _run_cli("*.md", tmp_dir=tmp_path)
+    assert result.returncode == 0
+
+
+def test_cli_directory_recursion(tmp_path):
+    """Directory paths are recursed."""
+    (tmp_path / "sub").mkdir()
+    (tmp_path / "sub" / "nested.md").write_text("# Nested\n")
+    result = _run_cli(str(tmp_path), tmp_dir=tmp_path)
+    assert result.returncode == 0
+
+
+# ===========================================================================
+# Batch API — performance sanity
+# ===========================================================================
+
+def test_lint_many_100_files():
+    """Batch linting 100 files completes without errors."""
+    files = [(f"file_{i}.md", f"# File {i}\n\n## Section\n") for i in range(100)]
+    results = mordant.lint_many(files)
+    assert len(results) == 100
+
+
+def test_fix_many_50_files():
+    """Batch fixing 50 files completes without errors."""
+    files = [(f"file_{i}.md", f"trailing   \n\n\ncontent\n") for i in range(50)]
+    results = mordant.fix_many(files)
+    assert len(results) == 50
+    for name, result in results:
+        assert result.output == f"trailing\n\ncontent\n"

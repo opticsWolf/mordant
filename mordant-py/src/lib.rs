@@ -421,6 +421,99 @@ fn lint_rules() -> Vec<RuleMetadata> {
     linter::lint_rules()
 }
 
+/// Lint multiple files in parallel.
+///
+/// Each file is parsed and linted independently on a separate thread,
+/// releasing the GIL for the entire batch operation.
+///
+/// # Arguments
+/// * `files` - List of (filename, source) tuples
+/// * `lint_config` - Optional LintConfig object
+///
+/// # Returns
+/// List of (filename, list of Diagnostic) tuples
+///
+/// # Example
+/// ```python
+/// import mordant
+/// files = [("a.md", "# A\n\n### C\n"), ("b.md", "# B\n\n## D\n")]
+/// results = mordant.lint_many(files)
+/// for name, diags in results:
+///     print(f"{name}: {len(diags)} issues")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (files, lint_config = None))]
+fn lint_many(
+    py: Python<'_>,
+    files: Vec<(String, String)>,
+    lint_config: Option<&LintConfig>,
+) -> PyResult<Vec<(String, Vec<Diagnostic>)>> {
+    let cfg = lint_config
+        .map(|c| c.clone())
+        .unwrap_or_else(|| linter::LintConfig::default());
+
+    // Release GIL for the entire batch (rayon threads run independently).
+    let batch = py.detach(move || {
+        linter::lint_many(&files, &cfg)
+    });
+
+    Ok(batch
+        .into_iter()
+        .map(|(name, violations)| {
+            (
+                name,
+                violations
+                    .into_iter()
+                    .map(Diagnostic::from_violation)
+                    .collect(),
+            )
+        })
+        .collect())
+}
+
+/// Fix multiple files in parallel.
+///
+/// Each file is parsed, linted, and fixed independently on a separate thread.
+///
+/// # Arguments
+/// * `files` - List of (filename, source) tuples
+/// * `lint_config` - Optional LintConfig object
+/// * `default_language` - Language to insert for MD040 fixes (default: None)
+///
+/// # Returns
+/// List of (filename, FixResult) tuples
+///
+/// # Example
+/// ```python
+/// import mordant
+/// files = [("a.md", "# A  \n\n\nText\n"), ("b.md", "# B\n\nText\n")]
+/// results = mordant.fix_many(files)
+/// for name, result in results:
+///     print(f"{name}: fixed {len(result.fixed)} issues")
+/// ```
+#[pyfunction]
+#[pyo3(signature = (files, lint_config = None, default_language = None))]
+fn fix_many(
+    py: Python<'_>,
+    files: Vec<(String, String)>,
+    lint_config: Option<&LintConfig>,
+    default_language: Option<String>,
+) -> PyResult<Vec<(String, FixResult)>> {
+    let cfg = lint_config
+        .map(|c| c.clone())
+        .unwrap_or_default();
+
+    // Release GIL for the entire batch.
+    let batch = py.detach(move || {
+        linter::fix_many(&files, &cfg, default_language.as_deref())
+    });
+
+    Ok(batch
+        .into_iter()
+        .map(|(name, outcome)| (name, FixResult::from_outcome(outcome)))
+        .collect())
+}
+
 /// Mordant - A fast CommonMark + GFM Markdown parser for Python.
 ///
 /// # Example
@@ -436,6 +529,8 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lint, m)?)?;
     m.add_function(wrap_pyfunction!(fix, m)?)?;
     m.add_function(wrap_pyfunction!(lint_rules, m)?)?;
+    m.add_function(wrap_pyfunction!(lint_many, m)?)?;
+    m.add_function(wrap_pyfunction!(fix_many, m)?)?;
     m.add_class::<linter::LintConfig>()?;
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;

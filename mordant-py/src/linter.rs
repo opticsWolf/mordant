@@ -2001,6 +2001,53 @@ mod tests {
 }
 
 // ===========================================================================
+// Phase 7 — Batch API (rayon-parallelized, GIL-free per file)
+// ===========================================================================
+
+/// Batch-lint multiple files in parallel.
+///
+/// Each `(name, source)` pair is parsed and linted independently on a
+/// separate rayon thread. The caller holds the GIL only for the final
+/// conversion of `Violation` → `Diagnostic`.
+pub fn lint_many(
+    files: &[(String, String)],
+    cfg: &LintConfig,
+) -> Vec<(String, Vec<Violation>)> {
+    use rayon::prelude::*;
+
+    files.par_iter()
+        .map(|(name, source)| {
+            // Each thread builds its own parser/arena — fully independent.
+            let parse_cfg = super::ParseConfig::default();
+            let (arena, root) = super::parse_only(source, false, &parse_cfg);
+            let violations = run_lint(source, &arena, root, cfg);
+            (name.clone(), violations)
+        })
+        .collect()
+}
+
+/// Batch-fix multiple files in parallel.
+///
+/// Returns one `FixOutcome` per file. Each file is parsed, linted, and fixed
+/// independently on a separate rayon thread.
+pub fn fix_many(
+    files: &[(String, String)],
+    cfg: &LintConfig,
+    default_language: Option<&str>,
+) -> Vec<(String, FixOutcome)> {
+    use rayon::prelude::*;
+
+    files.par_iter()
+        .map(|(name, source)| {
+            let parse_cfg = super::ParseConfig::default();
+            let (arena, root) = super::parse_only(source, false, &parse_cfg);
+            let outcome = run_fix(source, &arena, root, cfg, default_language);
+            (name.clone(), outcome)
+        })
+        .collect()
+}
+
+// ===========================================================================
 // Auto-fix entry point
 // ===========================================================================
 
