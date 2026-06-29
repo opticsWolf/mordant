@@ -3,7 +3,7 @@
 use pyo3::prelude::*;
 
 /// ParseOptions controls how the markdown parser behaves.
-#[pyclass(module = "rushdown", skip_from_py_object)]
+#[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
 pub struct ParseOptions {
     pub smart: bool,
@@ -54,7 +54,7 @@ impl ParseOptions {
 }
 
 /// RenderOptions controls how the HTML renderer behaves.
-#[pyclass(module = "rushdown", skip_from_py_object)]
+#[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
 pub struct RenderOptions {
     pub hard_wraps: bool,
@@ -98,7 +98,7 @@ impl RenderOptions {
 }
 
 /// GfmOptions controls GitHub Flavored Markdown extensions.
-#[pyclass(module = "rushdown", skip_from_py_object)]
+#[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
 pub struct GfmOptions {
     #[pyo3(get, set)]
@@ -126,7 +126,7 @@ impl GfmOptions {
 }
 
 /// ArenaOptions controls the internal AST arena allocation.
-#[pyclass(module = "rushdown", skip_from_py_object)]
+#[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
 pub struct ArenaOptions {
     #[pyo3(get, set)]

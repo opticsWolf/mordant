@@ -16,6 +16,7 @@ mod document;
 mod diagram;
 mod emoji;
 mod errors;
+mod linter;
 mod meta;
 mod node;
 mod options;
@@ -24,6 +25,7 @@ mod walker;
 use document::Document;
 use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
+use linter::{Diagnostic, FixResult, LintOptions};
 use node::Node;
 use options::{ArenaOptions, GfmOptions, ParseOptions, RenderOptions};
 use walker::Walker;
@@ -153,6 +155,36 @@ fn parse_only(
     parser.parse(&mut reader)
 }
 
+// Build a ParseConfig from the optional Python option objects. Shared by
+// parse(), markdown_to_html() (parse half), and lint().
+fn parse_config_from(
+    parse_opts: Option<&ParseOptions>,
+    emoji_opts: Option<&PyEmojiParserOptions>,
+    diagram_opts: Option<&PyDiagramParserOptions>,
+) -> ParseConfig {
+    let emoji_options = emoji_opts.map(|e| e.to_rushdown()).unwrap_or_default();
+    let diagram_options = diagram_opts.map(|d| d.to_rushdown()).unwrap_or_default();
+    if let Some(opts) = parse_opts {
+        ParseConfig {
+            attributes: opts.attributes,
+            auto_heading_ids: opts.auto_heading_ids,
+            escaped_space: opts.escaped_space,
+            meta_table: opts.meta_table,
+            emoji_options,
+            diagram_options,
+        }
+    } else {
+        ParseConfig {
+            attributes: false,
+            auto_heading_ids: false,
+            escaped_space: false,
+            meta_table: false,
+            emoji_options,
+            diagram_options,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Python-exposed functions
 // ---------------------------------------------------------------------------
@@ -181,25 +213,7 @@ fn parse_only(
 #[pyo3(signature = (source, gfm = false, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None))]
 fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
-    let parse_cfg = if let Some(opts) = parse_opts {
-        ParseConfig {
-            attributes: opts.attributes,
-            auto_heading_ids: opts.auto_heading_ids,
-            escaped_space: opts.escaped_space,
-            meta_table: opts.meta_table,
-            emoji_options: emoji_parse_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
-            diagram_options: diagram_parse_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
-        }
-    } else {
-        ParseConfig {
-            attributes: false,
-            auto_heading_ids: false,
-            escaped_space: false,
-            meta_table: false,
-            emoji_options: emoji_parse_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
-            diagram_options: diagram_parse_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
-        }
-    };
+    let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
 
     let render_cfg = if let Some(opts) = render_opts {
         RenderConfig {
@@ -250,25 +264,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
 #[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None))]
 fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>) -> PyResult<Document> {
     // Extract plain-Rust config (no Python references — safe for detach)
-    let parse_cfg = if let Some(opts) = parse_opts {
-        ParseConfig {
-            attributes: opts.attributes,
-            auto_heading_ids: opts.auto_heading_ids,
-            escaped_space: opts.escaped_space,
-            meta_table: opts.meta_table,
-            emoji_options: emoji_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
-            diagram_options: diagram_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
-        }
-    } else {
-        ParseConfig {
-            attributes: false,
-            auto_heading_ids: false,
-            escaped_space: false,
-            meta_table: false,
-            emoji_options: emoji_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
-            diagram_options: diagram_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
-        }
-    };
+    let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
 
     // Release GIL for CPU-heavy parse.
     // Arena and NodeRef are now Send (via ExtensionData::Send bound),
@@ -277,6 +273,103 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
         parse_only(source, gfm, &parse_cfg)
     });
     Ok(Document::new(arena, source.to_string(), root_ref))
+}
+
+/// Lint Markdown source and return a list of Diagnostic objects.
+///
+/// Parses the source into the rushdown AST and evaluates the lint rules
+/// against it. Rule identifiers follow markdownlint (MD0xx).
+///
+/// # Arguments
+/// * `source` - Markdown source string
+/// * `gfm` - Whether to enable GFM extensions (default: false)
+/// * `parse_opts` - Optional ParseOptions object
+/// * `emoji_opts` - Optional emoji parser options
+/// * `diagram_opts` - Optional diagram parser options
+/// * `lint_opts` - Optional LintOptions object (enable/disable rules)
+///
+/// # Returns
+/// List of Diagnostic objects, sorted by (line, rule id)
+///
+/// # Example
+/// ```python
+/// import mordant
+/// for d in mordant.lint("# A\n\n### C"):
+///     print(d.rule, d.line, d.message)
+/// ```
+#[pyfunction]
+#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None))]
+fn lint(
+    py: Python<'_>,
+    source: &str,
+    gfm: bool,
+    parse_opts: Option<&ParseOptions>,
+    emoji_opts: Option<&PyEmojiParserOptions>,
+    diagram_opts: Option<&PyDiagramParserOptions>,
+    lint_opts: Option<&LintOptions>,
+) -> PyResult<Vec<Diagnostic>> {
+    let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
+    let lint_cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+
+    // Release GIL: parse + lint produce plain-Rust values (Arena/NodeRef are
+    // Send, Violation is Send), so the whole pipeline runs detached.
+    let violations = py.detach(move || {
+        let (arena, root_ref) = parse_only(source, gfm, &parse_cfg);
+        linter::run_lint(source, &arena, root_ref, &lint_cfg)
+    });
+
+    Ok(violations
+        .into_iter()
+        .map(Diagnostic::from_violation)
+        .collect())
+}
+
+/// Lint Markdown source and auto-correct the fixable issues.
+///
+/// Returns a FixResult with the corrected source (`.output`), the diagnostics
+/// that were fixed (`.fixed`), and the ones that still need manual attention
+/// (`.unfixable`). Only whitespace/formatting rules (MD009, MD012, MD047) are
+/// auto-fixed; structural rules are reported but not changed. MD040 is fixed
+/// only when `default_language` is supplied (it is inserted onto fences that
+/// lack a language).
+///
+/// # Arguments
+/// * `source` - Markdown source string
+/// * `gfm` - Whether to enable GFM extensions (default: false)
+/// * `parse_opts` / `emoji_opts` / `diagram_opts` - Optional parser options
+/// * `lint_opts` - Optional LintOptions object (enable/disable rules)
+/// * `default_language` - Language to insert for MD040 fixes (default: None)
+///
+/// # Example
+/// ```python
+/// import mordant
+/// result = mordant.fix("# Title  \n\n\nText")
+/// print(result.output)        # corrected Markdown
+/// print(len(result.fixed))    # how many issues were fixed
+/// print(result.unfixable)     # what still needs manual attention
+/// ```
+#[pyfunction]
+#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None))]
+fn fix(
+    py: Python<'_>,
+    source: &str,
+    gfm: bool,
+    parse_opts: Option<&ParseOptions>,
+    emoji_opts: Option<&PyEmojiParserOptions>,
+    diagram_opts: Option<&PyDiagramParserOptions>,
+    lint_opts: Option<&LintOptions>,
+    default_language: Option<String>,
+) -> PyResult<FixResult> {
+    let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
+    let lint_cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+
+    // Release GIL: parse + lint + fix produce plain-Rust values (Send).
+    let outcome = py.detach(move || {
+        let (arena, root_ref) = parse_only(source, gfm, &parse_cfg);
+        linter::run_fix(source, &arena, root_ref, &lint_cfg, default_language.as_deref())
+    });
+
+    Ok(FixResult::from_outcome(outcome))
 }
 
 /// Mordant - A fast CommonMark + GFM Markdown parser for Python.
@@ -291,10 +384,13 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
 fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(markdown_to_html, m)?)?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
+    m.add_function(wrap_pyfunction!(lint, m)?)?;
+    m.add_function(wrap_pyfunction!(fix, m)?)?;
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;
     m.add_class::<GfmOptions>()?;
     m.add_class::<ArenaOptions>()?;
+    m.add_class::<LintOptions>()?;
     m.add_class::<PyEmojiParserOptions>()?;
     m.add_class::<PyEmojiHtmlRendererOptions>()?;
     m.add_class::<PyDiagramParserOptions>()?;
@@ -302,5 +398,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Document>()?;
     m.add_class::<Node>()?;
     m.add_class::<Walker>()?;
+    m.add_class::<Diagnostic>()?;
+    m.add_class::<FixResult>()?;
     Ok(())
 }

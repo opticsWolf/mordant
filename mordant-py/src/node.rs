@@ -14,7 +14,7 @@ use crate::diagram::{Diagram, DiagramType};
 /// A Python-accessible wrapper around a rushdown AST node.
 ///
 /// Holds a shared reference to the Arena (via Rc<RefCell>) and the source string.
-#[pyclass(module = "rushdown", unsendable)]
+#[pyclass(module = "mordant", unsendable)]
 pub struct Node {
     arena: Rc<RefCell<Arena>>,
     node_ref: NodeRef,

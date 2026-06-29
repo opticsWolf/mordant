@@ -11,11 +11,12 @@ use rushdown_lib::util::StringMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+use crate::linter::{run_fix, run_lint, Diagnostic, FixResult, LintOptions};
 use crate::node::{self, Node};
 use crate::walker::Walker;
 
 /// A Python-accessible wrapper around the rushdown AST Document.
-#[pyclass(module = "rushdown", unsendable)]
+#[pyclass(module = "mordant", unsendable)]
 pub struct Document {
     arena: Rc<RefCell<Arena>>,
     source: String,
@@ -112,6 +113,52 @@ impl Document {
         Ok(walker)
     }
 
+    /// Lint this document, returning a list of Diagnostic objects.
+    ///
+    /// Evaluates the lint rules against the already-parsed AST.
+    ///
+    /// # Example
+    /// ```python
+    /// doc = mordant.parse("# A\n\n### C")
+    /// for d in doc.lint():
+    ///     print(d.rule, d.line, d.message)
+    /// ```
+    #[pyo3(signature = (lint_opts = None))]
+    fn lint(&self, lint_opts: Option<&LintOptions>) -> Vec<Diagnostic> {
+        let cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+        let arena_ref = self.arena.borrow();
+        let violations = run_lint(&self.source, &arena_ref, self.root_ref, &cfg);
+        violations
+            .into_iter()
+            .map(Diagnostic::from_violation)
+            .collect()
+    }
+
+    /// Lint this document and auto-correct the fixable issues.
+    ///
+    /// Returns a FixResult with the corrected source (`.output`), the fixed
+    /// diagnostics (`.fixed`), and the ones still needing attention
+    /// (`.unfixable`). See `mordant.fix` for the rule-by-rule behavior.
+    ///
+    /// # Example
+    /// ```python
+    /// doc = mordant.parse("# Title  \n\n\nText")
+    /// print(doc.fix().output)
+    /// ```
+    #[pyo3(signature = (lint_opts = None, default_language = None))]
+    fn fix(&self, lint_opts: Option<&LintOptions>, default_language: Option<String>) -> FixResult {
+        let cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+        let arena_ref = self.arena.borrow();
+        let outcome = run_fix(
+            &self.source,
+            &arena_ref,
+            self.root_ref,
+            &cfg,
+            default_language.as_deref(),
+        );
+        FixResult::from_outcome(outcome)
+    }
+
     fn __repr__(&self) -> String {
         format!("<Document source_len={}>", self.source.len())
     }
@@ -179,5 +226,3 @@ fn meta_value_to_py(py: Python<'_>, value: &Meta) -> PyResult<Py<PyAny>> {
         }
     }
 }
-
-

@@ -16,11 +16,11 @@ use crate::node::Node;
 ///
 /// # Example
 /// ```python
-/// doc = rushdown.parse("# Hello\n\n**World**")
+/// doc = mordant.parse("# Hello\n\n**World**")
 /// for node in doc.walk("depth"):
 ///     print(node.kind, node.text)
 /// ```
-#[pyclass(module = "rushdown", unsendable)]
+#[pyclass(module = "mordant", unsendable)]
 pub struct Walker {
     arena: Rc<RefCell<Arena>>,
     source: String,

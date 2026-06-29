@@ -3,7 +3,7 @@
 use pyo3::prelude::*;
 
 /// Base exception for all rushdown errors.
-#[pyclass(module = "rushdown", skip_from_py_object)]
+#[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
 pub struct RushdownError {
     message: String,
