@@ -11,7 +11,7 @@ use rushdown_lib::util::StringMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::linter::{run_fix, run_lint, Diagnostic, FixResult, LintOptions};
+use crate::linter::{run_fix, run_lint, Diagnostic, FixResult, LintConfig, LintOptions};
 use crate::node::{self, Node};
 use crate::walker::Walker;
 
@@ -123,9 +123,20 @@ impl Document {
     /// for d in doc.lint():
     ///     print(d.rule, d.line, d.message)
     /// ```
-    #[pyo3(signature = (lint_opts = None))]
-    fn lint(&self, lint_opts: Option<&LintOptions>) -> Vec<Diagnostic> {
-        let cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+    #[pyo3(signature = (lint_opts = None, lint_config = None))]
+    fn lint(&self, lint_opts: Option<&LintOptions>, lint_config: Option<&LintConfig>) -> Vec<Diagnostic> {
+        let cfg = if let Some(cfg) = lint_config {
+            let mut lc = cfg.clone();
+            lc.suppressions = crate::linter::parse_suppressions(&self.source);
+            if let Some(opts) = lint_opts {
+                lc.disable.extend(opts.disable.clone());
+            }
+            lc
+        } else {
+            let mut lc = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+            lc.suppressions = crate::linter::parse_suppressions(&self.source);
+            lc
+        };
         let arena_ref = self.arena.borrow();
         let violations = run_lint(&self.source, &arena_ref, self.root_ref, &cfg);
         violations
@@ -145,9 +156,20 @@ impl Document {
     /// doc = mordant.parse("# Title  \n\n\nText")
     /// print(doc.fix().output)
     /// ```
-    #[pyo3(signature = (lint_opts = None, default_language = None))]
-    fn fix(&self, lint_opts: Option<&LintOptions>, default_language: Option<String>) -> FixResult {
-        let cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+    #[pyo3(signature = (lint_opts = None, default_language = None, lint_config = None))]
+    fn fix(&self, lint_opts: Option<&LintOptions>, default_language: Option<String>, lint_config: Option<&LintConfig>) -> FixResult {
+        let cfg = if let Some(cfg) = lint_config {
+            let mut lc = cfg.clone();
+            lc.suppressions = crate::linter::parse_suppressions(&self.source);
+            if let Some(opts) = lint_opts {
+                lc.disable.extend(opts.disable.clone());
+            }
+            lc
+        } else {
+            let mut lc = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+            lc.suppressions = crate::linter::parse_suppressions(&self.source);
+            lc
+        };
         let arena_ref = self.arena.borrow();
         let outcome = run_fix(
             &self.source,

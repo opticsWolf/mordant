@@ -25,7 +25,7 @@ mod walker;
 use document::Document;
 use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
-use linter::{Diagnostic, FixResult, LintOptions};
+use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
 use node::Node;
 use options::{ArenaOptions, GfmOptions, ParseOptions, RenderOptions};
 use walker::Walker;
@@ -286,7 +286,8 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
 /// * `parse_opts` - Optional ParseOptions object
 /// * `emoji_opts` - Optional emoji parser options
 /// * `diagram_opts` - Optional diagram parser options
-/// * `lint_opts` - Optional LintOptions object (enable/disable rules)
+/// * `lint_opts` - Optional LintOptions object (enable/disable rules, legacy)
+/// * `lint_config` - Optional LintConfig object (full config with params, suppressions)
 ///
 /// # Returns
 /// List of Diagnostic objects, sorted by (line, rule id)
@@ -298,7 +299,7 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
 ///     print(d.rule, d.line, d.message)
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None))]
+#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, lint_config = None))]
 fn lint(
     py: Python<'_>,
     source: &str,
@@ -307,9 +308,27 @@ fn lint(
     emoji_opts: Option<&PyEmojiParserOptions>,
     diagram_opts: Option<&PyDiagramParserOptions>,
     lint_opts: Option<&LintOptions>,
+    lint_config: Option<&LintConfig>,
 ) -> PyResult<Vec<Diagnostic>> {
     let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
-    let lint_cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+    let lint_cfg = if let Some(cfg) = lint_config {
+        let mut lc = linter::LintConfig {
+            disable: cfg.disable.clone(),
+            enable: cfg.enable.clone(),
+            suppressions: linter::parse_suppressions(source),
+            params: cfg.params.clone(),
+            _enabled_when_default_false: None,
+        };
+        // Merge disable list from lint_opts if provided
+        if let Some(opts) = lint_opts {
+            lc.disable.extend(opts.disable.clone());
+        }
+        lc
+    } else {
+        let mut lc = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+        lc.suppressions = linter::parse_suppressions(source);
+        lc
+    };
 
     // Release GIL: parse + lint produce plain-Rust values (Arena/NodeRef are
     // Send, Violation is Send), so the whole pipeline runs detached.
@@ -337,8 +356,9 @@ fn lint(
 /// * `source` - Markdown source string
 /// * `gfm` - Whether to enable GFM extensions (default: false)
 /// * `parse_opts` / `emoji_opts` / `diagram_opts` - Optional parser options
-/// * `lint_opts` - Optional LintOptions object (enable/disable rules)
+/// * `lint_opts` - Optional LintOptions object (enable/disable rules, legacy)
 /// * `default_language` - Language to insert for MD040 fixes (default: None)
+/// * `lint_config` - Optional LintConfig object (full config with params, suppressions)
 ///
 /// # Example
 /// ```python
@@ -349,7 +369,7 @@ fn lint(
 /// print(result.unfixable)     # what still needs manual attention
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None))]
+#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None, lint_config = None))]
 fn fix(
     py: Python<'_>,
     source: &str,
@@ -359,9 +379,21 @@ fn fix(
     diagram_opts: Option<&PyDiagramParserOptions>,
     lint_opts: Option<&LintOptions>,
     default_language: Option<String>,
+    lint_config: Option<&LintConfig>,
 ) -> PyResult<FixResult> {
     let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
-    let lint_cfg = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+    let lint_cfg = if let Some(cfg) = lint_config {
+        let mut lc = cfg.clone();
+        lc.suppressions = linter::parse_suppressions(source);
+        if let Some(opts) = lint_opts {
+            lc.disable.extend(opts.disable.clone());
+        }
+        lc
+    } else {
+        let mut lc = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+        lc.suppressions = linter::parse_suppressions(source);
+        lc
+    };
 
     // Release GIL: parse + lint + fix produce plain-Rust values (Send).
     let outcome = py.detach(move || {
@@ -370,6 +402,23 @@ fn fix(
     });
 
     Ok(FixResult::from_outcome(outcome))
+}
+
+
+/// Return metadata for all registered lint rules.
+///
+/// # Returns
+/// List of RuleMetadata objects, each with id, name, description, fixable, default_params
+///
+/// # Example
+/// ```python
+/// import mordant
+/// for r in mordant.lint_rules():
+///     print(r.id, r.name, r.fixable)
+/// ```
+#[pyfunction]
+fn lint_rules() -> Vec<RuleMetadata> {
+    linter::lint_rules()
 }
 
 /// Mordant - A fast CommonMark + GFM Markdown parser for Python.
@@ -386,6 +435,8 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_function(wrap_pyfunction!(lint, m)?)?;
     m.add_function(wrap_pyfunction!(fix, m)?)?;
+    m.add_function(wrap_pyfunction!(lint_rules, m)?)?;
+    m.add_class::<linter::LintConfig>()?;
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;
     m.add_class::<GfmOptions>()?;

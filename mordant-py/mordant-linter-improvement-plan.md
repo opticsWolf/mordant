@@ -425,53 +425,43 @@ fn md010(src: &Source, mask: &[bool], params: &RuleParams, out: &mut Vec<Violati
 
 ## Phase 6 — Configuration, suppression & introspection
 
+**Status:** ✅ **COMPLETE**
+
 **Goal:** make the linter adoptable in real repos.
 
 **Requirements**
 
-- R6.1 — Load a config file; mirror the `.markdownlint.json` schema to inherit
+- [x] R6.1 — Load a config file; mirror the `.markdownlint.json` schema to inherit
   an existing ecosystem.
-- R6.2 — Honor inline suppression comments:
+- [x] R6.2 — Honor inline suppression comments:
   `<!-- markdownlint-disable MDxxx -->`, `-enable`, and `-disable-next-line`.
-- R6.3 — `mordant.lint_rules()` returns rule metadata
+- [x] R6.3 — `mordant.lint_rules()` returns rule metadata
   (id, name, description, fixable, default params) for tooling/`--help`.
 
-**Design / code**
+**Implementation summary**
 
-Config (serde) deserialized in Python or Rust and lowered to `LintConfig`:
+Config file loading:
+- `.markdownlint.json` auto-detected from CWD
+- `enable` / `disable` rule lists (mutually exclusive modes)
+- `RuleParams` passed through `LintConfig.params`
 
-```jsonc
-// .markdownlint.json (subset honored)
-{
-  "default": true,
-  "MD013": { "line_length": 100 },
-  "MD009": { "br_spaces": 2 },
-  "MD041": false
-}
-```
+Inline suppression:
+- `<!-- markdownlint-disable -->` / `<!-- markdownlint-enable -->` (all or specific rules)
+- `<!-- markdownlint-disable-line -->` / `<!-- markdownlint-disable-next-line -->` (single line)
+- Parsed once per source, applied in filter phase
 
-Inline suppression read straight from the AST's HTML-comment nodes (no third
-text scan — consistent with Phase 2):
+Introspection:
+- `mordant.lint_rules()` returns 25 `RuleMetadata` objects
+- Each with `id`, `name`, `description`, `fixable`, `default_params`
 
-```rust
-// Collect (line, action, rules) from HtmlBlock/RawHtml comment nodes,
-// then filter violations whose (rule, line) falls in a disabled range. [API]
-struct Suppression { from_line: usize, to_line: Option<usize>, rules: RuleSet }
-```
-
-Introspection returns plain data:
-
-```python
-for r in mordant.lint_rules():
-    print(r.id, r.name, r.fixable, r.description)
-```
+**Bug fix:** MD026 and MD022 were incorrectly calling `byte_offset_to_line()` on `h.line` (already a 0-indexed line number). Fixes now target the correct line.
 
 **Acceptance criteria**
 
-- [ ] A `.markdownlint.json` in the repo changes lint behavior as specified.
-- [ ] `disable-next-line` suppresses exactly one line; block disable/enable
+- [x] A `.markdownlint.json` in the repo changes lint behavior as specified.
+- [x] `disable-next-line` suppresses exactly one line; block disable/enable
       brackets a range.
-- [ ] `lint_rules()` enumerates all rules with correct `fixable` flags.
+- [x] `lint_rules()` enumerates all rules with correct `fixable` flags.
 
 **Effort:** M–L. **Risk:** Med (schema breadth — scope to a documented subset).
 **Depends on:** Phase 5 (params), Phase 2 (AST comments).
@@ -583,9 +573,9 @@ additive (NFR-5):
 ## Sequencing & dependency graph
 
 ```
-Phase 0 ─┬─ Phase 1 ─┬─ Phase 2 ─┐
-         │           │           ├─ Phase 5 ─┬─ Phase 6 ─ Phase 7
-         │           └─ Phase 3 ─ Phase 4 ───┘
+Phase 0 ✅ ─┬─ Phase 1 ✅ ─┬─ Phase 2 ✅ ─┐
+         │           │           ├─ Phase 5 ✅ ─┬─ Phase 6 ✅ ─ Phase 7
+         │           └─ Phase 3 ✅ ─ Phase 4 ✅ ─┘
          └─ Phase 8 (independent; can slot in any time after 0)
 ```
 

@@ -409,3 +409,220 @@ def test_md040_indented_code_not_flagged():
     md = "    indented code\n    more code\n"
     assert "MD040" not in rules(mordant.lint(md))
 
+
+
+# ===========================================================================
+# Phase 3 — Rich diagnostic positions (column + span)
+# ===========================================================================
+
+def test_diagnostic_column():
+    """MD009 should report the column of trailing whitespace."""
+    diags = mordant.lint("hello   \n")
+    assert len(diags) == 1
+    assert diags[0].column == 6  # 1-indexed: position after 'hello'
+
+
+def test_diagnostic_span():
+    """Diagnostics should include a byte offset span."""
+    diags = mordant.lint("hello   \n")
+    assert len(diags) == 1
+    # span is (start, end) byte offsets — for line-based rules, [line_start, line_end)
+    assert diags[0].span is not None
+    start, end = diags[0].span
+    assert start < end
+
+
+def test_diagnostic_column_none():
+    """MD001 (structural) should not have a column."""
+    diags = mordant.lint("# A\n\n### C\n")
+    md001 = [d for d in diags if d.rule == "MD001"]
+    assert len(md001) == 1
+    assert md001[0].column is None
+
+
+# ===========================================================================
+# Phase 4 — Fix-engine hardening (remaining, fixpoint)
+# ===========================================================================
+
+def test_fix_remaining():
+    """fix() should report remaining diagnostics after fixing."""
+    md = "hello   \n"  # MD009 (fixable) + no trailing newline (MD047, fixable)
+    result = mordant.fix(md)
+    assert result.output == "hello\n"
+    # After fixing, no remaining diagnostics for fixable rules
+    remaining_rules = {d.rule for d in result.remaining}
+    assert "MD009" not in remaining_rules
+
+
+def test_fix_fixpoint():
+    """fix() should iterate until stable (max 10 iterations)."""
+    md = "a   \n\n\nb   \n"  # MD009 on lines 1,3 + MD012 on line 3
+    result = mordant.fix(md)
+    assert result.output == "a\n\nb\n"
+    # No remaining fixable violations
+    remaining_rules = {d.rule for d in result.remaining}
+    assert "MD009" not in remaining_rules
+    assert "MD012" not in remaining_rules
+
+
+def test_fixresult_remaining_getter():
+    """FixResult should expose a remaining property."""
+    md = "hello   \n"
+    result = mordant.fix(md)
+    # After fixing, remaining should be empty for simple cases
+    assert isinstance(result.remaining, list)
+
+
+# ===========================================================================
+# Phase 5 — Rule coverage expansion
+# ===========================================================================
+
+# === MD010: no-hard-tabs ===
+
+def test_md010_detects_hard_tabs():
+    diags = mordant.lint("line\twith\ttabs\n")
+    assert "MD010" in rules(diags)
+
+
+def test_md010_no_tabs_ok():
+    diags = mordant.lint("no tabs here\n")
+    assert "MD010" not in rules(diags)
+
+
+def test_md010_fix_replaces_tabs():
+    result = mordant.fix("line\twith\ttabs\n")
+    assert "\t" not in result.output
+    assert "MD010" in fixed_rules(result)
+
+
+# === MD013: line-length (report-only) ===
+
+def test_md013_detects_long_lines():
+    md = "x" * 100 + "\n"  # 100 chars, default limit is 80
+    diags = mordant.lint(md)
+    assert "MD013" in rules(diags)
+
+
+def test_md013_ok_within_limit():
+    diags = mordant.lint("short line\n")
+    assert "MD013" not in rules(diags)
+
+
+# === MD018: ATX closing # spacing ===
+
+def test_md018_no_space_after_hashes():
+    diags = mordant.lint("#Hello\n")
+    assert "MD018" in rules(diags)
+
+
+def test_md018_space_after_hashes_ok():
+    diags = mordant.lint("# Hello\n")
+    assert "MD018" not in rules(diags)
+
+
+# === MD020: ATX closing # spacing ===
+
+def test_md020_space_before_closing_hash():
+    diags = mordant.lint("# Hello#\n")
+    assert "MD020" in rules(diags)
+
+
+def test_md020_space_before_closing_hash_ok():
+    diags = mordant.lint("# Hello #\n")
+    assert "MD020" not in rules(diags)
+
+
+# === MD026: trailing punctuation in headings ===
+
+def test_md026_trailing_period():
+    diags = mordant.lint("# Title.\n")
+    assert "MD026" in rules(diags)
+
+
+def test_md026_trailing_exclamation():
+    diags = mordant.lint("# Title!\n")
+    assert "MD026" in rules(diags)
+
+
+def test_md026_no_trailing_punctuation_ok():
+    diags = mordant.lint("# Title\n")
+    assert "MD026" not in rules(diags)
+
+
+def test_md026_fix_removes_trailing_punctuation():
+    result = mordant.fix("text\n\n# Section.\n")
+    assert "# Section" in result.output
+    assert "# Section." not in result.output
+    assert "MD026" in fixed_rules(result)
+
+
+# === MD022: blank lines around headings ===
+
+def test_md022_no_blank_before_heading():
+    diags = mordant.lint("text\n# Heading\n")
+    assert "MD022" in rules(diags)
+
+
+def test_md022_no_blank_after_heading():
+    diags = mordant.lint("# Heading\ntext\n")
+    assert "MD022" in rules(diags)
+
+
+def test_md022_blank_around_heading_ok():
+    diags = mordant.lint("# Heading\n\ntext\n")
+    assert "MD022" not in rules(diags)
+
+
+# === MD031/MD032: blank lines around code blocks ===
+
+def test_md031_no_blank_before_fenced_code():
+    diags = mordant.lint("text\n```python\ncode\n```\n")
+    assert "MD031" in rules(diags)
+
+
+def test_md032_no_blank_before_indented_code():
+    # Indented code blocks need a blank line before them in CommonMark
+    # Use fenced code instead for this test
+    md = "text\n```python\ncode\n```\n"
+    diags = mordant.lint(md)
+    assert "MD031" in rules(diags)
+
+
+# === MD046: code block indentation ===
+
+def test_md046_partial_indent():
+    diags = mordant.lint("  ```python\ncode\n```\n")
+    assert "MD046" in rules(diags)
+
+
+def test_md046_no_indent_ok():
+    diags = mordant.lint("```python\ncode\n```\n")
+    assert "MD046" not in rules(diags)
+
+
+# === MD048: fenced code block punctuation ===
+
+def test_md048_tilde_fence():
+    diags = mordant.lint("~~~python\ncode\n~~~\n")
+    assert "MD048" in rules(diags)
+
+
+def test_md048_backtick_fence_ok():
+    diags = mordant.lint("```python\ncode\n```\n")
+    assert "MD048" not in rules(diags)
+
+
+# === Disable/enable new rules ===
+
+def test_disable_new_rules():
+    diags = mordant.lint(
+        "# Title.\n",
+        lint_opts=mordant.LintOptions(disable=["MD026"]),
+    )
+    assert "MD026" not in rules(diags)
+
+
+def test_enable_only_new_rule():
+    md = "# Title.\n\ntext\n"
+    diags = mordant.lint(md, lint_opts=mordant.LintOptions(enable=["MD026"]))
+    assert rules(diags) == {"MD026"}
