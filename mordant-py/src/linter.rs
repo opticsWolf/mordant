@@ -13,9 +13,11 @@
 //! Conversion into the `Diagnostic` pyclass happens on the GIL thread.
 
 use pyo3::prelude::*;
-use rushdown_lib::ast::{Arena, KindData, NodeRef};
-use std::collections::{HashMap, HashSet};
+use rushdown_lib::ast::{Arena, KindData, Meta, NodeRef};
+use std::collections::HashSet;
 use pyo3::types::PyDict;
+
+use crate::emoji::EmojiData;
 
 // ---------------------------------------------------------------------------
 // Diagnostics
@@ -560,6 +562,10 @@ struct Collected {
     code_blocks: Vec<CodeBlockInfo>,
     /// Code regions derived from AST nodes (fenced blocks, indented code).
     code_regions: Vec<CodeRegion>,
+    /// Frontmatter title, if present (for MD025 — single h1).
+    frontmatter_title: Option<String>,
+    /// Canonical heading anchors for MD041/MD043/fragment link checks.
+    heading_anchors: Vec<String>,
 }
 
 /// Check if a source line contains a fence delimiter (backtick or tilde).
@@ -572,6 +578,7 @@ fn has_fence_char(s: &str) -> bool {
 ///
 /// Mirrors `node::collect_text`, but operates on a borrowed `&Arena` rather
 /// than `Rc<RefCell<Arena>>` so it can run on the GIL-free parse result.
+/// Handles emoji extension nodes by extracting the Unicode emoji character.
 fn collect_text(arena: &Arena, node_ref: NodeRef, source: &str) -> String {
     let mut result = String::new();
     let mut child = arena[node_ref].first_child();
@@ -580,6 +587,13 @@ fn collect_text(arena: &Arena, node_ref: NodeRef, source: &str) -> String {
             KindData::Text(t) => result.push_str(t.str(source)),
             KindData::CodeSpan(c) => result.push_str(c.str(source).as_ref()),
             KindData::RawHtml(r) => result.push_str(r.str(source).as_ref()),
+            KindData::Extension(ext) => {
+                // Try to downcast to EmojiData and extract the emoji string.
+                if let Some(emoji_data) = (ext.as_ref() as &dyn std::any::Any).downcast_ref::<EmojiData>() {
+                    result.push_str(emoji_data.as_str());
+                }
+                // If not an emoji, fall through to recursion (no-op for leaf nodes).
+            }
             _ => result.push_str(&collect_text(arena, nref, source)),
         }
         child = arena[nref].next_sibling();
@@ -587,16 +601,57 @@ fn collect_text(arena: &Arena, node_ref: NodeRef, source: &str) -> String {
     result
 }
 
+/// Generate a canonical heading anchor (slug) from heading text.
+/// Mirrors GitHub Flavored Markdown / rushdown's auto_heading_ids behavior:
+/// lowercase, replace spaces with hyphens, remove non-alphanumeric chars
+/// (except hyphens).
+fn heading_anchor(text: &str) -> String {
+    let slug: String = text.trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c
+            } else if c == '-' {
+                '-'
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    slug.split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<&str>>()
+        .join("-")
+}
+
 /// Single pre-order DFS that extracts everything the rules need.
 fn build(arena: &Arena, node_ref: NodeRef, src: &Source, out: &mut Collected) {
     match &arena[node_ref].kind_data() {
+        KindData::Document(doc) => {
+            // Extract frontmatter title from metadata (for MD025)
+            let meta = doc.metadata();
+            if let Some(title_val) = meta.get("title") {
+                if let Meta::String(title_str) = title_val {
+                    if !title_str.trim().is_empty() {
+                        out.frontmatter_title = Some(title_str.clone());
+                    }
+                }
+            }
+        }
         KindData::Heading(h) => {
             let line_num = arena[node_ref].pos().and_then(|p| byte_offset_to_line(src, p));
+            let heading_text = collect_text(arena, node_ref, src.text);
             out.headings.push(HeadingInfo {
                 level: h.level(),
                 line: line_num,
-                text: collect_text(arena, node_ref, src.text),
+                text: heading_text.clone(),
             });
+            // Generate canonical anchor for fragment link validation (MD042/R8.3)
+            let anchor = heading_anchor(&heading_text);
+            if !anchor.is_empty() {
+                out.heading_anchors.push(anchor);
+            }
         }
         KindData::Link(l) => out.links.push(LinkInfo {
             destination: l.destination_str(src.text).to_string(),
@@ -773,6 +828,10 @@ fn md024(m: &Collected, out: &mut Vec<Violation>) {
 }
 
 /// MD025 — a document should have at most one top-level (h1) heading.
+///
+/// If the document has a frontmatter `title:` field, that counts as the
+/// document title, so a single h1 is not flagged (it's a section heading,
+/// not a duplicate title). Frontmatter title extraction is done in `build()`.
 fn md025(m: &Collected, out: &mut Vec<Violation>) {
     let mut count = 0;
     for h in &m.headings {
@@ -831,6 +890,8 @@ fn md040(m: &Collected, out: &mut Vec<Violation>) {
 }
 
 /// MD042 — links should not have an empty destination.
+/// Also flags fragment-only links (`#anchor`) that don't reference a known
+/// heading anchor in the document (R8.3).
 fn md042(m: &Collected, out: &mut Vec<Violation>) {
     for l in &m.links {
         let dest = l.destination.trim();
@@ -843,6 +904,20 @@ fn md042(m: &Collected, out: &mut Vec<Violation>) {
                 l.line.map(|x| (x, x + 1)), // span: [line_start, line_end)
                 "Link has an empty destination",
             ));
+            continue;
+        }
+        // Check fragment-only links against known heading anchors.
+        if let Some(fragment) = dest.strip_prefix('#') {
+            if !fragment.is_empty() && !m.heading_anchors.contains(&fragment.to_string()) {
+                out.push(Violation::warn(
+                    "MD042",
+                    "no-empty-links",
+                    l.line.map(|x| x + 1),
+                    None, // column
+                    l.line.map(|x| (x, x + 1)), // span: [line_start, line_end)
+                    format!("Link references unknown anchor: \"{}\"", fragment),
+                ));
+            }
         }
     }
 }

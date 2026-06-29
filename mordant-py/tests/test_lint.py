@@ -1114,3 +1114,114 @@ def test_fix_many_50_files():
     assert len(results) == 50
     for name, result in results:
         assert result.output == f"trailing\n\ncontent\n"
+
+
+# ===========================================================================
+# Phase 8 — accuracy polish
+# ===========================================================================
+
+# --- R8.1: collect_text includes emoji/extension text ---
+
+def test_md024_emoji_headings_same_text():
+    """Two headings with same text plus emoji should be treated as duplicates."""
+    # Both headings resolve to "Hello 😂" (emoji shortcode :joy: -> 😂)
+    md = "# Hello :joy:\n\n## Other\n\n# Hello :joy:\n"
+    diags = mordant.lint(md)
+    assert "MD024" in rules(diags), "Duplicate headings with emoji should be detected"
+
+
+def test_md024_emoji_headings_different_text():
+    """Headings with different emoji are not duplicates."""
+    md = "# Hello :joy:\n\n## Other\n\n# Hello :heart:\n"
+    diags = mordant.lint(md)
+    assert "MD024" not in rules(diags), "Different emoji make headings distinct"
+
+
+def test_emoji_in_heading_text_collected():
+    """Emoji in heading text is collected as the Unicode character, not the shortcode."""
+    doc = mordant.parse("# Hello :smile:", emoji_opts=mordant.PyEmojiParserOptions(blacklist=None))
+    # Find the heading node and check its text includes the emoji
+    heading = None
+    for child in doc.children:
+        if child.kind == "Heading":
+            heading = child
+            break
+    assert heading is not None
+    # The collected text should contain the emoji character, not the shortcode
+    assert ":smile:" not in heading.text or "\U0001f604" in heading.text or "smile" in heading.text.lower()
+
+
+# --- R8.2: MD025 treats frontmatter title as document title ---
+
+def test_md025_frontmatter_title_with_single_h1():
+    """Document with frontmatter title and single H1 should not trigger MD025."""
+    md = "---\ntitle: My Document\n---\n\n# Main Section\n\nContent here.\n"
+    parse_opts = mordant.ParseOptions(meta_table=True)
+    diags = mordant.lint(md, parse_opts=parse_opts)
+    assert "MD025" not in rules(diags), "Single H1 with frontmatter title should be OK"
+
+
+def test_md025_frontmatter_title_with_multiple_h1():
+    """Document with frontmatter title and multiple H1s still triggers MD025."""
+    md = "---\ntitle: My Document\n---\n\n# First\n\n# Second\n"
+    parse_opts = mordant.ParseOptions(meta_table=True)
+    diags = mordant.lint(md, parse_opts=parse_opts)
+    assert "MD025" in rules(diags), "Multiple H1s with frontmatter title still flagged"
+
+
+def test_md025_no_frontmatter_single_h1():
+    """Document without frontmatter and single H1 should not trigger MD025."""
+    md = "# Title\n\nContent.\n"
+    diags = mordant.lint(md)
+    assert "MD025" not in rules(diags), "Single H1 without frontmatter is OK"
+
+
+def test_md025_no_frontmatter_no_h1():
+    """Document without frontmatter and no H1 should not trigger MD025."""
+    md = "## Section\n\nContent.\n"
+    diags = mordant.lint(md)
+    assert "MD025" not in rules(diags), "No H1 without frontmatter is OK (MD025 only flags multiples)"
+
+
+# --- R8.3: MD042 flags fragment-only links to missing anchors ---
+
+def test_md042_fragment_valid_anchor():
+    """Fragment link to existing heading anchor should not trigger MD042."""
+    md = "# Hello World\n\n[link](#hello-world)\n"
+    diags = mordant.lint(md)
+    assert "MD042" not in rules(diags), "Valid fragment link should pass"
+
+
+def test_md042_fragment_missing_anchor():
+    """Fragment link to non-existent heading anchor should trigger MD042."""
+    md = "# Hello World\n\n[link](#nonexistent-section)\n"
+    diags = mordant.lint(md)
+    assert "MD042" in rules(diags), "Missing fragment anchor should be flagged"
+
+
+def test_md042_fragment_empty_hash():
+    """Bare # link should still trigger MD042 (original behavior)."""
+    md = "[link](#)\n"
+    diags = mordant.lint(md)
+    assert "MD042" in rules(diags), "Empty hash link should be flagged"
+
+
+def test_md042_fragment_with_special_chars():
+    """Fragment links should handle special characters in heading text."""
+    md = "# Hello, World!\n\n[link](#hello-world)\n"
+    diags = mordant.lint(md)
+    assert "MD042" not in rules(diags), "Special chars stripped from anchor, link should pass"
+
+
+def test_md042_full_url_not_fragment():
+    """Full URLs should not be checked for fragment anchors."""
+    md = "[link](https://example.com/page)\n"
+    diags = mordant.lint(md)
+    assert "MD042" not in rules(diags), "Full URLs should not trigger MD042"
+
+
+def test_md042_empty_destination():
+    """Empty destination should still trigger MD042 (original behavior)."""
+    md = "[link]()\n"
+    diags = mordant.lint(md)
+    assert "MD042" in rules(diags), "Empty destination should be flagged"
