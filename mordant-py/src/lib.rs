@@ -16,6 +16,7 @@ mod document;
 mod diagram;
 mod emoji;
 mod errors;
+mod highlighter;
 mod linter;
 mod meta;
 mod node;
@@ -25,6 +26,7 @@ mod walker;
 use document::Document;
 use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
+use highlighter::{add_custom_theme, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
 use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
 use node::Node;
 use options::{ArenaOptions, GfmOptions, ParseOptions, RenderOptions};
@@ -65,6 +67,7 @@ struct RenderConfig {
     escaped_space: bool,
     emoji_options: EmojiHtmlRendererOptions,
     diagram_options: DiagramHtmlRendererOptions,
+    highlighting_options: Option<HighlightingRendererOptions>,
 }
 
 impl Default for RenderConfig {
@@ -76,6 +79,7 @@ impl Default for RenderConfig {
             escaped_space: false,
             emoji_options: EmojiHtmlRendererOptions::default(),
             diagram_options: DiagramHtmlRendererOptions::default(),
+            highlighting_options: None,
         }
     }
 }
@@ -120,7 +124,19 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
 
     let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
     let diagram_ext = diagram_html_renderer_extension(render_cfg.diagram_options.clone());
-    rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
+    
+    let base_ext = emoji_ext.and(diagram_ext);
+    
+    // Add highlighting extension if enabled
+    if let Some(ref highlighting_opts) = render_cfg.highlighting_options {
+        let highlighting_ext = highlighting_html_renderer_extension(highlighting_opts.clone());
+        rushdown_lib::renderer::html::Renderer::with_extensions(
+            opts,
+            base_ext.and(highlighting_ext),
+        )
+    } else {
+        rushdown_lib::renderer::html::Renderer::with_extensions(opts, base_ext)
+    }
 }
 
 // Parse + render to HTML string — returns Result<String, String>
@@ -200,6 +216,8 @@ fn parse_config_from(
 /// * `emoji_render_opts` - Optional emoji renderer options (template)
 /// * `diagram_parse_opts` - Optional diagram parser options
 /// * `diagram_render_opts` - Optional diagram renderer options (mermaid_url)
+/// * `highlighting_theme` - Optional theme name for code highlighting (default: "InspiredGitHub")
+/// * `highlighting_mode` - Optional highlighting mode ("Attribute" or "Class", default: "Attribute")
 ///
 /// # Returns
 /// HTML string
@@ -210,8 +228,8 @@ fn parse_config_from(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>) -> PyResult<String> {
+#[pyo3(signature = (source, gfm = false, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, highlighting_theme = None, highlighting_mode = None))]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
 
@@ -223,6 +241,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
             escaped_space: opts.escaped_space,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
+            highlighting_options: None, // Will be set below
         }
     } else {
         RenderConfig {
@@ -232,13 +251,30 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
             escaped_space: false,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
+            highlighting_options: None, // Will be set below
         }
+    };
+
+    // Add highlighting options if provided
+    let final_render_cfg = if let Some(theme) = highlighting_theme {
+        let mode = match highlighting_mode {
+            Some("Class") => highlighter::HighlightingMode::Class,
+            _ => highlighter::HighlightingMode::Attribute,
+        };
+        let mut cfg = render_cfg;
+        cfg.highlighting_options = Some(HighlightingRendererOptions {
+            theme: theme.to_string(),
+            mode,
+        });
+        cfg
+    } else {
+        render_cfg
     };
 
     // Release GIL for CPU-heavy parse + render
     // String is Send, so it can cross the GIL boundary
     py.detach(move || {
-        parse_and_render(source, gfm, &parse_cfg, &render_cfg)
+        parse_and_render(source, gfm, &parse_cfg, &final_render_cfg)
     }).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
 }
 
@@ -524,6 +560,9 @@ fn fix_many(
 /// ```
 #[pymodule]
 fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // Load custom themes from .mordant/themes/ directory
+    let _loaded = highlighter::load_builtin_themes();
+    
     m.add_function(wrap_pyfunction!(markdown_to_html, m)?)?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
     m.add_function(wrap_pyfunction!(lint, m)?)?;
@@ -531,6 +570,9 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(lint_rules, m)?)?;
     m.add_function(wrap_pyfunction!(lint_many, m)?)?;
     m.add_function(wrap_pyfunction!(fix_many, m)?)?;
+    m.add_function(wrap_pyfunction!(add_custom_theme, m)?)?;
+    m.add_function(wrap_pyfunction!(list_themes, m)?)?;
+    m.add_function(wrap_pyfunction!(list_syntaxes, m)?)?;
     m.add_class::<linter::LintConfig>()?;
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;
@@ -541,6 +583,8 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEmojiHtmlRendererOptions>()?;
     m.add_class::<PyDiagramParserOptions>()?;
     m.add_class::<PyDiagramHtmlRendererOptions>()?;
+    m.add_class::<PyHighlighter>()?;
+    m.add_class::<PyHighlightingMode>()?;
     m.add_class::<Document>()?;
     m.add_class::<Node>()?;
     m.add_class::<Walker>()?;

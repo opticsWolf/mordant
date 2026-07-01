@@ -1,0 +1,19 @@
+[project]
+name = "mordant"
+version = "0.6.0"
+description = "Mordant - A fast CommonMark + GFM Markdown parser for Python"
+requires-python = ">=3.9"
+readme = "README.md"
+
+[tool.maturin]
+# Include the themes directory as package data
+package-dir = "mordant"
+
+[tool.maturin.modules]
+# The Rust extension
+mordant = "target/release/mordant.dll"
+
+[tool.maturin.include]
+# Include themes directory in the wheel
+"mordant/themes/*.tmTheme" = "mordant/themes/"
+"mordant/themes/ThirdPartyNotices.md" = "mordant/themes/"
