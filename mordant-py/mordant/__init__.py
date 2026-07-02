@@ -57,15 +57,22 @@ def _load_embedded_themes():
         return
     
     for f in sorted(os.listdir(themes_dir)):
-        if f.endswith(".tmTheme"):
-            theme_name = f.replace(".tmTheme", "")
-            file_path = os.path.join(themes_dir, f)
-            try:
-                with open(file_path, "r") as fp:
-                    content = fp.read()
-                add_custom_theme(theme_name, content)
-            except Exception as e:
-                print(f"Warning: Could not load theme {theme_name}: {e}")
+        file_path = os.path.join(themes_dir, f)
+        try:
+            with open(file_path, "r") as fp:
+                content = fp.read()
+            
+            # Determine theme name from filename
+            if f.endswith(".tmTheme"):
+                theme_name = f.replace(".tmTheme", "")
+            elif f.endswith(".json"):
+                theme_name = f.replace(".json", "")
+            else:
+                continue
+            
+            add_custom_theme(theme_name, content)
+        except Exception as e:
+            print(f"Warning: Could not load theme {f}: {e}")
 
 
 # Load embedded themes after module import

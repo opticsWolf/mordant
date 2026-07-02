@@ -21,6 +21,7 @@ mod linter;
 mod meta;
 mod node;
 mod options;
+mod vscode_theme;
 mod walker;
 
 use document::Document;

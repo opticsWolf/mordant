@@ -3,7 +3,7 @@
 > **Version:** 0.6.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 973 Python (806 core + 29 emoji + 17 diagram + 121 lint + 12 phase8) + 54 Rust (26 unit + 2 AST + 1 CommonMark spec + 1 extension + 1 extra + 6 GFM + 2 options + 1 override renderer + 14 doc-tests)
+> **Tests:** 1003 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 17 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme) + 51 Rust (28 linter + 14 meta + 9 emoji)
 
 ---
 
@@ -21,6 +21,10 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 - **Batch API:** `lint_many()` / `fix_many()` for parallel file processing via `rayon`
 - **CLI:** `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`
 - **GIL release:** Parse, render, and batch lint/fix operations run without the GIL for multi-threaded parallelism
+- **Syntax highlighting:** `Highlighter` class with `Attribute`/`Class` modes via syntect-assets (bat's syntaxes/themes)
+- **Theme system:** `add_custom_theme()` for VSCode JSON and Sublime `.tmTheme` files; `list_themes()` and `list_syntaxes()` for introspection
+- **Rule introspection:** `lint_rules()` returns `RuleMetadata` for all 25 lint rules
+- **Document methods:** `doc.lint()` and `doc.fix()` for linting/fixing already-parsed documents
 
 ---
 
@@ -39,22 +43,25 @@ mordant/                          # Rushdown Rust crate (unchanged upstream)
 │   └── error.rs                  # Error types
 
 mordant-py/                       # PyO3 Python bindings
-├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json
+├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json, syntect, syntect-assets
 ├── src/
-│   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), lint(), fix(), lint_many(), fix_many(), GIL detach
-│   ├── document.rs               # Document wrapper (Arena + source + root_ref)
+│   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), lint(), fix(), lint_many(), fix_many(), lint_rules(), GIL detach
+│   ├── document.rs               # Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix()
 │   ├── node.rs                   # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 │   ├── walker.rs                 # DFS/BFS AST walker
 │   ├── options.rs                # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
 │   ├── errors.rs                 # RushdownError Python exception type
-│   ├── meta.rs                   # YAML frontmatter parser extension
-│   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests
+│   ├── meta.rs                   # YAML frontmatter parser extension + unit tests (14)
+│   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests (9)
 │   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook
-│   ├── linter.rs                 # Lint engine: 25 rules (MD001, MD009, MD012, MD024, MD025, MD040, MD042, MD045, MD047+), diagnostics, fix engine, config, suppression, batch API
-│   └── fix_engine.rs             # Fix engine: FixOp, FixResult, fixpoint checking
+│   ├── linter.rs                 # Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API, RuleMetadata + unit tests (28)
+│   ├── highlighter.rs            # Syntax highlighting via syntect-assets: PyHighlighter, add_custom_theme(), list_themes(), list_syntaxes(), load_builtin_themes()
+│   ├── vscode_theme.rs           # VSCode JSON theme parser (JSONC with comments → syntect Theme)
+│   └── themes.rs                 # Theme loading utilities
 ├── mordant/
-│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, FixOp, RuleParams, PyRuleConfig, PyEnable, PyDisable, PySuppression, PyLintResult
+│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, lint_rules, RuleMetadata, Diagnostic, FixResult, PyHighlighter, PyHighlightingMode, add_custom_theme, list_themes, list_syntaxes, Document, Node, Walker
 │   └── __main__.py               # CLI: argparse, formatters (human/json/github), config loading, glob expansion, exit codes
+├── mordant/themes/               # 21 embedded themes (.tmTheme + .json)
 ├── tests/
 │   ├── test_core.py              # 14 tests: basic CommonMark rendering
 │   ├── test_ast.py               # 61 tests: Document, Node, Walker, metadata
@@ -64,7 +71,9 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── test_emoji.py             # 29 tests: emoji rendering, blacklist, templates, AST access
 │   ├── test_diagram.py           # 17 tests: Mermaid diagram rendering, options, AST access
 │   ├── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
-│   └── test_lint.py              # 133 tests: 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors
+│   ├── test_lint.py              # 133 tests: 25 rules + fixer + config + CLI + batch API
+│   ├── test_highlighting.py      # 18 tests: theme loading, Highlighter class, markdown highlighting, add_custom_theme, list_syntaxes
+│   └── test_vscode_theme.py      # 11 tests: VSCode JSON theme parsing, registration, highlighting, markdown rendering
 └── benchmarks/                   # Performance benchmarks vs. python-markdown, mistune, markdown-it-py
 
 pyproject/                        # Python package project (setuptools/pip install)
@@ -992,7 +1001,73 @@ impl ContextKeyRegistry {
 
 ---
 
-## 10. Build & Distribution
+## 10. Theme Loading
+
+### 10.1. Theme Sources
+
+Themes are loaded from three sources, in priority order:
+
+| Source | Location | Format | Description |
+|--------|----------|--------|-------------|
+| **Embedded** | `mordant/themes/` (package) | `.tmTheme` (Sublime XML) + `.json` (VSCode) | Bundled with the package, loaded at import time |
+| **User** | `~/.mordant/themes/` | `.tmTheme` (Sublime XML) + `.json` (VSCode) | User themes in home directory, loaded at module init |
+| **AppData** | `%APPDATA%/mordant/themes/` (Windows) | `.tmTheme` (Sublime XML) + `.json` (VSCode) | User themes in AppData, loaded at module init |
+| **Built-in** | `syntect-assets` (bat's themes) | Syntect format | Loaded via `load_builtin_themes()` at Rust level |
+
+### 10.2. User Theme Loading
+
+User themes are loaded from `~/.mordant/themes/` (or `%APPDATA%/mordant/themes/` on Windows) during module initialization:
+
+```rust
+// In src/highlighter.rs — load_custom_themes()
+let home_dir = std::env::var("HOME")
+    .or(std::env::var("USERPROFILE"))
+    .or(std::env::var("APPDATA"))
+    .unwrap_or(".".to_string());
+
+let user_themes_home = PathBuf::from(&home_dir).join(".mordant").join("themes");
+let user_themes_appdata = PathBuf::from(&home_dir).join("AppData").join("Roaming").join("mordant").join("themes");
+```
+
+The scanner supports two formats:
+
+| Extension | Format | Parser |
+|-----------|--------|--------|
+| `.tmTheme` | Sublime Text XML (plist) | `ThemeSet::load_from_reader()` |
+| `.json` | VSCode JSON theme | `vscode_theme_to_syntect()` via `parse_vscode_theme_jsonc()` |
+
+JSON themes are parsed through the same VSCode theme conversion pipeline as `add_custom_theme()`:
+1. `is_vscode_json_theme()` — detect JSON format
+2. `parse_vscode_theme_jsonc()` — parse JSONC (with comments)
+3. `vscode_theme_to_syntect()` — convert to syntect theme
+
+Failed loads print a warning to stderr but don't crash.
+
+### 10.3. add_custom_theme()
+
+The `add_custom_theme(name, content)` function accepts both formats:
+
+```python
+# VSCode JSON theme
+with open("my_theme.json") as f:
+    mordant.add_custom_theme("my-vscode", f.read())
+
+# Sublime .tmTheme XML
+with open("my_theme.tmTheme") as f:
+    mordant.add_custom_theme("my-sublime", f.read())
+```
+
+Auto-detection logic:
+1. Try `is_vscode_json_theme()` → parse as VSCode JSON
+2. Try `is_plist_xml_theme()` → parse as Sublime XML
+3. Try plist XML fallback
+4. Try VSCode JSON fallback
+
+### 10.4. Built-in Themes
+
+Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `load_builtin_themes()` at the Rust level. These are pre-compiled syntect themes and don't require format detection.
+
+## 11. Build & Distribution
 
 ### 10.1. Dependencies
 
@@ -1057,7 +1132,7 @@ python benchmarks.py -o results.json  # Save JSON
 | File | Lines | Purpose |
 |------|-------|---------|
 | **Rust Core** | | |
-| `src/lib.rs` | 594 | Public API entry points |
+| `src/lib.rs` | ~600 | Module entry, core API, lint_rules(), lint_many(), fix_many(), GIL detach |
 | `src/ast.rs` | 3,281 | AST types: Node, NodeRef, Arena, KindData (25 variants) |
 | `src/parser/mod.rs` | 2,660 | Parser struct, options, extensions, GFM |
 | `src/parser/attribute.rs` | ~100 | Attribute parser |

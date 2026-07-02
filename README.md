@@ -17,7 +17,8 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **CLI** — `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`, `--default-language`, glob/directory recursion
 - **Phase 8 accuracy polish** — emoji text in heading comparison (MD024), frontmatter `title:` support (MD025), fragment anchor validation for links (MD042)
 - **Inline suppression** — `<!-- markdownlint-disable MD001 -->` comments supported
-- **973 tests** passing (up from 840)
+- **VSCode JSON theme support** — Custom themes from `.json` files via `add_custom_theme()` and user directory `~/.mordant/themes/`
+- **1003 tests** passing (up from 973)
 
 ## Features
 
@@ -320,7 +321,20 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-973 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Lint engine, CLI, batch API, Phase 8 accuracy) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+1003 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+
+## Theme Loading
+
+Themes are loaded from multiple sources:
+
+- **Embedded themes** — Bundled in `mordant/themes/`, loaded at import time
+- **User themes** — Place `.json` or `.tmTheme` files in `~/.mordant/themes/` (or `%APPDATA%/mordant/themes/` on Windows) for auto-loading
+- **Built-in themes** — Loaded from `syntect-assets` (bat's updated themes)
+- **Custom themes** — Use `add_custom_theme(name, content)` to register themes from JSON or XML content
+
+Both VSCode JSON and Sublime `.tmTheme` formats are supported. VSCode JSON themes are automatically converted to the syntect format via the `parse_vscode_theme_jsonc` → `vscode_theme_to_syntect` pipeline, allowing you to use any VSCode theme file directly.
+
+See [QUICKREF.md](QUICKREF.md#theme-loading) for details.
 
 ## License
 

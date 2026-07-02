@@ -21,6 +21,8 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 use syntect_assets::assets::HighlightingAssets;
 
+use crate::vscode_theme::{parse_vscode_theme_jsonc, is_vscode_json_theme, is_plist_xml_theme};
+
 // ---------------------------------------------------------------------------
 // Global resources (lazy-loaded, thread-safe)
 // ---------------------------------------------------------------------------
@@ -286,15 +288,40 @@ pub fn load_builtin_themes() -> Vec<String> {
                     if let Ok(dir_entry) = entry {
                         let file = dir_entry.file_name();
                         let file_str = file.to_string_lossy();
+                        let file_path = theme_dir.join(&file);
+
                         if file_str.ends_with(".tmTheme") {
                             let theme_name = file_str.trim_end_matches(".tmTheme");
-                            let file_path = theme_dir.join(&file);
-                            
+
                             if let Ok(content) = std::fs::read_to_string(&file_path) {
                                 if let Ok(theme) = ThemeSet::load_from_reader(&mut Cursor::new(content)) {
                                     let mut ts = THEME_SET.write().unwrap();
                                     ts.themes.insert(theme_name.to_string(), theme);
                                     loaded.push(theme_name.to_string());
+                                }
+                            }
+                        } else if file_str.ends_with(".json") {
+                            let theme_name = file_str.trim_end_matches(".json");
+
+                            if let Ok(content) = std::fs::read_to_string(&file_path) {
+                                if is_vscode_json_theme(&content) {
+                                    match parse_vscode_theme_jsonc(&content) {
+                                        Ok(vscode_theme) => {
+                                            match crate::vscode_theme::vscode_theme_to_syntect(&vscode_theme) {
+                                                Ok(theme) => {
+                                                    let mut ts = THEME_SET.write().unwrap();
+                                                    ts.themes.insert(theme_name.to_string(), theme);
+                                                    loaded.push(theme_name.to_string());
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("Warning: Could not convert VSCode theme {}: {}", file_str, e);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Warning: Could not parse VSCode JSON theme {}: {}", file_str, e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -307,31 +334,88 @@ pub fn load_builtin_themes() -> Vec<String> {
     loaded
 }
 
-/// Register a custom syntect theme from XML content.
+/// Register a custom syntect theme from JSON or XML content.
+///
+/// Automatically detects whether the content is a VSCode JSON theme
+/// or a plist XML (.tmTheme) file.
 ///
 /// # Arguments
 /// * `name` - Theme name (used to reference this theme)
-/// * `content` - XML content of the .tmTheme file
+/// * `content` - JSON content (VSCode theme) or XML content (.tmTheme)
 ///
 /// # Example
 /// ```python
+/// # For a .tmTheme file (plist XML)
 /// with open("my_theme.tmTheme", "r") as f:
 ///     mordant.add_custom_theme("my-theme", f.read())
+///
+/// # For a VSCode JSON theme
+/// with open("my_vscode_theme.json", "r") as f:
+///     mordant.add_custom_theme("my-vscode-theme", f.read())
 /// ```
 #[pyfunction]
 pub fn add_custom_theme(name: &str, content: &str) -> PyResult<()> {
-    let mut reader = Cursor::new(content.as_bytes());
-    let theme = ThemeSet::load_from_reader(&mut reader);
+    let mut ts = THEME_SET.write().unwrap();
     
-    match theme {
-        Ok(t) => {
-            let mut ts = THEME_SET.write().unwrap();
+    if is_vscode_json_theme(content) {
+        // Parse as VSCode JSON theme
+        match parse_vscode_theme_jsonc(content) {
+            Ok(vscode_theme) => {
+                match crate::vscode_theme::vscode_theme_to_syntect(&vscode_theme) {
+                    Ok(theme) => {
+                        ts.themes.insert(name.to_string(), theme);
+                        Ok(())
+                    }
+                    Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                        "VSCode theme conversion error: {}", e
+                    ))),
+                }
+            }
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Failed to parse VSCode JSON theme: {}", e
+            ))),
+        }
+    } else if is_plist_xml_theme(content) {
+        // Parse as plist XML (.tmTheme)
+        let mut reader = Cursor::new(content.as_bytes());
+        let theme = ThemeSet::load_from_reader(&mut reader);
+        
+        match theme {
+            Ok(t) => {
+                ts.themes.insert(name.to_string(), t);
+                Ok(())
+            }
+            Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                "Failed to parse plist XML theme: {}", e
+            ))),
+        }
+    } else {
+        // Try plist XML first (fallback)
+        let mut reader = Cursor::new(content.as_bytes());
+        let theme_result = ThemeSet::load_from_reader(&mut reader);
+        
+        if let Ok(t) = theme_result {
             ts.themes.insert(name.to_string(), t);
             Ok(())
+        } else {
+            // Try VSCode JSON as last resort
+            match parse_vscode_theme_jsonc(content) {
+                Ok(vscode_theme) => {
+                    match crate::vscode_theme::vscode_theme_to_syntect(&vscode_theme) {
+                        Ok(theme) => {
+                            ts.themes.insert(name.to_string(), theme);
+                            Ok(())
+                        }
+                        Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                            "Theme conversion error: {}", e
+                        ))),
+                    }
+                }
+                Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
+                    "Failed to parse theme: {} (tried both plist XML and VSCode JSON)", e
+                ))),
+            }
         }
-        Err(e) => Err(pyo3::exceptions::PyValueError::new_err(format!(
-            "Failed to parse custom theme: {}", e
-        ))),
     }
 }
 

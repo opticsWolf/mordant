@@ -17,9 +17,27 @@ cd mordant-py && cargo build --release
 
 ## Core API
 
-### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None) -> str`
+### `list_syntaxes() -> list[str]`
+
+List all available syntax highlighting languages (from syntect-assets).
+
+```python
+syntaxes = mordant.list_syntaxes()
+print(len(syntaxes))  # ~198 languages
+assert "Python" in syntaxes
+assert "Rust" in syntaxes
+```
+
+---
+
+### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, highlighting_theme=None, highlighting_mode=None) -> str`
 
 One-call parse + render. GIL is released during the CPU-heavy parse + render phase.
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `highlighting_theme` | `str \| None` | `"InspiredGitHub"` | Theme name for code highlighting |
+| `highlighting_mode` | `str \| None` | `"Attribute"` | `"Attribute"` (inline `style`) or `"Class"` (CSS `class`) |
 
 ```python
 import mordant
@@ -38,6 +56,19 @@ html = mordant.markdown_to_html(
     render_opts=mordant.RenderOptions(hard_wraps=True),
 )
 # '<p>Hello<br />\nWorld</p>\n'
+
+# With syntax highlighting
+html = mordant.markdown_to_html("""```python
+def hello():
+    print("world")
+```""", highlighting_theme="Dracula")
+# Code block rendered with Dracula theme (inline style attributes)
+
+# With Class mode
+html = mordant.markdown_to_html("""```python
+x = 1
+```""", highlighting_theme="GitHub", highlighting_mode="Class")
+# Code block rendered with CSS class attributes
 ```
 
 ### `parse(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None) -> Document`
@@ -106,6 +137,34 @@ result = mordant.fix(
 print(result.output)
 # 'trailing\n\ncontent\n'
 ```
+
+---
+
+## Rule Introspection
+
+### `lint_rules() -> list[RuleMetadata]`
+
+Return metadata for all registered lint rules.
+
+```python
+import mordant
+
+for r in mordant.lint_rules():
+    print(f"{r.id}: {r.name} - {r.description} (fixable={r.fixable})")
+# MD001: heading-increment - Heading levels should increment by one at a time (fixable=False)
+# MD009: no-trailing-spaces - Lines should not have trailing spaces (fixable=True)
+# ...
+```
+
+### RuleMetadata
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `id` | `str` | Rule ID (e.g., `"MD001"`) |
+| `name` | `str` | Rule name (e.g., `"heading-increment"`) |
+| `description` | `str` | Human-readable description |
+| `fixable` | `bool` | True if the rule has an auto-fix |
+| `default_params` | `str` | JSON string of default parameters |
 
 ---
 
@@ -293,6 +352,8 @@ Multiple rules:
 | `doc.children` | `list[Node]` | Direct child nodes |
 | `doc.metadata` | `dict` | YAML frontmatter (empty `{}` if none) |
 | `doc.walk(mode)` | `Walker` | AST walker: `"depth"` or `"breadth"` |
+| `doc.lint(lint_opts=None, lint_config=None)` | `list[Diagnostic]` | Lint the already-parsed document |
+| `doc.fix(lint_opts=None, default_language=None, lint_config=None)` | `FixResult` | Lint and auto-fix the document |
 | `doc.__repr__()` | `str` | `"<Document source_len=N>"` |
 
 ---
@@ -335,6 +396,34 @@ Multiple rules:
 | TableCell | `alignment` | `str \| None` | `"left"`, `"center"`, `"right"`, `"none"` |
 | Diagram | `diagram_type` | `str \| None` | Always `"mermaid"` |
 | Diagram | `diagram_value` | `str` | Diagram source content |
+
+---
+
+## Highlighter Classes
+
+### PyHighlighter
+
+```python
+hl = mordant.Highlighter(theme="Dracula", mode="Attribute")
+html = hl.highlight("python", "def hello():
+    pass")
+```
+
+| Constructor | Type | Default | Description |
+|-------------|------|---------|-------------|
+| `theme` | `str` | `"InspiredGitHub"` | Theme name for highlighting |
+| `mode` | `str` | `"Attribute"` | `"Attribute"` (inline `style`) or `"Class"` (CSS `class`) |
+
+| Method | Return Type | Description |
+|--------|-------------|-------------|
+| `highlight(language, code)` | `str` | Highlight code snippet and return HTML |
+
+### PyHighlightingMode
+
+| Value | Description |
+|-------|-------------|
+| `Attribute` | Inline `style` attributes (default) |
+| `Class` | CSS `class` attributes |
 
 ---
 
@@ -611,6 +700,71 @@ assert True  # Starts with "- " → frontmatter
 doc = mordant.parse("---\n| block scalar\n---\n\nBody")
 assert True  # Starts with "|" → frontmatter
 ```
+
+---
+
+## Theme Loading
+
+### Available Themes
+
+```python
+import mordant
+
+# List all available themes (built-in + embedded + user)
+themes = mordant.list_themes()
+print(f"Total themes: {len(themes)}")
+for t in sorted(themes)[:10]:
+    print(f"  - {t}")
+```
+
+### Theme Sources
+
+| Source | Location | Format |
+|--------|----------|--------|
+| **Embedded** | `mordant/themes/` (package) | `.tmTheme` + `.json` |
+| **User** | `~/.mordant/themes/` | `.tmTheme` + `.json` |
+| **AppData** | `%APPDATA%/mordant/themes/` (Windows) | `.tmTheme` + `.json` |
+| **Built-in** | `syntect-assets` (bat's themes) | Syntect format |
+
+### Custom Themes
+
+```python
+# Add a VSCode JSON theme
+vscode_theme = '''{
+    "name": "My Theme",
+    "type": "dark",
+    "tokenColors": [
+        {"scope": "comment", "settings": {"foreground": "#888888"}},
+        {"scope": "keyword", "settings": {"foreground": "#FF6B6B"}}
+    ]
+}'''
+
+mordant.add_custom_theme("my-vscode", vscode_theme)
+
+# Verify it's loaded
+assert "my-vscode" in mordant.list_themes()
+
+# Use it for highlighting
+hl = mordant.Highlighter(theme="my-vscode")
+html = hl.highlight("python", "def hello(): pass")
+
+# Use it for markdown rendering
+html = mordant.markdown_to_html("# Hello", highlighting_theme="my-vscode")
+```
+
+### User Theme Directory
+
+Place `.json` or `.tmTheme` files in `~/.mordant/themes/` (or `%APPDATA%/mordant/themes/` on Windows) to have them auto-loaded at import time:
+
+```bash
+# Create user theme directory
+mkdir -p ~/.mordant/themes
+
+# Place a VSCode JSON theme
+# ~/.mordant/themes/my-dark.json
+```
+
+JSON themes are parsed through the same VSCode theme conversion pipeline (`parse_vscode_theme_jsonc` → `vscode_theme_to_syntect`). Failed loads print a warning to stderr but don't crash.
 
 ---
 
