@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.6.0  
+> **Version:** 0.7.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -10,7 +10,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
-## What's New in 0.6.0
+## What's New in 0.7.0
 
 - **Lint engine** — 25 lint rules (MD001, MD003, MD009, MD010, MD012, MD013, MD018–MD022, MD024, MD025, MD026, MD031, MD032, MD034, MD040, MD042, MD045–MD048, MD049, MD050) with diagnostics, fix engine, and configuration
 - **Batch API** — `lint_many()` and `fix_many()` for parallel file processing via `rayon`, with GIL release for the entire batch

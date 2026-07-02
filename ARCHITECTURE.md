@@ -1,6 +1,6 @@
 # Mordant Architecture
 
-> **Version:** 0.6.0  
+> **Version:** 0.7.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
 > **Tests:** 1003 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 17 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme) + 51 Rust (28 linter + 14 meta + 9 emoji)
