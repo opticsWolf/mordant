@@ -51,9 +51,9 @@ class TestThemeLoading:
     def test_theme_count_reasonable(self):
         """Total theme count should be reasonable (built-in + embedded)."""
         themes = mordant.list_themes()
-        # 7 built-in syntect themes + 21 embedded project themes = 28
+        # 7 built-in syntect themes + 53 embedded project themes = 60
         # (some may overlap, so we check a reasonable range)
-        assert 25 <= len(themes) <= 30
+        assert 50 <= len(themes) <= 100
 
 
 class TestHighlighter:
