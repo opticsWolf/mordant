@@ -16,9 +16,10 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Batch API** — `lint_many()` and `fix_many()` for parallel file processing via `rayon`, with GIL release for the entire batch
 - **CLI** — `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`, `--default-language`, glob/directory recursion
 - **Phase 8 accuracy polish** — emoji text in heading comparison (MD024), frontmatter `title:` support (MD025), fragment anchor validation for links (MD042)
+- **Document chunking** — `MarkdownChunker` lazy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors
 - **Inline suppression** — `<!-- markdownlint-disable MD001 -->` comments supported
 - **VSCode JSON theme support** — Custom themes from `.json` files via `add_custom_theme()` and user directory `~/.mordant/themes/`
-- **1003 tests** passing (up from 973)
+- **1040 tests** passing (up from 1003)
 
 ## Features
 
@@ -29,6 +30,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Multi-threaded.** Parse and render release the GIL — scale ~4.0x linearly with thread count.
 - **Emoji support.** :joy: `:heart:` `:smile:` — shortcode-style emoji rendering with blacklist and custom templates.
 - **Mermaid diagrams.** `graph LR`, `sequenceDiagram` — render Mermaid diagrams from code blocks with client-side JS loading.
+- **Document chunking.** `MarkdownChunker` — lazy, low-copy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors.
 - **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
 
 ## Install
@@ -99,7 +101,51 @@ Body
 doc = mordant.parse(md)
 print(doc.metadata)
 # {'title': 'My Doc', 'author': 'Jane', 'tags': ['rust', 'markdown']}
+
+# Document chunking
+chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
+for chunk in chunker:
+    print(chunk)
+# # Section
+#
+# Para one
+# ## Sub
+#
+# Para two
 ```
+
+## Document Chunking
+
+Split a document into heading-scoped chunks — each chunk carries the most recent heading as a prefix. Headings themselves are not yielded; thematic breaks and other non-body nodes are skipped without resetting context.
+
+```python
+import mordant
+
+# Basic chunking with heading context
+chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
+chunks = list(chunker)
+assert len(chunks) == 2
+assert chunks[0] == "# Section\n\nPara one"
+assert chunks[1] == "## Sub\n\nPara two"
+
+# current_header tracks the last heading seen
+assert chunker.current_header == "## Sub"
+
+# from_file reads from disk
+chunker = mordant.MarkdownChunker.from_file("/path/to/doc.md")
+for chunk in chunker:
+    print(chunk)
+
+# from_file_mmap for zero-copy large files
+chunker = mordant.MarkdownChunker.from_file_mmap("/path/to/large.md")
+
+# Nested headings inside blockquotes never leak as context
+chunker = mordant.MarkdownChunker("# Outer\n\n> # Nested\n\n> Quote text.")
+chunks = list(chunker)
+assert all(not c.startswith("# Nested") for c in chunks)
+```
+
+See [QUICKREF.md](QUICKREF.md#markdownchunker) for full API reference.
 
 ## AST Traversal
 
@@ -321,7 +367,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-1003 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+1040 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## Theme Loading
 

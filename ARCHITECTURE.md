@@ -3,7 +3,7 @@
 > **Version:** 0.7.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1003 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 17 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme) + 51 Rust (28 linter + 14 meta + 9 emoji)
+> **Tests:** 1040 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 17 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme + 37 chunker) + 51 Rust (28 linter + 14 meta + 9 emoji)
 
 ---
 
@@ -19,6 +19,7 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 - **Diagram support:** Mermaid diagram rendering from code blocks
 - **Lint engine:** 25 rules (MD001, MD009, MD012, MD024, MD025, MD040, MD042, MD045, MD047, MD010, MD018–MD021, MD030, MD031, MD032, MD033, MD034, MD036, MD037, MD038, MD039, MD041, MD043, MD044, MD046, MD048, MD049) with diagnostics, fix engine, config, and suppression
 - **Batch API:** `lint_many()` / `fix_many()` for parallel file processing via `rayon`
+- **Chunking engine:** `MarkdownChunker` — lazy, low-copy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors
 - **CLI:** `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`
 - **GIL release:** Parse, render, and batch lint/fix operations run without the GIL for multi-threaded parallelism
 - **Syntax highlighting:** `Highlighter` class with `Attribute`/`Class` modes via syntect-assets (bat's syntaxes/themes)
@@ -59,7 +60,7 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── vscode_theme.rs           # VSCode JSON theme parser (JSONC with comments → syntect Theme)
 │   └── themes.rs                 # Theme loading utilities
 ├── mordant/
-│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, lint_rules, RuleMetadata, Diagnostic, FixResult, PyHighlighter, PyHighlightingMode, add_custom_theme, list_themes, list_syntaxes, Document, Node, Walker
+│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, lint_rules, RuleMetadata, Diagnostic, FixResult, PyHighlighter, PyHighlightingMode, add_custom_theme, list_themes, list_syntaxes, Document, Node, Walker, MarkdownChunker
 │   └── __main__.py               # CLI: argparse, formatters (human/json/github), config loading, glob expansion, exit codes
 ├── mordant/themes/               # 21 embedded themes (.tmTheme + .json)
 ├── tests/
@@ -73,7 +74,8 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
 │   ├── test_lint.py              # 133 tests: 25 rules + fixer + config + CLI + batch API
 │   ├── test_highlighting.py      # 18 tests: theme loading, Highlighter class, markdown highlighting, add_custom_theme, list_syntaxes
-│   └── test_vscode_theme.py      # 11 tests: VSCode JSON theme parsing, registration, highlighting, markdown rendering
+│   ├── test_vscode_theme.py      # 11 tests: VSCode JSON theme parsing, registration, highlighting, markdown rendering
+│   └── test_chunker.py           # 37 tests: chunker iteration, heading context, file I/O, edge cases
 └── benchmarks/                   # Performance benchmarks vs. python-markdown, mistune, markdown-it-py
 
 pyproject/                        # Python package project (setuptools/pip install)
@@ -308,6 +310,7 @@ The `mordant` module (via `#[pymodule]`) registers:
 | `PyEmojiHtmlRendererOptions` | `emoji.rs` |
 | `PyDiagramParserOptions` | `diagram.rs` |
 | `PyDiagramHtmlRendererOptions` | `diagram.rs` |
+| `MarkdownChunker` | `chunker.rs` |
 | `Document` | `document.rs` |
 | `Node` | `node.rs` |
 | `Walker` | `walker.rs` |
@@ -540,7 +543,71 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_re
 |------------------|-------------|-------------|
 | `message` | str | Error message |
 | `__str__()` | str | Same as message |
+### 5.13. MarkdownChunker
 
+Lazy, low-copy chunking iterator over the rushdown AST. Yields one chunk (a `str`) at a time. Headings update a "current header" context; each subsequent body block is yielded either standalone or prefixed with that header.
+
+| Constructor / Method | Return Type | Description |
+|----------------------|-------------|-------------|
+| `MarkdownChunker(text)` | — | Build from Python string. Parses immediately; GIL released during parsing. |
+| `MarkdownChunker.from_file(path)` | — | Read `path`, validate UTF-8, own bytes as `String`. Safe path. |
+| `MarkdownChunker.from_file_mmap(path)` | — | Zero-copy variant that memory-maps `path`. **Safety invariant:** caller MUST NOT modify/truncate the file while chunker is alive. |
+| `__iter__()` | MarkdownChunker | Returns self (iterator protocol). |
+| `__next__()` | str \| None | Advance to next block chunk, or `None` (→ `StopIteration`). |
+| `current_header` | str \| None | Current heading context (last top-level heading seen), or `None`. |
+| `node_count` | int | Number of top-level nodes extracted (with a source position). |
+
+**Chunking behaviour:**
+
+| Node Kind | Yielded? | Context Update |
+|-----------|----------|----------------|
+| Heading | No (not yielded) | Updates `current_header` |
+| Paragraph | Yes | Uses current header as prefix |
+| CodeBlock | Yes | Uses current header as prefix |
+| List | Yes | Uses current header as prefix |
+| Table | Yes | Uses current header as prefix |
+| Blockquote | Yes | Uses current header as prefix |
+| ThematicBreak / HtmlBlock / LinkRefDef | No (skipped) | Does NOT reset heading context |
+
+**Memory model:** The `Arena` is dropped immediately after extraction; only `(kind, start, end)` is retained. Peak memory ≈ source + ~24 bytes per top-level node.
+
+**Example — heading context propagation:**
+
+```python
+chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
+chunks = list(chunker)
+# chunks[0] == "# Section\n\nPara one"
+# chunks[1] == "## Sub\n\nPara two"
+
+# current_header tracks the last heading seen
+assert chunker.current_header == "## Sub"
+```
+
+**Example — from_file:**
+
+```python
+chunker = mordant.MarkdownChunker.from_file("/path/to/doc.md")
+for chunk in chunker:
+    print(chunk)
+```
+
+**Example — from_file_mmap (zero-copy):**
+
+```python
+chunker = mordant.MarkdownChunker.from_file_mmap("/path/to/large.md")
+chunks = list(chunker)
+# Zero-copy: the file is memory-mapped, no full read into Python memory
+```
+
+**Example — nested headings don't leak:**
+
+```python
+# A heading inside a blockquote must never become the context prefix
+chunker = mordant.MarkdownChunker("# Outer\n\n> # Nested\n\n> Quote text.")
+chunks = list(chunker)
+# The paragraph after the blockquote carries "# Outer", not "# Nested"
+assert all(not c.startswith("# Nested") for c in chunks)
+```
 ---
 
 ## 6. YAML Frontmatter (meta.rs)
@@ -1175,6 +1242,7 @@ python benchmarks.py -o results.json  # Save JSON
 | `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
 | `mordant-py/src/diagram.rs` | ~350 | Mermaid diagram AST transformer + HTML renderer + post-render hook |
 | `mordant-py/src/linter.rs` | ~1,800 | Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API |
+| `mordant-py/src/chunker.rs` | ~260 | Markdown chunking engine: PyMarkdownChunker, lazy AST-based chunk iterator, heading context, from_file(), from_file_mmap() |
 | `mordant-py/src/fix_engine.rs` | ~200 | Fix engine: FixOp, FixResult, fixpoint checking |
 | `mordant-py/mordant/__init__.py` | ~100 | Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, etc. |
 | `mordant-py/mordant/__main__.py` | ~300 | CLI: argparse, formatters (human/json/github), config loading, glob expansion |
@@ -1189,6 +1257,7 @@ python benchmarks.py -o results.json  # Save JSON
 | `mordant-py/tests/test_commonmark_spec.py` | 652 | Full CommonMark 0.31.2 spec |
 | `mordant-py/tests/test_lint.py` | 133 | 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors |
 | `mordant-py/tests/test_lint.py` | 133 | 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors |
+| `mordant-py/tests/test_chunker.py` | 37 | chunker iteration, heading context, file I/O, edge cases |
 
 ---
 

@@ -13,6 +13,7 @@ use rushdown_lib::parser::ParserExtension;
 use rushdown_lib::renderer::html::RendererExtension;
 
 mod document;
+mod chunker;
 mod diagram;
 mod emoji;
 mod errors;
@@ -589,6 +590,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Document>()?;
     m.add_class::<Node>()?;
     m.add_class::<Walker>()?;
+    m.add_class::<chunker::PyMarkdownChunker>()?;
     m.add_class::<Diagnostic>()?;
     m.add_class::<FixResult>()?;
     Ok(())

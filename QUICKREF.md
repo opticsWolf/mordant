@@ -448,6 +448,77 @@ for node in doc.walk("breadth"):
 
 ---
 
+## MarkdownChunker
+
+Lazy, low-copy chunking iterator over the rushdown AST. Yields one chunk (a `str`) at a time. Headings update a "current header" context; each subsequent body block is yielded either standalone or prefixed with that header.
+
+```python
+import mordant
+
+# Basic usage — heading context propagation
+chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
+chunks = list(chunker)
+assert len(chunks) == 2
+assert chunks[0] == "# Section\n\nPara one"
+assert chunks[1] == "## Sub\n\nPara two"
+
+# current_header tracks the last heading seen
+assert chunker.current_header == "## Sub"
+
+# node_count includes all top-level nodes (headings, paragraphs, thematic breaks, etc.)
+assert chunker.node_count == 4  # 2 headings + 2 paragraphs
+```
+
+| Constructor / Method | Return Type | Description |
+|----------------------|-------------|-------------|
+| `MarkdownChunker(text)` | — | Build from Python string. Parses immediately; GIL released during parsing. |
+| `MarkdownChunker.from_file(path)` | — | Read `path`, validate UTF-8, own bytes as `String`. Safe path. |
+| `MarkdownChunker.from_file_mmap(path)` | — | Zero-copy variant that memory-maps `path`. **Safety invariant:** caller MUST NOT modify/truncate the file while chunker is alive. |
+| `__iter__()` | `MarkdownChunker` | Returns self (iterator protocol). |
+| `__next__()` | `str \| None` | Advance to next block chunk, or `None` (→ `StopIteration`). |
+| `current_header` | `str \| None` | Current heading context (last top-level heading seen), or `None`. |
+| `node_count` | `int` | Number of top-level nodes extracted (with a source position). |
+
+**Chunking behaviour:**
+
+| Node Kind | Yielded? | Context Update |
+|-----------|----------|----------------|
+| Heading | No (not yielded) | Updates `current_header` |
+| Paragraph | Yes | Uses current header as prefix |
+| CodeBlock | Yes | Uses current header as prefix |
+| List | Yes | Uses current header as prefix |
+| Table | Yes | Uses current header as prefix |
+| Blockquote | Yes | Uses current header as prefix |
+| ThematicBreak / HtmlBlock / LinkRefDef | No (skipped) | Does NOT reset heading context |
+
+**Example — from_file:**
+
+```python
+chunker = mordant.MarkdownChunker.from_file("/path/to/doc.md")
+for chunk in chunker:
+    print(chunk)
+```
+
+**Example — from_file_mmap (zero-copy):**
+
+```python
+chunker = mordant.MarkdownChunker.from_file_mmap("/path/to/large.md")
+chunks = list(chunker)
+# Zero-copy: the file is memory-mapped, no full read into Python memory
+```
+
+**Example — nested headings don't leak:**
+
+```python
+# A heading inside a blockquote must never become the context prefix
+chunker = mordant.MarkdownChunker("# Outer\n\n> # Nested\n\n> Quote text.")
+chunks = list(chunker)
+# The paragraph after the blockquote carries "# Outer", not "# Nested"
+assert all(not c.startswith("# Nested") for c in chunks)
+```
+
+---
+
 ## Emoji Extension
 
 ### `:joy:`, `:heart:`, `:smile:` etc.

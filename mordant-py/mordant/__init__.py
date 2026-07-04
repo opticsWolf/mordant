@@ -107,4 +107,5 @@ __all__ = [
     "Diagnostic",
     "FixResult",
     "RuleMetadata",
+    "MarkdownChunker",
 ]
