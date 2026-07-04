@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.8.0  
+> **Version:** 0.8.5  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1136 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 21 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme + 37 chunker) + 51 Rust (28 linter + 14 meta + 9 emoji)
+> **Tests:** 1161 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 17 diagram + 14 core + 11 VSCode theme + 9 GFM) + 51 Rust (28 linter + 14 meta + 9 emoji)
 
 ---
 
@@ -17,6 +17,7 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 - **GFM support:** Tables, task lists, strikethrough (linkify disabled by default; enable with `GfmOptions.all()`)
 - **Emoji support:** Shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.)
 - **Diagram support:** Mermaid diagram rendering from code blocks
+- **Footnote support:** PHP Markdown Extra style footnotes (`[^1]`, `[^named]`)
 - **Lint engine:** 25 rules (MD001, MD009, MD012, MD024, MD025, MD040, MD042, MD045, MD047, MD010, MD018–MD021, MD030, MD031, MD032, MD033, MD034, MD036, MD037, MD038, MD039, MD041, MD043, MD044, MD046, MD048, MD049) with diagnostics, fix engine, config, and suppression
 - **Batch API:** `lint_many()` / `fix_many()` for parallel file processing via `rayon`
 - **Chunking engine:** `MarkdownChunker` — lazy, low-copy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors
@@ -71,6 +72,7 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── test_meta.py              # 41 tests: YAML frontmatter + thematic break conflict
 │   ├── test_emoji.py             # 29 tests: emoji rendering, blacklist, templates, AST access
 │   ├── test_diagram.py           # 17 tests: Mermaid diagram rendering, options, AST access
+│   ├── test_footnote.py          # 25 tests: Footnote rendering, options, AST access, interoperability
 │   ├── test_commonmark_spec.py   # 652 spec cases: full CommonMark 0.31.2 spec
 │   ├── test_lint.py              # 133 tests: 25 rules + fixer + config + CLI + batch API
 │   ├── test_highlighting.py      # 18 tests: theme loading, Highlighter class, markdown highlighting, add_custom_theme, list_syntaxes
@@ -174,7 +176,7 @@ W: TextWrite (String by default)
 
 6. **Context key-value store** — `Context` holds type-safe KV pairs (`ContextKey<T>`) for passing data between parser phases, hooks, and renderers (e.g., tight-list detection, custom ID generation, diagram presence tracking).
 
-### 3.4. AST Node Kinds (25 total: 23 built-in + 2 extension)
+### 3.4. AST Node Kinds (28 total: 24 built-in + 4 extension)
 
 | Kind | Type | Key Fields |
 |------|------|------------|
@@ -202,6 +204,8 @@ W: TextWrite (String by default)
 | TableCell | block | `alignment: TableCellAlignment` |
 | Strikethrough | inline | — |
 | Diagram | block | `diagram_type: DiagramType`, `value: Lines` |
+| FootnoteReference | inline | `label: Value`, `index: usize`, `ref_index: usize` |
+| FootnoteDefinition | block | `label: Value`, `index: usize`, `references: Vec<usize>` |
 | Extension | any | `Box<dyn ExtensionData>` |
 
 ### 3.5. Parser Options
@@ -214,6 +218,7 @@ W: TextWrite (String by default)
 | `arena` | `ArenaOptions` | Arena allocation settings (`initial_size: 1024`) |
 | `escaped_space` | false | Treat `\` as space escape |
 | `id_generator` | None | Custom node ID generator (`GenerateNodeId`) |
+| `math_options` | `MathParserOptions` | Inline/block math options (`inline_math: true`, `display_math: true`) |
 
 ### 3.6. GFM Parser Options
 
@@ -305,11 +310,21 @@ The `mordant` module (via `#[pymodule]`) registers:
 | `ParseOptions` | `options.rs` |
 | `RenderOptions` | `options.rs` |
 | `GfmOptions` | `options.rs` |
+| `GfmFeature` | `options.rs` |
 | `ArenaOptions` | `options.rs` |
+| `LintOptions` | `linter.rs` |
+| `LintConfig` | `linter.rs` |
+| `RuleParams` | `linter.rs` |
+| `RuleMetadata` | `linter.rs` |
+| `Diagnostic` | `linter.rs` |
+| `FixResult` | `linter.rs` |
 | `PyEmojiParserOptions` | `emoji.rs` |
 | `PyEmojiHtmlRendererOptions` | `emoji.rs` |
 | `PyDiagramParserOptions` | `diagram.rs` |
 | `PyDiagramHtmlRendererOptions` | `diagram.rs` |
+| `PyFootnoteHtmlRendererOptions` | `footnote.rs` |
+| `PyHighlighter` | `highlighter.rs` |
+| `PyHighlightingMode` | `highlighter.rs` |
 | `MarkdownChunker` | `chunker.rs` |
 | `Document` | `document.rs` |
 | `Node` | `node.rs` |
@@ -317,8 +332,17 @@ The `mordant` module (via `#[pymodule]`) registers:
 
 | Function | Source |
 |----------|--------|
-| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts, diagram_parse_opts, diagram_render_opts)` | `lib.rs` |
+| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts, diagram_parse_opts, diagram_render_opts, footnote_render_opts, highlighting_theme, highlighting_mode)` | `lib.rs` |
 | `parse(source, gfm, parse_opts, emoji_opts, diagram_opts)` | `lib.rs` |
+| `lint(source, gfm, parse_opts, emoji_opts, diagram_opts, lint_opts, lint_config)` | `lib.rs` |
+| `fix(source, gfm, parse_opts, emoji_opts, diagram_opts, lint_opts, default_language, lint_config)` | `lib.rs` |
+| `lint_rules()` | `lib.rs` |
+| `lint_many(files, lint_config)` | `lib.rs` |
+| `fix_many(files, lint_config, default_language)` | `lib.rs` |
+| `add_custom_theme(name, content)` | `highlighter.rs` |
+| `list_themes()` | `highlighter.rs` |
+| `list_syntaxes()` | `highlighter.rs` |
+| `render_math(latex, display, output)` | `math.rs` |
 
 ### 4.3. GIL Management
 
@@ -342,10 +366,11 @@ This enables true parallelism across threads: mordant scales ~4.0x linearly with
 
 | Function | Description |
 |----------|-------------|
-| `build_parser(gfm, parse_cfg)` | Constructs `rushdown::parser::Parser` with options + meta + emoji + diagram + GFM extensions |
-| `build_renderer(render_cfg)` | Constructs `rushdown::renderer::html::Renderer` with render options + emoji + diagram extensions |
+| `build_parser(gfm, parse_cfg)` | Constructs `rushdown::parser::Parser` with options + meta + emoji + diagram + math + GFM extensions |
+| `build_renderer(render_cfg)` | Constructs `rushdown::renderer::html::Renderer` with render options + emoji + diagram + math + footnote extensions |
 | `parse_and_render(source, gfm, parse_cfg, render_cfg)` | Parse + render to HTML string (runs without GIL) |
 | `parse_only(source, gfm, parse_cfg)` | Parse only, returns `(Arena, NodeRef)` (runs without GIL) |
+| `parse_config_from(parse_opts, emoji_opts, diagram_opts)` | Build `ParseConfig` from Python option objects |
 
 ### 4.5. Memory Model
 
@@ -366,6 +391,11 @@ Walker (Python object)
 ├── mode: String                 # "depth" or "breadth"
 ├── stack: Vec<NodeRef>          # DFS stack
 └── queue: Vec<NodeRef>          # BFS queue
+
+MarkdownChunker (Python object)
+├── source: String               # Owned source string
+├── nodes: Vec<NodeInfo>         # (kind, start, end) for top-level nodes
+└── current_header: Option<String>  # Last heading context
 ```
 
 `source` is shared via `Rc<str>` across all three classes. Every `Node` created during navigation or walking bumps the refcount instead of deep-copying the source. When `Document` is garbage-collected, the `Rc` reference count drops to 0, freeing the Arena and all AST nodes.
@@ -383,6 +413,7 @@ struct ParseConfig {
     meta_table: bool,
     emoji_options: EmojiParserOptions,
     diagram_options: DiagramParserOptions,
+    math_options: MathParserOptions,
 }
 
 #[derive(Clone)]
@@ -393,6 +424,8 @@ struct RenderConfig {
     escaped_space: bool,
     emoji_options: EmojiHtmlRendererOptions,
     diagram_options: DiagramHtmlRendererOptions,
+    footnote_options: FootnoteHtmlRendererOptions,
+    highlighting_options: Option<HighlightingRendererOptions>,
 }
 ```
 
@@ -466,7 +499,14 @@ opts = mordant.GfmOptions(features=[
 | `GfmFeature.TaskList` | GFM task list items (`- [ ]`) |
 | `GfmFeature.Linkify` | GFM autolink (auto-convert URLs) |
 
-### 5.4. MathOptions
+### 5.4. render_math() — Standalone Math Rendering
+
+```python
+import mordant
+
+# Standalone math rendering (no parse/render options needed)
+result = mordant.render_math(r"\int_0^\infty e^{-x^2} dx", display=True, output="both")
+```
 
 ```python
 import mordant
@@ -481,8 +521,8 @@ render_opts = mordant.RenderOptions()
 result = mordant.render_math(r"\int_0^\infty e^{-x^2} dx", display=True, output="both")
 ```
 
-| Attribute/Method | Return Type | Description |
-|------------------|-------------|-------------|
+| Function | Return Type | Description |
+|----------|-------------|-------------|
 | `render_math(latex, display=False, output="both")` | `str` | Render LaTeX to KaTeX markup (GIL released) |
 
 | Parameter | Type | Default | Description |
@@ -548,6 +588,9 @@ result = mordant.render_math(r"\int_0^\infty e^{-x^2} dx", display=True, output=
 | `name` | str\|None | Full name for emoji nodes (e.g. `"grinning face with smiling eyes"`) |
 | `diagram_type` | str\|None | Diagram type for diagram nodes (e.g. `"mermaid"`) |
 | `diagram_value` | str | Diagram source content for diagram nodes |
+| `footnote_label` | str\|None | Footnote label for `FootnoteReference`/`FootnoteDefinition` nodes |
+| `footnote_index` | int\|None | Footnote index (1-based) for `FootnoteReference`/`FootnoteDefinition` nodes |
+| `footnote_references` | list[int]\|None | List of reference indices for `FootnoteDefinition` nodes |
 | `__repr__()` | str | `"<Node kind=N ref=R>"` |
 
 ### 5.7. Walker
@@ -606,13 +649,68 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_re
 # Script tag uses custom URL
 ```
 
-### 5.12. RushdownError
+### 5.12. PyHighlighter
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `theme` | str | `"InspiredGitHub"` | Theme name for syntax highlighting |
+| `mode` | str | `"Attribute"` | `"Attribute"` (inline `style`) or `"Class"` (CSS `class`) |
+
+```python
+hl = mordant.Highlighter(theme="Dracula", mode="Attribute")
+html = hl.highlight("python", "def hello(): pass")
+```
+
+### 5.13. PyHighlightingMode
+
+| Value | Description |
+|-------|-------------|
+| `Attribute` | Inline `style` attributes (default) |
+| `Class` | CSS `class` attributes |
+
+### 5.12. PyFootnoteHtmlRendererOptions
+
+```python
+import mordant
+
+# Basic usage — footnotes are always enabled (no parser options)
+md = "Text with footnote.[^1]\n\n[^1]: The footnote."
+html = mordant.markdown_to_html(md)
+# Contains <sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup>
+# Contains <div class="footnotes" role="doc-endnotes"><ol><li id="fn:1">...</li></ol></div>
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `link_class` | `str` | `"footnote-ref"` | CSS class for footnote reference links |
+| `backlink_class` | `str` | `"footnote-backref"` | CSS class for backlink (return to text) links |
+| `backlink_html` | `str` | `"&#x21a9;&#xfe0e;"` | HTML for backlink character |
+| `id_prefix` | `str\|None` | `None` | Prefix for footnote IDs |
+
+```python
+# Custom classes
+opts = mordant.PyFootnoteHtmlRendererOptions(
+    link_class="my-ref",
+    backlink_class="my-back",
+)
+html = mordant.markdown_to_html("Text[^1]", footnote_render_opts=opts)
+# class="my-ref" and class="my-back"
+
+# Custom backlink
+opts = mordant.PyFootnoteHtmlRendererOptions(backlink_html="↑ back")
+
+# Custom ID prefix
+opts = mordant.PyFootnoteHtmlRendererOptions(id_prefix="note-")
+# id="note-fnref:1", href="#note-fn:1"
+```
+
+### 5.13. RushdownError
 
 | Attribute/Method | Return Type | Description |
 |------------------|-------------|-------------|
 | `message` | str | Error message |
 | `__str__()` | str | Same as message |
-### 5.13. MarkdownChunker
+### 5.14. MarkdownChunker
 
 Lazy, low-copy chunking iterator over the rushdown AST. Yields one chunk (a `str`) at a time. Headings update a "current header" context; each subsequent body block is yielded either standalone or prefixed with that header.
 
@@ -1052,6 +1150,305 @@ rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diag
 
 ---
 
+### 7.14. Footnote Extension (rushdown-footnote)
+
+The footnote extension provides PHP Markdown Extra style footnotes via an inline parser, block parser, and HTML renderer with post-render hook. **Footnotes are always enabled** — there are no parser options to disable them.
+
+**Syntax:**
+
+```markdown
+That's some text with a footnote.[^1]
+That's some text with a named footnote.[^hello]
+
+[^1]: The footnote.
+
+[^hello]: The named footnote.
+```
+
+**Expected HTML output:**
+
+```html
+<p>That's some text with a footnote.<sup id="fnref:1"><a href="#fn:1" class="footnote-ref" role="doc-noteref">1</a></sup></p>
+<p>That's some text with a named footnote.<sup id="fnref:2"><a href="#fn:2" class="footnote-ref" role="doc-noteref">hello</a></sup></p>
+
+<div class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn:1">The footnote.&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></li>
+<li id="fn:2">The named footnote.&#160;<a href="#fnref:2" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></li>
+</ol>
+</div>
+```
+
+#### 7.14.1. Parser Design
+
+| Component | Type | Priority | Trigger | Description |
+|-----------|------|----------|---------|-------------|
+| `FootnoteDefinitionParser` | BlockParser | `PRIORITY_LIST + 100` | `[` | Parses `[^label]:` definition blocks |
+| `FootnoteReferenceParser` | InlineParser | `PRIORITY_LINK - 100` | `![` | Parses `[^label]` references |
+
+The inline parser uses trigger `![` (two chars) to avoid conflicts with image syntax `![alt]`. It checks for `^` after `[`.
+
+**Context keys:**
+- `FOOTNOTE_LIST` — stores `FootnoteDefinitions` list
+- `REFERENCE_LIST` — stores `Vec<NodeRef>` of references
+- `FOOTNOTE_RENDER` — render flag for post-render hook
+
+#### 7.14.2. AST Nodes
+
+| Kind | Type | Key Fields | Description |
+|------|------|------------|-------------|
+| `FootnoteReference` | inline | `label: Value`, `index: usize`, `ref_index: usize` | Inline footnote marker `[^1]` |
+| `FootnoteDefinition` | block | `label: Value`, `index: usize`, `references: Vec<usize>` | Footnote definition block `[^1]:` |
+
+Both are stored as `Extension` AST nodes containing `KindData::Extension(Box::new(e))`.
+
+#### 7.14.3. Node Properties
+
+```python
+import mordant
+
+md = "Ref [^1] and [^hello].\n\n[^1]: First.\n\n[^hello]: Second."
+doc = mordant.parse(md)
+
+for node in doc.walk("depth"):
+    if node.kind == "FootnoteReference":
+        print(node.footnote_label)   # "1" or "hello"
+        print(node.footnote_index)   # 1 or 2
+    elif node.kind == "FootnoteDefinition":
+        print(node.footnote_label)   # "1" or "hello"
+        print(node.footnote_index)   # 1 or 2
+        print(node.footnote_references)  # [1] or [2]
+
+# Non-footnote nodes return None
+heading = doc.children[0]
+assert heading.footnote_label is None
+assert heading.footnote_index is None
+assert heading.footnote_references is None
+```
+
+#### 7.14.4. Renderer
+
+The footnote HTML renderer converts `FootnoteReference` nodes to `<sup><a>` elements and `FootnoteDefinition` nodes to `<li>` elements. A post-render hook (priority 500) renders the `<div class="footnotes">` block at the end of the document if any footnotes were referenced.
+
+#### 7.14.5. Options
+
+The footnote extension has **no parser options** — it is always enabled. The renderer accepts `PyFootnoteHtmlRendererOptions` for customizing CSS classes, backlink HTML, and ID prefixes.
+
+#### 7.14.6. Footnote Extension Registration
+
+```rust
+// In lib.rs — build_parser()
+let footnote_ext = footnote_parser_extension();
+let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext).and(gfm_ext).and(footnote_ext);
+
+// In lib.rs — build_renderer()
+let footnote_ext = footnote_html_renderer_extension(render_cfg.footnote_options.clone());
+let base_ext = emoji_ext.and(diagram_ext).and(math_fence_ext).and(math_inline_ext).and(footnote_ext);
+```
+
+#### 7.14.7. Footnote Extension Tests
+
+**Python tests** (in `mordant-py/tests/test_footnote.py`): 25 tests covering basic rendering, custom options, AST node properties, extension interoperability (GFM, emoji, math, diagram, frontmatter, highlighting), and edge cases.
+
+---
+
+## 8. Linter Module
+
+### 8.1. Architecture Overview
+
+```
+Source String
+    │
+    ▼
+┌──────────────┐
+│  Rushdown     │  ──►  (Arena, NodeRef)
+│  Parser       │       Parse-only (no render)
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  AST          │  ──►  Collected struct (headings, links, code_blocks, etc.)
+│  Traversal    │       Single DFS walk collecting rule-relevant data
+│  (build())    │
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Rule         │  ──►  25 lint rules, each a function(Collected, &mut Vec<Violation>)
+│  Engine       │       MD001, MD003, MD009, MD010, MD012, MD013,
+│               │       MD018–MD022, MD024, MD025, MD026,
+│               │       MD031, MD032, MD034, MD040, MD042,
+│               │       MD045–MD050
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Diagnostics  │  ──►  Diagnostic { rule, name, message, line, severity, column, span, fix }
+│  Output       │       Fixable flag derived from fix field
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  Fix Engine   │  ──►  apply_fixes(source, diagnostics) → FixResult
+│               │       Applies FixOp (Insert, Delete, Replace) on source lines
+│               │       Re-lints to verify fixpoint (no new violations)
+└──────────────┘
+```
+
+### 8.2. Rule Catalog
+
+| ID | Name | Fixable | Description |
+|----|------|---------|-------------|
+| MD001 | heading-increment | no | Headings increment by 1 |
+| MD003 | heading-style | no | Heading style consistency |
+| MD009 | no-trailing-spaces | yes | No trailing whitespace |
+| MD010 | no-hard-tabs | yes | No hard tabs (spaces preferred) |
+| MD012 | no-multiple-blanks | yes | No multiple blank lines |
+| MD013 | line-length | no | Lines should not exceed max length |
+| MD018 | atx-spacing | no | ATX heading space after # |
+| MD019 | atx-closing-spaces | no | ATX leaf headings no closing # |
+| MD020 | atx-closing-spaces | no | ATX heading space before closing # |
+| MD021 | atx-heading-space | no | Multiple spaces inside ATX heading |
+| MD022 | heading-blank-lines | yes | Headings should have blank lines around them |
+| MD024 | no-duplicate-heading | no | No duplicate headings |
+| MD025 | single-h1 | no | Single H1 per document |
+| MD026 | no-trailing-punctuation | yes | Headings should not end with trailing punctuation |
+| MD031 | fenced-code-blocks-working | yes | Fenced code blocks should have blank lines around them |
+| MD032 | indented-code-block | no | Indented code blocks should have blank lines around them |
+| MD034 | no-bare-urls | no | Bare URLs should be in angle brackets |
+| MD040 | fenced-code-language | yes | Fenced code blocks should specify a language |
+| MD042 | no-empty-links | no | Links should have a non-empty destination |
+| MD045 | no-alt-text | no | Images should have alternate text |
+| MD046 | code-block-indentation | no | Fenced code blocks should use 4-space indentation |
+| MD047 | single-trailing-newline | yes | Files should end with a single trailing newline |
+| MD048 | fenced-code-block-punctuation | no | Fenced code blocks should use backticks, not tildes |
+| MD049 | emphasis-style | no | Emphasis style consistency |
+| MD050 | strong-style | no | Strong style consistency |
+
+### 8.3. Configuration System
+
+Rules are configured via `LintConfig` / `RuleParams`:
+
+| Class | Description |
+|-------|-------------|
+| `LintConfig` | `disable: list[str]`, `enable: list[str] | None`, `params: RuleParams`, `suppressions` |
+| `LintOptions` | Legacy: `disable`, `enable` |
+| `RuleParams` | `heading_style`, `line_length`, `line_length_ignore_threshold`, `spaces_per_tab`, `siblings_only`, `default_language` |
+
+### 8.4. Suppression System
+
+Inline suppression comments are parsed at lint time:
+
+```markdown
+<!-- markdownlint-disable MD001 -->
+# H1
+
+### H3 jump
+
+<!-- markdownlint-enable MD001 -->
+<!-- markdownlint-disable-next-line MD009 -->
+```
+
+### 8.5. Python Bindings
+
+| Class | Description |
+|-------|-------------|
+| `Diagnostic` | `rule`, `name`, `message`, `line`, `severity`, `column`, `span`, `fixable` |
+| `FixResult` | `output`, `fixed`, `unfixable`, `remaining` |
+| `LintConfig` | `disable`, `enable`, `params`, `suppressions` |
+| `RuleParams` | `heading_style`, `line_length`, `spaces_per_tab`, etc. |
+| `RuleMetadata` | `id`, `name`, `description`, `fixable`, `default_params` |
+
+### 8.6. Python API
+
+```python
+# Lint
+mordant.lint(source, parse_opts=None, lint_opts=None, lint_config=None) -> list[Diagnostic]
+
+# Fix
+mordant.fix(source, parse_opts=None, lint_opts=None, default_language=None, lint_config=None) -> FixResult
+
+# Batch (parallel)
+mordant.lint_many(files, lint_config=None) -> list[tuple[str, list[Diagnostic]]]
+mordant.fix_many(files, lint_config=None, default_language=None) -> list[tuple[str, FixResult]]
+
+# Introspection
+mordant.lint_rules() -> list[RuleMetadata]
+```
+
+### 8.7. Batch API
+
+Uses `rayon` for thread-parallel processing. GIL is released via `py.detach()` for the entire batch.
+
+### 8.8. Phase 8 Accuracy Polish
+
+- **R8.1**: `collect_text()` handles `KindData::Extension` nodes by downcasting to `EmojiData` — emoji shortcode headings now correctly compared by MD024
+- **R8.2**: `build()` extracts `title` from YAML frontmatter metadata — MD025 respects frontmatter title
+- **R8.3**: Canonical heading anchors (lowercase, hyphenated, no special chars) generated during AST traversal — MD042 validates `#fragment` links against known anchors
+
+---
+
+## 9. Highlighting & Theme System
+
+### 9.1. Architecture
+
+```
+Source Code
+    │
+    ▼
+┌──────────────┐
+│  PyHighlighter│  ──►  syntect HighlighterSet
+│  (theme, mode)│       Theme: InspiredGitHub / Dracula / GitHub / ...
+│               │       Mode: Attribute (inline style) | Class (CSS class)
+└──────────────┘
+    │
+    ▼
+┌──────────────┐
+│  highlight()  │  ──►  HTML with style/class attributes
+│  (language,   │       Uses syntect-assets (bat's syntaxes/themes)
+│   code)       │       ~198 languages, 60+ themes
+└──────────────┘
+```
+
+### 9.2. Theme Sources
+
+| Source | Location | Format |
+|--------|----------|--------|
+| **Embedded** | `mordant/themes/` (package, 55 files) | `.tmTheme` + `.json` |
+| **User** | `~/.mordant/themes/` or `%APPDATA%/mordant/themes/` | `.tmTheme` + `.json` |
+| **Built-in** | `syntect-assets` | Syntect format |
+
+### 9.3. VSCode JSON Theme Support
+
+```python
+vscode_theme = '''{
+    "name": "My Theme",
+    "type": "dark",
+    "tokenColors": [
+        {"scope": "comment", "settings": {"foreground": "#888888"}}
+    ]
+}'''
+mordant.add_custom_theme("my-vscode", vscode_theme)
+```
+
+JSONC (with comments) is supported via `jsonc-parser`. Failed loads print warnings but don't crash.
+
+### 9.4. Python Bindings
+
+| Class | Description |
+|-------|-------------|
+| `PyHighlighter` | `theme` (default: `"InspiredGitHub"`), `mode` (`"Attribute"` or `"Class"`) |
+| `PyHighlightingMode` | `Attribute` (inline style), `Class` (CSS class) |
+
+| Function | Description |
+|----------|-------------|
+| `add_custom_theme(name, content)` | Register a theme from JSON or XML content |
+| `list_themes()` | List all available themes |
+| `list_syntaxes()` | List all available syntax languages (~198) |
+
+---
+
 ## 7.12. Math Extension (KaTeX)
 
 The math extension provides LaTeX math rendering via the pure-Rust `katex-rs` crate. It supports fenced code blocks (` ```math `, ` ```latex `) and inline math (`$...$`, `$$...$$`).
@@ -1276,7 +1673,7 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 
 ## 11. Build & Distribution
 
-### 10.1. Dependencies
+### 11.1. Dependencies
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
@@ -1284,8 +1681,16 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 | `pyo3` | 0.29 | Python bindings |
 | `yaml-peg` | 1.0.9 | YAML frontmatter parsing |
 | `emojis` | 0.8.0 | Emoji shortcode database (1,500+ emojis) |
+| `katex-rs` | 0.2.4 | LaTeX math rendering |
+| `rayon` | 1.10 | Parallel batch processing |
+| `serde` | 1.0 | Serialization |
+| `serde_json` | 1.0 | JSON support |
+| `memmap2` | 0.9 | Zero-copy file mmap |
+| `syntect` | 5.3.0 | Syntax highlighting |
+| `syntect-assets` | 0.23.6 | Syntax/theme assets |
+| `jsonc-parser` | 0.32 | JSONC parsing (VSCode themes) |
 
-### 10.2. Build Commands
+### 11.2. Build Commands
 
 ```bash
 # Build Python extension
@@ -1302,7 +1707,7 @@ python benchmarks.py -f medium -n 100  # Specific fixture, custom count
 python benchmarks.py -o results.json  # Save JSON
 ```
 
-### 10.3. Benchmarks (single-threaded, 50 iterations)
+### 11.3. Benchmarks (single-threaded, 50 iterations)
 
 | Fixture | mordant | mistune | markdown-it-py | python-markdown |
 |---------|---------|---------|----------------|-----------------|
@@ -1311,7 +1716,7 @@ python benchmarks.py -o results.json  # Save JSON
 | Large (26.7KB) | **0.410ms** | 8.611ms | 16.743ms | 31.304ms |
 | Data (202KB) | **2.763ms** | 38.152ms | 65.736ms | 621.295ms |
 
-### 10.4. Multi-threaded Scaling (4 threads, medium fixture)
+### 11.4. Multi-threaded Scaling (4 threads, medium fixture)
 
 | Library | 1-thread | 4-threads | Scaling |
 |---------|----------|-----------|---------|
@@ -1322,7 +1727,7 @@ python benchmarks.py -o results.json  # Save JSON
 
 ---
 
-## 11. Comparison with Existing Libraries
+## 12. Comparison with Existing Libraries
 
 | Library | AST Access | GFM | Speed | Extensibility |
 |---------|------------|-----|-------|---------------|
@@ -1334,7 +1739,7 @@ python benchmarks.py -o results.json  # Save JSON
 
 ---
 
-## 12. File Reference
+## 13. File Reference
 
 | File | Lines | Purpose |
 |------|-------|---------|
@@ -1374,16 +1779,17 @@ python benchmarks.py -o results.json  # Save JSON
 | **Python Bindings** | | |
 | `mordant-py/src/lib.rs` | ~500 | PyO3 module, core API, lint/fix/batch API, GIL detach |
 | `mordant-py/src/document.rs` | 183 | Document wrapper, metadata, walk |
-| `mordant-py/src/node.rs` | ~380 | Node wrapper, kind-specific properties (incl. emoji/diagram props) |
+| `mordant-py/src/node.rs` | 437 | Node wrapper, kind-specific properties (emoji/diagram/footnote/heading/code) |
 | `mordant-py/src/walker.rs` | 105 | AST walker (DFS/BFS) |
 | `mordant-py/src/options.rs` | 143 | ParseOptions, RenderOptions, GfmOptions, ArenaOptions |
 | `mordant-py/src/errors.rs` | 33 | Python exception types |
 | `mordant-py/src/meta.rs` | 655 | YAML frontmatter parser + unit tests |
 | `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
 | `mordant-py/src/diagram.rs` | ~350 | Mermaid diagram AST transformer + HTML renderer + post-render hook |
+| `mordant-py/src/footnote.rs` | 829 | Footnote inline/block parser, HTML renderer, post-render hook, PyFootnoteHtmlRendererOptions |
 | `mordant-py/src/linter.rs` | ~1,800 | Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API |
 | `mordant-py/src/chunker.rs` | ~260 | Markdown chunking engine: PyMarkdownChunker, lazy AST-based chunk iterator, heading context, from_file(), from_file_mmap() |
-| `mordant-py/src/fix_engine.rs` | ~200 | Fix engine: FixOp, FixResult, fixpoint checking |
+| `mordant-py/src/document.rs` | 250 | Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix() |
 | `mordant-py/mordant/__init__.py` | ~100 | Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, etc. |
 | `mordant-py/mordant/__main__.py` | ~300 | CLI: argparse, formatters (human/json/github), config loading, glob expansion |
 | **Tests** | | |
@@ -1394,8 +1800,8 @@ python benchmarks.py -o results.json  # Save JSON
 | `mordant-py/tests/test_meta.py` | 41 | YAML frontmatter + thematic break conflict |
 | `mordant-py/tests/test_emoji.py` | 29 | Emoji rendering, blacklist, templates, AST access |
 | `mordant-py/tests/test_diagram.py` | 17 | Mermaid diagram rendering, options, AST access |
+| `mordant-py/tests/test_footnote.py` | 25 | Footnote rendering, options, AST access, interoperability |
 | `mordant-py/tests/test_commonmark_spec.py` | 652 | Full CommonMark 0.31.2 spec |
-| `mordant-py/tests/test_lint.py` | 133 | 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors |
 | `mordant-py/tests/test_lint.py` | 133 | 25 rules + fixer + config + CLI + batch API + Phase 8 emoji/frontmatter/fragment anchors |
 | `mordant-py/tests/test_chunker.py` | 37 | chunker iteration, heading context, file I/O, edge cases |
 

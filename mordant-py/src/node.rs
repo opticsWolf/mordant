@@ -10,6 +10,7 @@ use std::cell::RefCell;
 
 use crate::emoji::EmojiData;
 use crate::diagram::{Diagram, DiagramType};
+use crate::footnote::{FootnoteReference, FootnoteDefinition};
 
 /// A Python-accessible wrapper around a rushdown AST node.
 ///
@@ -318,6 +319,54 @@ impl Node {
     #[getter]
     fn line(&self) -> PyResult<Option<usize>> {
         Ok(self.arena.borrow()[self.node_ref].pos())
+    }
+
+    /// Returns the footnote label (e.g., "1" or "named"), or None if not a footnote node.
+    #[getter]
+    fn footnote_label(&self) -> PyResult<Option<String>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(ref_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<FootnoteReference>() {
+                    return Ok(Some(ref_data.label().str(&self.source).to_string()));
+                }
+                if let Some(def_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<FootnoteDefinition>() {
+                    return Ok(Some(def_data.label().str(&self.source).to_string()));
+                }
+            }
+            _ => {}
+        }
+        Ok(None)
+    }
+
+    /// Returns the footnote index (1-based definition order), or None if not a footnote node.
+    #[getter]
+    fn footnote_index(&self) -> PyResult<Option<usize>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(ref_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<FootnoteReference>() {
+                    return Ok(Some(ref_data.index()));
+                }
+                if let Some(def_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<FootnoteDefinition>() {
+                    return Ok(Some(def_data.index()));
+                }
+            }
+            _ => {}
+        }
+        Ok(None)
+    }
+
+    /// Returns the list of reference indices for a footnote definition, or None if not a FootnoteDefinition.
+    #[getter]
+    fn footnote_references(&self) -> PyResult<Option<Vec<usize>>> {
+        match &self.arena.borrow()[self.node_ref].kind_data() {
+            KindData::Extension(ref d) => {
+                if let Some(def_data) = (d.as_ref() as &dyn ::core::any::Any).downcast_ref::<FootnoteDefinition>() {
+                    return Ok(Some(def_data.references().to_vec()));
+                }
+            }
+            _ => {}
+        }
+        Ok(None)
     }
 
     fn __repr__(&self) -> String {

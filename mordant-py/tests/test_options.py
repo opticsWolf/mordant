@@ -58,23 +58,31 @@ def test_render_options_custom():
 
 def test_gfm_options_default():
     opts = mordant.GfmOptions()
-    assert opts.tables is True
-    assert opts.strikethrough is True
-    assert opts.task_lists is True
-    assert opts.linkify is True
+    assert opts.has(mordant.GfmFeature.Table)
+    assert opts.has(mordant.GfmFeature.Strikethrough)
+    assert opts.has(mordant.GfmFeature.TaskList)
+    assert not opts.has(mordant.GfmFeature.Linkify)
+
+
+def test_gfm_options_all():
+    opts = mordant.GfmOptions.all()
+    assert opts.has(mordant.GfmFeature.Table)
+    assert opts.has(mordant.GfmFeature.Strikethrough)
+    assert opts.has(mordant.GfmFeature.TaskList)
+    assert opts.has(mordant.GfmFeature.Linkify)
 
 
 def test_gfm_options_custom():
-    opts = mordant.GfmOptions(
-        tables=True,
-        strikethrough=False,
-        task_lists=False,
-        linkify=False,
-    )
-    assert opts.tables is True
-    assert opts.strikethrough is False
-    assert opts.task_lists is False
-    assert opts.linkify is False
+    opts = mordant.GfmOptions(features=[mordant.GfmFeature.Table, mordant.GfmFeature.Strikethrough])
+    assert opts.has(mordant.GfmFeature.Table)
+    assert opts.has(mordant.GfmFeature.Strikethrough)
+    assert not opts.has(mordant.GfmFeature.TaskList)
+    assert not opts.has(mordant.GfmFeature.Linkify)
+
+
+def test_gfm_options_none():
+    opts = mordant.GfmOptions.none()
+    assert opts.features == []
 
 
 # === ArenaOptions ===
@@ -145,7 +153,7 @@ def test_parse_basic():
 
 
 def test_parse_gfm():
-    doc = mordant.parse("| A | B |\n|---|---|\n| 1 | 2 |", gfm=True)
+    doc = mordant.parse("| A | B |\n|---|---|\n| 1 | 2 |", gfm_opts=mordant.GfmOptions.all())
     assert "| A | B |" in doc.source
 
 

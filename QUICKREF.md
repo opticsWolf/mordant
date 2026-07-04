@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.0  
+> **Version:** 0.8.5  
 > **Import:** `import mordant`
 
 ---
@@ -377,6 +377,9 @@ Multiple rules:
 | `node.name` | `str \| None` | Full name for emoji nodes (e.g. `"grinning face with smiling eyes"`) |
 | `node.diagram_type` | `str \| None` | Diagram type for diagram nodes (e.g. `"mermaid"`) |
 | `node.diagram_value` | `str` | Diagram source content for diagram nodes |
+| `node.footnote_label` | `str \| None` | Footnote label for `FootnoteReference`/`FootnoteDefinition` nodes |
+| `node.footnote_index` | `int \| None` | Footnote index (1-based) for `FootnoteReference`/`FootnoteDefinition` nodes |
+| `node.footnote_references` | `list[int] \| None` | List of reference indices for `FootnoteDefinition` nodes |
 | `node.__repr__()` | `str` | `"<Node kind=N ref=R>"` |
 
 ### Kind-Specific Properties
@@ -396,6 +399,11 @@ Multiple rules:
 | TableCell | `alignment` | `str \| None` | `"left"`, `"center"`, `"right"`, `"none"` |
 | Diagram | `diagram_type` | `str \| None` | Always `"mermaid"` |
 | Diagram | `diagram_value` | `str` | Diagram source content |
+| FootnoteReference | `footnote_label` | `str \| None` | Footnote label (e.g. `"1"`, `"hello"`) |
+| FootnoteReference | `footnote_index` | `int \| None` | Footnote index (1-based) |
+| FootnoteDefinition | `footnote_label` | `str \| None` | Footnote label |
+| FootnoteDefinition | `footnote_index` | `int \| None` | Footnote index (1-based) |
+| FootnoteDefinition | `footnote_references` | `list[int] \| None` | List of reference indices |
 
 ---
 
@@ -654,6 +662,87 @@ diagram_nodes = [n for n in doc.walk("depth") if n.kind == "Diagram"]
 for node in diagram_nodes:
     print(node.diagram_type)   # "mermaid"
     print(node.diagram_value)  # "graph LR\n    A --- B\n"
+```
+
+---
+
+## Footnote Extension
+
+### `[^1]`, `[^hello]` PHP Markdown Extra footnotes
+
+Footnotes are **always enabled** — no parser options needed.
+
+```python
+import mordant
+
+# Basic footnote
+md = "Text with a footnote.[^1]\n\n[^1]: The footnote."
+html = mordant.markdown_to_html(md)
+# '<p>Text with a footnote.<sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup></p>\n'
+# '<div class="footnotes" role="doc-endnotes"><hr><ol><li id="fn:1">The footnote.&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></li></ol></div>'
+
+# Named footnotes
+md = "See[^hello] and[^1].\n\n[^hello]: Named footnote.\n[^1]: Numbered footnote."
+html = mordant.markdown_to_html(md)
+# Both rendered with proper IDs
+
+# Multiple refs to same definition
+md = "First[^1] and second[^1].\n\n[^1]: Shared."
+html = mordant.markdown_to_html(md)
+# Two superscript refs, two backlinks
+
+# No footnotes div if no footnotes
+md = "Plain text."
+html = mordant.markdown_to_html(md)
+# No footnotes div in output
+```
+
+### PyFootnoteHtmlRendererOptions
+
+```python
+opts = mordant.PyFootnoteHtmlRendererOptions(
+    link_class="footnote-ref",
+    backlink_class="footnote-backref",
+    backlink_html="&#x21a9;&#xfe0e;",
+    id_prefix=None,
+)
+
+# Custom classes
+opts = mordant.PyFootnoteHtmlRendererOptions(
+    link_class="my-ref",
+    backlink_class="my-back",
+)
+html = mordant.markdown_to_html("Text[^1]", footnote_render_opts=opts)
+# class="my-ref" and class="my-back"
+
+# Custom backlink
+opts = mordant.PyFootnoteHtmlRendererOptions(backlink_html="↑ back")
+
+# Custom ID prefix
+opts = mordant.PyFootnoteHtmlRendererOptions(id_prefix="note-")
+# id="note-fnref:1", href="#note-fn:1"
+```
+
+### Footnote AST Access
+
+```python
+doc = mordant.parse("Ref [^1] and [^hello].\n\n[^1]: First.\n\n[^hello]: Second.")
+
+# Find footnote nodes
+for node in doc.walk("depth"):
+    if node.kind == "FootnoteReference":
+        print(node.footnote_label)   # "1" or "hello"
+        print(node.footnote_index)   # 1 or 2
+    elif node.kind == "FootnoteDefinition":
+        print(node.footnote_label)   # "1" or "hello"
+        print(node.footnote_index)   # 1 or 2
+        print(node.footnote_references)  # [1] or [2]
+
+# Non-footnote nodes return None
+heading = doc.children[0]
+assert heading.footnote_label is None
+assert heading.footnote_index is None
+assert heading.footnote_references is None
 ```
 
 ---
@@ -1149,6 +1238,8 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 | TableCell | block | `<td>` |
 | Strikethrough | inline | `~~text~~` |
 | Diagram | block | ` ```mermaid ... ``` ` |
+| FootnoteReference | inline | `[^1]`, `[^hello]` |
+| FootnoteDefinition | block | `[^1]:`, `[^hello]:` |
 | Extension | any | Custom nodes |
 
 ---

@@ -17,6 +17,7 @@ mod chunker;
 mod diagram;
 mod emoji;
 mod errors;
+mod footnote;
 mod highlighter;
 mod linter;
 mod math;
@@ -29,6 +30,7 @@ mod walker;
 use document::Document;
 use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
+use footnote::{footnote_html_renderer_extension, footnote_parser_extension, FootnoteHtmlRendererOptions, PyFootnoteHtmlRendererOptions};
 use highlighter::{add_custom_theme, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
 use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
 use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions};
@@ -73,6 +75,7 @@ struct RenderConfig {
     escaped_space: bool,
     emoji_options: EmojiHtmlRendererOptions,
     diagram_options: DiagramHtmlRendererOptions,
+    footnote_options: FootnoteHtmlRendererOptions,
     highlighting_options: Option<HighlightingRendererOptions>,
 }
 
@@ -85,6 +88,7 @@ impl Default for RenderConfig {
             escaped_space: false,
             emoji_options: EmojiHtmlRendererOptions::default(),
             diagram_options: DiagramHtmlRendererOptions::default(),
+            footnote_options: FootnoteHtmlRendererOptions::default(),
             highlighting_options: None,
         }
     }
@@ -137,7 +141,8 @@ fn build_parser(
         }
     });
 
-    let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext).and(gfm_ext);
+    let footnote_ext = footnote_parser_extension();
+    let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext).and(gfm_ext).and(footnote_ext);
 
     rushdown_lib::parser::Parser::with_extensions(parser_opts, parser_ext)
 }
@@ -154,7 +159,8 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
     let math_fence_ext = math::math_html_renderer_extension(math::MathRendererOptions::default());
     let math_inline_ext = math::math_inline_html_renderer_extension(math::MathInlineRendererOptions::default());
     
-    let base_ext = emoji_ext.and(diagram_ext).and(math_fence_ext).and(math_inline_ext);
+    let footnote_ext = footnote_html_renderer_extension(render_cfg.footnote_options.clone());
+    let base_ext = emoji_ext.and(diagram_ext).and(math_fence_ext).and(math_inline_ext).and(footnote_ext);
     
     // Add highlighting extension if enabled
     if let Some(ref highlighting_opts) = render_cfg.highlighting_options {
@@ -259,8 +265,8 @@ fn parse_config_from(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, highlighting_theme = None, highlighting_mode = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>) -> PyResult<String> {
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None))]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
 
@@ -272,6 +278,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             escaped_space: opts.escaped_space,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
+            footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
         }
     } else {
@@ -282,6 +289,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             escaped_space: false,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
+            footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
         }
     };
@@ -616,6 +624,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEmojiHtmlRendererOptions>()?;
     m.add_class::<PyDiagramParserOptions>()?;
     m.add_class::<PyDiagramHtmlRendererOptions>()?;
+    m.add_class::<PyFootnoteHtmlRendererOptions>()?;
     m.add_class::<PyHighlighter>()?;
     m.add_class::<PyHighlightingMode>()?;
     m.add_class::<Document>()?;

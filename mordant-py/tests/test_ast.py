@@ -64,7 +64,7 @@ def test_document_children_blockquote():
 
 
 def test_document_children_table():
-    doc = mordant.parse("| A | B |\n|---|---|\n| 1 | 2 |", gfm=True)
+    doc = mordant.parse("| A | B |\n|---|---|\n| 1 | 2 |", gfm_opts=mordant.GfmOptions.all())
     children = doc.children
     assert len(children) == 1
     assert children[0].kind == "Table"
@@ -303,14 +303,14 @@ def test_list_marker_plus():
 # === Task list properties ===
 
 def test_task_list_active():
-    doc = mordant.parse("- [ ] todo", gfm=True)
+    doc = mordant.parse("- [ ] todo", gfm_opts=mordant.GfmOptions.all())
     item = doc.children[0].children[0]
     assert item.is_task is True
     assert item.task_status == "active"
 
 
 def test_task_list_completed():
-    doc = mordant.parse("- [x] done", gfm=True)
+    doc = mordant.parse("- [x] done", gfm_opts=mordant.GfmOptions.all())
     item = doc.children[0].children[0]
     assert item.is_task is True
     assert item.task_status == "completed"
@@ -325,7 +325,7 @@ def test_non_task_list_item():
 # === Table properties ===
 
 def test_table_structure():
-    doc = mordant.parse("| A | B |\n|---|---|\n| 1 | 2 |", gfm=True)
+    doc = mordant.parse("| A | B |\n|---|---|\n| 1 | 2 |", gfm_opts=mordant.GfmOptions.all())
     table = doc.children[0]
     assert table.kind == "Table"
     children = table.children
@@ -333,7 +333,7 @@ def test_table_structure():
 
 
 def test_table_cell_alignment():
-    doc = mordant.parse("| left | center | right |\n|---|:---:|---:|\n| a | b | c |", gfm=True)
+    doc = mordant.parse("| left | center | right |\n|---|:---:|---:|\n| a | b | c |", gfm_opts=mordant.GfmOptions.all())
     table = doc.children[0]
     # Find table body rows
     for child in table.children:
@@ -470,7 +470,7 @@ print("hello")
 
 Final paragraph.
 """
-    doc = mordant.parse(md, gfm=True)
+    doc = mordant.parse(md, gfm_opts=mordant.GfmOptions.all())
     walker = doc.walk("depth")
     kinds = [n.kind for n in walker]
 

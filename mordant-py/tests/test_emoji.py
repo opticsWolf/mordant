@@ -191,7 +191,7 @@ def test_emoji_with_frontmatter():
 
 def test_emoji_with_gfm():
     """Emojis should work with GFM extensions."""
-    html = mordant.markdown_to_html(":joy: ~~deleted~~", gfm=True)
+    html = mordant.markdown_to_html(":joy: ~~deleted~~", gfm_opts=mordant.GfmOptions.all())
     assert "\U0001F602" in html
     assert "<del>" in html
 

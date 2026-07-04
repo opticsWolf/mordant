@@ -256,7 +256,7 @@ def test_document_lint_with_options():
 
 def test_lint_works_with_gfm():
     md = "# Title\n\n| A | B |\n|---|---|\n| 1 | 2 |\n"
-    diags = mordant.lint(md, gfm=True)
+    diags = mordant.lint(md, gfm_opts=mordant.GfmOptions.all())
     # Well-formed table, single heading — nothing to report here.
     assert "MD025" not in rules(diags)
     assert "MD001" not in rules(diags)

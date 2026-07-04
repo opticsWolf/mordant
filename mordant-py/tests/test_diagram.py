@@ -201,7 +201,7 @@ graph LR
 graph LR
     A --- B
 ```"""
-        html = mordant.markdown_to_html(source, gfm=True)
+        html = mordant.markdown_to_html(source, gfm_opts=mordant.GfmOptions.all())
         assert '<pre class="mermaid">' in html
 
     def test_mermaid_with_frontmatter(self):
@@ -230,7 +230,7 @@ graph LR
 
 ~~strikethrough~~ and `code` and [link](url)
 """
-        html = mordant.markdown_to_html(source, gfm=True)
+        html = mordant.markdown_to_html(source, gfm_opts=mordant.GfmOptions.all())
         assert '<pre class="mermaid">' in html
         assert "<del>" in html
         assert "<code>" in html

@@ -243,9 +243,9 @@ class TestHtmlIntegration:
 
     def test_gfm_with_frontmatter(self):
         md = "---\ntitle: Test\n---\n\n| A | B |\n|---|---|\n| 1 | 2 |"
-        html = mordant.markdown_to_html(md, gfm=True)
+        html = mordant.markdown_to_html(md, gfm_opts=mordant.GfmOptions.all())
         assert "<table>" in html
-        doc = mordant.parse(md, gfm=True)
+        doc = mordant.parse(md, gfm_opts=mordant.GfmOptions.all())
         assert doc.metadata["title"] == "Test"
 
     def test_empty_document(self):

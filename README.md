@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.8.0  
+> **Version:** 0.8.5  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -10,7 +10,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
-## What's New in 0.8.0
+## What's New in 0.8.5
 
 - **Lint engine** — 25 lint rules (MD001, MD003, MD009, MD010, MD012, MD013, MD018–MD022, MD024, MD025, MD026, MD031, MD032, MD034, MD040, MD042, MD045–MD048, MD049, MD050) with diagnostics, fix engine, and configuration
 - **Batch API** — `lint_many()` and `fix_many()` for parallel file processing via `rayon`, with GIL release for the entire batch
@@ -19,7 +19,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Document chunking** — `MarkdownChunker` lazy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors
 - **Inline suppression** — `<!-- markdownlint-disable MD001 -->` comments supported
 - **VSCode JSON theme support** — Custom themes from `.json` files via `add_custom_theme()` and user directory `~/.mordant/themes/`
-- **1040 tests** passing (up from 1003)
+- **1161 tests** passing (up from 1065)
 
 ## Features
 
@@ -31,6 +31,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Emoji support.** :joy: `:heart:` `:smile:` — shortcode-style emoji rendering with blacklist and custom templates.
 - **Math support.** LaTeX math via KaTeX — fenced ```math/```latex blocks, inline `$...$`/`$$...$$` math, standalone `render_math()` function.
 - **Mermaid diagrams.** `graph LR`, `sequenceDiagram` — render Mermaid diagrams from code blocks with client-side JS loading.
+- **Footnotes.** PHP Markdown Extra style footnotes (`[^1]`, `[^hello]`) with `<sup>` references, `<div class="footnotes">` endnotes, and backlinks.
 - **Document chunking.** `MarkdownChunker` — lazy, low-copy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors.
 - **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
 
@@ -91,6 +92,18 @@ html = mordant.markdown_to_html("""```math
 
 # Standalone math rendering
 result = mordant.render_math(r"\alpha + \beta", display=True, output="both")
+
+# Footnotes (always enabled)
+html = mordant.markdown_to_html("Text[^1]\n\n[^1]: The footnote.")
+# '<p>Text<sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup></p>\n<div class="footnotes" role="doc-endnotes">\n<hr>\n<ol><li id="fn:1">The footnote.&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></li></ol></div>'
+
+# Custom footnote options
+opts = mordant.PyFootnoteHtmlRendererOptions(
+    link_class="my-ref",
+    backlink_class="my-back",
+    backlink_html="↑ back",
+)
+html = mordant.markdown_to_html("Text[^1]", footnote_render_opts=opts)
 
 # Mermaid diagrams
 html = mordant.markdown_to_html("""```mermaid
@@ -281,6 +294,8 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 | TableCell | block | `<td>` |
 | Strikethrough | inline | `~~text~~` |
 | Diagram | block | ` ```mermaid ... ``` ` |
+| FootnoteReference | inline | `[^1]`, `[^hello]` |
+| FootnoteDefinition | block | `[^1]:`, `[^hello]:` |
 | Extension | any | Custom nodes |
 
 ## Thematic Break vs Frontmatter
@@ -386,6 +401,47 @@ Key features:
 
 See [ARCHITECTURE.md §7.12](ARCHITECTURE.md#712-math-extension-katex) for full details.
 
+### rushdown-footnote
+
+Footnote support is provided by [rushdown-footnote](https://github.com/yuin/rushdown-footnote), which has been directly incorporated into mordant. Footnotes are **always enabled** — no parser options to disable them.
+
+**Syntax (PHP Markdown Extra):**
+
+```markdown
+Text with a footnote.[^1]
+Text with a named footnote.[^hello]
+
+[^1]: The footnote.
+
+[^hello]: The named footnote.
+```
+
+**Output:**
+
+```html
+<p>Text with a footnote.<sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup></p>
+<div class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn:1">The footnote.&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></li>
+</ol>
+</div>
+```
+
+Key features:
+
+- **Inline references:** `[^1]`, `[^hello]` — rendered as `<sup><a href="#fn:N">N</a></sup>`
+- **Block definitions:** `[^1]:` followed by content — rendered in `<div class="footnotes">` at end of document
+- **Named footnotes:** `[^hello]` — label preserved in ID
+- **Multiple refs:** Multiple `[^1]` to same `[^1]:` — each gets a superscript ref, definition rendered once
+- **Backlinks:** Each definition has a backlink anchor (`&#x21a9;&#xfe0e;`) to return to the reference
+- **Accessibility:** `role="doc-endnotes"`, `role="doc-noteref"`, `role="doc-backlink"` ARIA attributes
+- **Custom options:** `PyFootnoteHtmlRendererOptions` for custom CSS classes, backlink HTML, and ID prefixes
+- **AST node access:** `node.footnote_label`, `node.footnote_index`, `node.footnote_references` properties
+- **No parser options:** Footnotes are always enabled (matches math extension pattern)
+
+See [ARCHITECTURE.md §7.14](ARCHITECTURE.md#714-footnote-extension-rushdown-footnote) for full details.
+
 ## Benchmarks
 
 Run benchmarks:
@@ -404,7 +460,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-1040 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker) + 54 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+1161 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, Mixed Features) + 51 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## Theme Loading
 
@@ -425,5 +481,5 @@ MIT
 
 ## Author
 
-Mordant: Python bindings by [your name]  
+Mordant: Python bindings by [opticsWolf](https://github.com/opticsWolf)
 Rushdown: Rust core by [Yusuke Inuzuka](https://github.com/yuin)
