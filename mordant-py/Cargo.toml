@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2021"
 rust-version = "1.87"
 description = "Mordant - A fast CommonMark + GFM Markdown parser for Python, powered by the rushdown Rust library"

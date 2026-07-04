@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.7.0  
+> **Version:** 0.8.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1040 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 17 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme + 37 chunker) + 51 Rust (28 linter + 14 meta + 9 emoji)
+> **Tests:** 1136 Python (652 commonmark spec + 133 lint + 61 AST + 29 emoji + 21 options + 14 core + 9 GFM + 17 diagram + 18 highlighting + 11 VSCode theme + 37 chunker) + 51 Rust (28 linter + 14 meta + 9 emoji)
 
 ---
 
@@ -14,7 +14,7 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 - **Single-call parse + render:** `markdown_to_html("# Hello")`
 - **AST access:** `parse("# Hello")` returns a `Document` with full tree traversal
 - **YAML frontmatter:** Metadata extraction via `yaml-peg`
-- **GFM support:** Tables, task lists, strikethrough, autolink
+- **GFM support:** Tables, task lists, strikethrough (linkify disabled by default; enable with `GfmOptions.all()`)
 - **Emoji support:** Shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.)
 - **Diagram support:** Mermaid diagram rendering from code blocks
 - **Lint engine:** 25 rules (MD001, MD009, MD012, MD024, MD025, MD040, MD042, MD045, MD047, MD010, MD018–MD021, MD030, MD031, MD032, MD033, MD034, MD036, MD037, MD038, MD039, MD041, MD043, MD044, MD046, MD048, MD049) with diagnostics, fix engine, config, and suppression
@@ -423,14 +423,83 @@ These are `Send` and have no Python references, so they are safe to use inside `
 
 ### 5.3. GfmOptions
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `tables` | bool | true | Enable GFM tables |
-| `strikethrough` | bool | true | Enable GFM strikethrough |
-| `task_lists` | bool | true | Enable GFM task list items |
-| `linkify` | bool | true | Enable GFM autolink |
+```python
+import mordant
 
-### 5.4. ArenaOptions
+# Default: tables + strikethrough + task lists (linkify disabled)
+opts = mordant.GfmOptions()
+opts.has(mordant.GfmFeature.Table)        # True
+opts.has(mordant.GfmFeature.Strikethrough) # True
+opts.has(mordant.GfmFeature.TaskList)      # True
+opts.has(mordant.GfmFeature.Linkify)       # False
+
+# All features (including linkify)
+opts = mordant.GfmOptions.all()
+
+# None
+opts = mordant.GfmOptions.none()
+
+# Granular feature selection
+opts = mordant.GfmOptions(features=[
+    mordant.GfmFeature.Table,
+    mordant.GfmFeature.Strikethrough,
+])
+```
+
+| Classmethod | Description |
+|-------------|-------------|
+| `GfmOptions.all()` | Enable all features (tables, strikethrough, task lists, linkify) |
+| `GfmOptions.none()` | Disable all GFM features |
+| `GfmOptions(features=[...])` | Enable specific features |
+
+| Attribute/Method | Return Type | Description |
+|------------------|-------------|-------------|
+| `features` | `list[GfmFeature]` | Enabled GFM feature list |
+| `has(feature)` | `bool` | Check if a specific feature is enabled |
+
+### 5.3.1. GfmFeature Enum
+
+| Value | Description |
+|-------|-------------|
+| `GfmFeature.Table` | GFM tables |
+| `GfmFeature.Strikethrough` | GFM strikethrough (`~~text~~`) |
+| `GfmFeature.TaskList` | GFM task list items (`- [ ]`) |
+| `GfmFeature.Linkify` | GFM autolink (auto-convert URLs) |
+
+### 5.4. MathOptions
+
+```python
+import mordant
+
+# Parse options for math
+parse_opts = mordant.ParseOptions()
+
+# Render options for math
+render_opts = mordant.RenderOptions()
+
+# Standalone math rendering
+result = mordant.render_math(r"\int_0^\infty e^{-x^2} dx", display=True, output="both")
+```
+
+| Attribute/Method | Return Type | Description |
+|------------------|-------------|-------------|
+| `render_math(latex, display=False, output="both")` | `str` | Render LaTeX to KaTeX markup (GIL released) |
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `latex` | `str` | — | LaTeX expression to render |
+| `display` | `bool` | `False` | `True` for display mode (`$$...$$`), `False` for inline (`$...$`) |
+| `output` | `str` | `"both"` | Output format: `"both"` (HTML+MathML), `"html"`, or `"mathml"` |
+
+**Output formats:**
+
+| Format | Description | Requires |
+|--------|-------------|----------|
+| `"both"` (default) | Styled HTML + MathML | KaTeX CSS + web fonts |
+| `"html"` | Styled HTML only | KaTeX CSS + web fonts |
+| `"mathml"` | Semantic MathML only | MathML-capable browser |
+
+### 5.5. ArenaOptions
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -980,6 +1049,77 @@ rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diag
 - Multiple diagrams: multiple `<pre>` blocks, single script tag
 - Mixed content: diagrams with headings, paragraphs, lists
 - Edge cases: empty block, special HTML chars, GFM mode, frontmatter integration
+
+---
+
+## 7.12. Math Extension (KaTeX)
+
+The math extension provides LaTeX math rendering via the pure-Rust `katex-rs` crate. It supports fenced code blocks (` ```math `, ` ```latex `) and inline math (`$...$`, `$$...$$`).
+
+### 7.12.1. Efficiency Model
+
+- `KatexContext` (font metrics, symbol tables, function/environment registries) is expensive to build but `Send + Sync`. Built **once** in a `LazyLock` and shared read-only across all renders and threads.
+- Rendered markup is **memoized** on `(display, output, latex)`: documents repeat formulas and rendering is the costly step. `Arc<str>` makes cache hits cheap.
+- Rendering is pure-Rust CPU work, so it runs with the GIL released.
+
+### 7.12.2. Output Formats
+
+| Format | Description | Requires |
+|--------|-------------|----------|
+| `"both"` (default) | Styled HTML + MathML | KaTeX CSS + web fonts |
+| `"html"` | Styled HTML only | KaTeX CSS + web fonts |
+| `"mathml"` | Semantic MathML only | MathML-capable browser |
+
+### 7.12.3. MathParserOptions
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `inline_math` | bool | true | Enable `$...$` inline math |
+| `display_math` | bool | true | Enable `$$...$$` block math |
+
+### 7.12.4. MathData (Extension Node)
+
+Math expressions are stored as `Extension` AST nodes containing `MathData`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `latex` | String | Raw LaTeX source (without delimiters) |
+| `display` | bool | `True` for `$$...$$`, `False` for `$...$` |
+
+### 7.12.5. Math HTML Renderer
+
+The math HTML renderer converts `MathData` nodes and fenced code blocks to KaTeX markup:
+
+```python
+import mordant
+
+# Fenced math block
+md = "```math\\n\\int_0^\\infty e^{-x^2} dx\\n```"
+html = mordant.markdown_to_html(md)
+# Contains <span class="katex">...</span>
+
+# Standalone render_math
+result = mordant.render_math(r"\int_0^\infty e^{-x^2} dx", display=True, output="both")
+```
+
+### 7.12.6. Math Extension Registration
+
+```rust
+// In lib.rs — build_parser()
+let math_ext = math_parser_extension(parse_cfg.math_options.clone());
+let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext);
+
+// In lib.rs — build_renderer()
+let math_ext = math_html_renderer_extension(math::MathRendererOptions::default());
+let math_inline_ext = math_inline_html_renderer_extension(math::MathInlineRendererOptions::default());
+```
+
+### 7.12.7. Math Extension Tests (37 tests in `test_math.py`)
+
+- **Level 1 (fenced blocks):** ` ```math `, ` ```latex `, katex class output, display mode, multiple blocks, complex expressions, subscripts/superscripts, Greek letters
+- **Standalone `render_math()`:** inline/display mode, output formats (both/html/mathml), case-insensitive output, invalid output raises ValueError, caching, different display/output produce different output
+- **Level 2 (inline math):** `$...$` inline, `$$...$$` block, multiple expressions, mixed with emphasis, inside lists
+- **Integration:** math with code highlighting, math with emoji, GFM mode with math, math doesn't break regular code blocks, parse options with math
 
 ---
 

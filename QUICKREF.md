@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.7.0  
+> **Version:** 0.8.0  
 > **Import:** `import mordant`
 
 ---
@@ -30,7 +30,7 @@ assert "Rust" in syntaxes
 
 ---
 
-### `markdown_to_html(source, gfm=False, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, highlighting_theme=None, highlighting_mode=None) -> str`
+### `markdown_to_html(source, gfm_opts=None, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, highlighting_theme=None, highlighting_mode=None) -> str`
 
 One-call parse + render. GIL is released during the CPU-heavy parse + render phase.
 
@@ -47,7 +47,7 @@ html = mordant.markdown_to_html("# Hello\n\n**World**")
 # '<h1>Hello</h1>\n<p><strong>World</strong></p>\n'
 
 # GFM
-html = mordant.markdown_to_html("~~strike~~", gfm=True)
+html = mordant.markdown_to_html("~~strike~~")
 # '<p><del>strike</del></p>\n'
 
 # With options
@@ -71,7 +71,7 @@ x = 1
 # Code block rendered with CSS class attributes
 ```
 
-### `parse(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None) -> Document`
+### `parse(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None) -> Document`
 
 Parse only. Returns a `Document` with full AST access. GIL is released during parsing.
 
@@ -89,7 +89,7 @@ print(doc.metadata)    # {}
 
 ## Lint API
 
-### `lint(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, lint_config=None) -> list[Diagnostic]`
+### `lint(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, lint_config=None) -> list[Diagnostic]`
 
 Lint a markdown string and return diagnostics. GIL is released during linting.
 
@@ -116,7 +116,7 @@ for d in diagnostics:
 # MD001:1 heading-increment: Heading incremented by more than 1
 ```
 
-### `fix(source, gfm=False, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, default_language=None, lint_config=None) -> FixResult`
+### `fix(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, default_language=None, lint_config=None) -> FixResult`
 
 Lint and auto-fix a markdown string. Returns the fixed output and any remaining diagnostics.
 
@@ -658,6 +658,92 @@ for node in diagram_nodes:
 
 ---
 
+## Math Extension (KaTeX)
+
+### ` ```math ` and ` ```latex ` fenced code blocks
+
+```python
+import mordant
+
+# Basic math block
+html = mordant.markdown_to_html("""```math
+\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}
+```""")
+# Contains <span class="katex katex-display">...</span>
+
+# Using 'latex' language tag (same as 'math')
+html = mordant.markdown_to_html("""```latex
+E = mc^2
+```""")
+```
+
+### Standalone `render_math()` function
+
+Render LaTeX independently of the Markdown AST. GIL is released during rendering.
+
+```python
+import mordant
+
+# Inline math (default)
+result = mordant.render_math("x^2 + y^2")
+# '<span class="katex">...</span>'
+
+# Display math
+result = mordant.render_math("E = mc^2", display=True)
+# '<span class="katex katex-display">...</span>'
+
+# Output formats
+result = mordant.render_math("x^2", output="html")     # HTML only
+result = mordant.render_math("x^2", output="mathml")   # MathML only
+result = mordant.render_math("x^2", output="both")     # HTML + MathML (default)
+
+# Invalid LaTeX produces error span (doesn't crash)
+result = mordant.render_math(r"\\nonexistentcommand{}")
+# '<span class="katex-error" title="...">...<\/span>'
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `latex` | `str` | — | LaTeX expression to render |
+| `display` | `bool` | `False` | `True` for display mode (`$$...$$`), `False` for inline (`$...$`) |
+| `output` | `str` | `"both"` | Output format: `"both"` (HTML+MathML), `"html"`, or `"mathml"` |
+
+**Output formats:**
+
+| Format | Description | Requires |
+|--------|-------------|----------|
+| `"both"` (default) | Styled HTML + MathML | KaTeX CSS + web fonts |
+| `"html"` | Styled HTML only | KaTeX CSS + web fonts |
+| `"mathml"` | Semantic MathML only | MathML-capable browser |
+
+### Inline `$...$` and block `$$...$$` math
+
+```python
+import mordant
+
+# Inline math
+html = mordant.markdown_to_html("The value of $x^2$ is important.")
+
+# Block math
+html = mordant.markdown_to_html("Equation:\n\n$$E = mc^2$$\n\nMore text.")
+```
+
+### Math AST Access
+
+```python
+doc = mordant.parse("""```math
+x^2 + y^2 = z^2
+```""")
+
+# Find math nodes
+math_nodes = [n for n in doc.walk("depth") if n.kind == "Extension" and hasattr(n, 'latex')]
+for node in math_nodes:
+    print(node.latex)  # Raw LaTeX source
+    print(node.display)  # True for $$...$$, False for $...$
+```
+
+---
+
 ## Options
 
 ### ParseOptions
@@ -686,15 +772,47 @@ opts = mordant.RenderOptions(
 ### GfmOptions
 
 ```python
-opts = mordant.GfmOptions(
-    tables=True,              # GFM tables
-    strikethrough=True,       # ~~strikethrough~~
-    task_lists=True,          # - [ ] task items
-    linkify=True,             # Auto-link URLs
-)
+import mordant
+
+# Default: tables + strikethrough + task lists (linkify disabled)
+opts = mordant.GfmOptions()
+opts.has(mordant.GfmFeature.Table)        # True
+opts.has(mordant.GfmFeature.Strikethrough) # True
+opts.has(mordant.GfmFeature.TaskList)      # True
+opts.has(mordant.GfmFeature.Linkify)       # False
+
+# All features (including linkify)
+opts = mordant.GfmOptions.all()
+
+# None
+opts = mordant.GfmOptions.none()
+
+# Granular feature selection
+opts = mordant.GfmOptions(features=[
+    mordant.GfmFeature.Table,
+    mordant.GfmFeature.Strikethrough,
+])
 ```
 
-> **Note:** `GfmOptions` is exposed but not yet wired to the parser. When `gfm=True` is passed to `parse()` or `markdown_to_html()`, the parser always uses default GFM settings.
+| Classmethod | Description |
+|-------------|-------------|
+| `GfmOptions.all()` | Enable all features (tables, strikethrough, task lists, linkify) |
+| `GfmOptions.none()` | Disable all GFM features |
+| `GfmOptions(features=[...])` | Enable specific features |
+
+| Attribute/Method | Return Type | Description |
+|------------------|-------------|-------------|
+| `features` | `list[GfmFeature]` | Enabled GFM feature list |
+| `has(feature)` | `bool` | Check if a specific feature is enabled |
+
+### GfmFeature Enum
+
+| Value | Description |
+|-------|-------------|
+| `GfmFeature.Table` | GFM tables |
+| `GfmFeature.Strikethrough` | GFM strikethrough (`~~text~~`) |
+| `GfmFeature.TaskList` | GFM task list items (`- [ ]`) |
+| `GfmFeature.Linkify` | GFM autolink (auto-convert URLs) |
 
 ### ArenaOptions
 
@@ -957,21 +1075,25 @@ except Exception as e:
 ## GFM Examples
 
 ```python
-# Tables
+import mordant
+
+# Tables (enabled by default)
 html = mordant.markdown_to_html(
-    "| A | B |\n|---|---|\n| 1 | 2 |",
-    gfm=True,
+    "| A | B |\n|---|---|\n| 1 | 2 |"
 )
 
-# Task lists
+# Task lists (enabled by default)
 md = "- [ ] todo\n- [x] done"
-html = mordant.markdown_to_html(md, gfm=True)
+html = mordant.markdown_to_html(md)
 
-# Strikethrough
-html = mordant.markdown_to_html("~~deleted~~", gfm=True)
+# Strikethrough (enabled by default)
+html = mordant.markdown_to_html("~~deleted~~")
 
-# Autolink
-html = mordant.markdown_to_html("https://example.com", gfm=True)
+# Autolink (disabled by default; enable with GfmOptions.all())
+html = mordant.markdown_to_html(
+    "https://example.com",
+    gfm_opts=mordant.GfmOptions.all()
+)
 # '<p><a href="https://example.com">https://example.com</a></p>\n'
 ```
 
@@ -986,7 +1108,7 @@ import mordant
 
 def parse_and_render(md):
     # GIL is released during parse + render
-    html = mordant.markdown_to_html(md, gfm=True)
+    html = mordant.markdown_to_html(md)
     return html
 
 docs = [open(f).read() for f in file_list]
@@ -1110,7 +1232,7 @@ Parse, render, lint, and fix operations release the GIL via `Python::detach()`:
 
 ```python
 # These calls release the GIL internally:
-mordant.markdown_to_html(source, gfm=True)   # GIL released during parse + render
+mordant.markdown_to_html(source)   # GIL released during parse + render
 mordant.parse(source)                          # GIL released during parse
 mordant.lint(source)                           # GIL released during linting
 mordant.fix(source)                            # GIL released during linting + fixing

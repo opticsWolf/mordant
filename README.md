@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.7.0  
+> **Version:** 0.8.0  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -10,7 +10,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
-## What's New in 0.7.0
+## What's New in 0.8.0
 
 - **Lint engine** — 25 lint rules (MD001, MD003, MD009, MD010, MD012, MD013, MD018–MD022, MD024, MD025, MD026, MD031, MD032, MD034, MD040, MD042, MD045–MD048, MD049, MD050) with diagnostics, fix engine, and configuration
 - **Batch API** — `lint_many()` and `fix_many()` for parallel file processing via `rayon`, with GIL release for the entire batch
@@ -25,10 +25,11 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 
 - **Blazing fast.** One of the fastest Markdown parsers for Python — up to 55x faster than python-markdown on large documents.
 - **Full AST access.** Parse markdown to a `Document` with complete tree traversal — navigate parent, children, siblings, access all node kinds.
-- **CommonMark + GFM.** Fully compliant with CommonMark 0.31.2 and GitHub Flavored Markdown (tables, task lists, strikethrough, autolink).
+- **CommonMark + GFM.** Fully compliant with CommonMark 0.31.2 and GitHub Flavored Markdown (tables, task lists, strikethrough; autolink disabled by default, enable with `GfmOptions.all()`).
 - **YAML frontmatter.** Extract metadata from YAML frontmatter with full type preservation (null, bool, int, float, str, list, dict).
 - **Multi-threaded.** Parse and render release the GIL — scale ~4.0x linearly with thread count.
 - **Emoji support.** :joy: `:heart:` `:smile:` — shortcode-style emoji rendering with blacklist and custom templates.
+- **Math support.** LaTeX math via KaTeX — fenced ```math/```latex blocks, inline `$...$`/`$$...$$` math, standalone `render_math()` function.
 - **Mermaid diagrams.** `graph LR`, `sequenceDiagram` — render Mermaid diagrams from code blocks with client-side JS loading.
 - **Document chunking.** `MarkdownChunker` — lazy, low-copy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors.
 - **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
@@ -56,9 +57,16 @@ import mordant
 html = mordant.markdown_to_html("# Hello\n\n**World**")
 # '<h1>Hello</h1>\n<p><strong>World</strong></p>\n'
 
-# GFM support
-html = mordant.markdown_to_html("~~deleted~~", gfm=True)
+# GFM support (tables, strikethrough, task lists enabled by default)
+html = mordant.markdown_to_html("~~deleted~~")
 # '<p><del>deleted</del></p>\n'
+
+# Autolink (disabled by default; enable with GfmOptions.all())
+html = mordant.markdown_to_html(
+    "https://example.com",
+    gfm_opts=mordant.GfmOptions.all()
+)
+# '<p><a href="https://example.com">https://example.com</a></p>\n'
 
 # Full AST access
 doc = mordant.parse("# Hello\n\n**World**")
@@ -74,6 +82,15 @@ html = mordant.markdown_to_html("I'm :joy: and :heart:")
 opts = mordant.PyEmojiParserOptions(blacklist="joy")
 html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
 # ':joy:' passes through; :heart: renders as ❤️
+
+# Math support
+html = mordant.markdown_to_html("""```math
+\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}
+```""")
+# '<span class="katex katex-display">...</span>'
+
+# Standalone math rendering
+result = mordant.render_math(r"\alpha + \beta", display=True, output="both")
 
 # Mermaid diagrams
 html = mordant.markdown_to_html("""```mermaid
@@ -184,17 +201,21 @@ render_opts = mordant.RenderOptions(
     escaped_space=False,
 )
 
-# GFM options
-gfm_opts = mordant.GfmOptions(
-    tables=True,
-    strikethrough=True,
-    task_lists=True,
-    linkify=True,
-)
+# GFM options (default: tables + strikethrough + task lists; linkify disabled)
+import mordant
+
+gfm_opts = mordant.GfmOptions()
+# Enable all features including linkify
+gfm_opts = mordant.GfmOptions.all()
+# Granular feature selection
+gfm_opts = mordant.GfmOptions(features=[
+    mordant.GfmFeature.Table,
+    mordant.GfmFeature.Strikethrough,
+])
 
 html = mordant.markdown_to_html(
     "Hello\nWorld",
-    gfm=True,
+    gfm_opts=gfm_opts,
     parse_opts=parse_opts,
     render_opts=render_opts,
 )
@@ -344,10 +365,26 @@ Mordant currently implements Mermaid support only. Key features:
 - **Parser options:** `PyDiagramParserOptions(mermaid_enabled=False)` — disable diagram transformation to keep code blocks as regular fenced code blocks
 - **AST node access:** Diagram nodes expose `diagram_type` ("mermaid") and `diagram_value` (source content) properties via the `Diagram` node kind
 - **Multiple diagrams:** Multiple Mermaid blocks in one document all render correctly with a single script tag
-- **GFM compatible:** Works alongside other GFM features (tables, task lists, strikethrough, autolink)
+- **GFM compatible:** Works alongside other GFM features (tables, task lists, strikethrough; autolink disabled by default, enable with `GfmOptions.all()`)
 - **Frontmatter compatible:** Works alongside YAML frontmatter
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
+
+### rushdown-math
+
+Math support is provided by the pure-Rust `katex-rs` crate, incorporated directly into mordant.
+
+Key features:
+
+- **Fenced math blocks:** ```` ```math ```` and ```` ```latex ```` code blocks render to KaTeX markup
+- **Inline math:** `$...$` for inline, `$$...$$` for display mode
+- **Standalone `render_math()`:** `mordant.render_math(r"\alpha + \beta", display=True, output="both")` — renders LaTeX independently of the Markdown AST
+- **Output formats:** `"both"` (HTML+MathML, default), `"html"`, or `"mathml"`
+- **Error handling:** Invalid LaTeX produces an error span (`<span class="katex-error">...`) instead of crashing
+- **Caching:** Rendered markup is memoized on `(display, output, latex)` for repeated formulas
+- **GIL released:** Math rendering runs with the GIL released for multi-threaded parallelism
+
+See [ARCHITECTURE.md §7.12](ARCHITECTURE.md#712-math-extension-katex) for full details.
 
 ## Benchmarks
 
