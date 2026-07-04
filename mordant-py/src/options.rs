@@ -97,31 +97,81 @@ impl RenderOptions {
     fn set_escaped_space(&mut self, v: bool) { self.escaped_space = v }
 }
 
+/// Individual GFM features that can be enabled/disabled.
+#[pyclass(module = "mordant")]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum GfmFeature {
+    Table,
+    Strikethrough,
+    TaskList,
+    Linkify,
+}
+
 /// GfmOptions controls GitHub Flavored Markdown extensions.
+///
+/// Pass a list of `GfmFeature` values to enable specific features.
+/// Use `GfmOptions.all()` to enable everything, or `GfmOptions.none()` for none.
+///
+/// By default (no gfm_opts passed), GFM is completely disabled.
 #[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
 pub struct GfmOptions {
-    #[pyo3(get, set)]
-    tables: bool,
-    #[pyo3(get, set)]
-    strikethrough: bool,
-    #[pyo3(get, set)]
-    task_lists: bool,
-    #[pyo3(get, set)]
-    linkify: bool,
+    pub(crate) features: Vec<GfmFeature>,
+}
+
+impl Default for GfmOptions {
+    fn default() -> Self {
+        Self {
+            features: vec![
+                GfmFeature::Table,
+                GfmFeature::Strikethrough,
+                GfmFeature::TaskList,
+            ],
+        }
+    }
 }
 
 #[pymethods]
 impl GfmOptions {
     #[new]
-    #[pyo3(signature = (tables = true, strikethrough = true, task_lists = true, linkify = true))]
-    fn new(tables: bool, strikethrough: bool, task_lists: bool, linkify: bool) -> Self {
-        GfmOptions {
-            tables,
-            strikethrough,
-            task_lists,
-            linkify,
+    #[pyo3(signature = (features = None))]
+    fn new(features: Option<Vec<GfmFeature>>) -> Self {
+        Self {
+            features: features.unwrap_or_else(|| vec![
+                GfmFeature::Table,
+                GfmFeature::Strikethrough,
+                GfmFeature::TaskList,
+            ]),
         }
+    }
+
+    /// Enable all GFM features (tables, strikethrough, task lists, linkify).
+    #[staticmethod]
+    fn all() -> Self {
+        Self {
+            features: vec![
+                GfmFeature::Table,
+                GfmFeature::Strikethrough,
+                GfmFeature::TaskList,
+                GfmFeature::Linkify,
+            ],
+        }
+    }
+
+    /// Disable all GFM features.
+    #[staticmethod]
+    fn none() -> Self {
+        Self { features: vec![] }
+    }
+
+    /// Returns true if the given feature is enabled.
+    fn has(&self, feature: GfmFeature) -> bool {
+        self.features.contains(&feature)
+    }
+
+    #[getter]
+    fn features(&self) -> Vec<GfmFeature> {
+        self.features.clone()
     }
 }
 

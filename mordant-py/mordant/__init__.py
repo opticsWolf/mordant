@@ -11,6 +11,7 @@ try:
     from .mordant import (
         markdown_to_html,
         parse,
+        render_math,
         lint,
         fix,
         lint_rules,
@@ -81,6 +82,7 @@ _load_embedded_themes()
 __all__ = [
     "markdown_to_html",
     "parse",
+    "render_math",
     "lint",
     "fix",
     "lint_rules",

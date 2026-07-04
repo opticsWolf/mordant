@@ -2094,7 +2094,7 @@ pub fn lint_many(
         .map(|(name, source)| {
             // Each thread builds its own parser/arena — fully independent.
             let parse_cfg = super::ParseConfig::default();
-            let (arena, root) = super::parse_only(source, false, &parse_cfg);
+            let (arena, root) = super::parse_only(source, None, &parse_cfg);
             let violations = run_lint(source, &arena, root, cfg);
             (name.clone(), violations)
         })
@@ -2115,7 +2115,7 @@ pub fn fix_many(
     files.par_iter()
         .map(|(name, source)| {
             let parse_cfg = super::ParseConfig::default();
-            let (arena, root) = super::parse_only(source, false, &parse_cfg);
+            let (arena, root) = super::parse_only(source, None, &parse_cfg);
             let outcome = run_fix(source, &arena, root, cfg, default_language);
             (name.clone(), outcome)
         })

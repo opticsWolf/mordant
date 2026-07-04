@@ -19,6 +19,7 @@ mod emoji;
 mod errors;
 mod highlighter;
 mod linter;
+mod math;
 mod meta;
 mod node;
 mod options;
@@ -30,8 +31,9 @@ use diagram::{diagram_html_renderer_extension, diagram_parser_extension, Diagram
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
 use highlighter::{add_custom_theme, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
 use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
+use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions};
 use node::Node;
-use options::{ArenaOptions, GfmOptions, ParseOptions, RenderOptions};
+use options::{ArenaOptions, GfmFeature, GfmOptions, ParseOptions, RenderOptions};
 use walker::Walker;
 
 // ---------------------------------------------------------------------------
@@ -46,6 +48,7 @@ struct ParseConfig {
     meta_table: bool,
     emoji_options: EmojiParserOptions,
     diagram_options: DiagramParserOptions,
+    math_options: MathParserOptions,
 }
 
 impl Default for ParseConfig {
@@ -57,6 +60,7 @@ impl Default for ParseConfig {
             meta_table: false,
             emoji_options: EmojiParserOptions::default(),
             diagram_options: DiagramParserOptions::default(),
+            math_options: MathParserOptions::default(),
         }
     }
 }
@@ -91,7 +95,7 @@ impl Default for RenderConfig {
 // ---------------------------------------------------------------------------
 
 fn build_parser(
-    gfm: bool,
+    gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
 ) -> rushdown_lib::parser::Parser {
     let meta_opts = meta::MetaParserOptions { table: parse_cfg.meta_table };
@@ -99,22 +103,43 @@ fn build_parser(
 
     let emoji_ext = emoji_parser_extension(parse_cfg.emoji_options.clone());
     let diagram_ext = diagram_parser_extension(parse_cfg.diagram_options.clone());
+    let math_ext = math_parser_extension(parse_cfg.math_options.clone());
 
     let mut parser_opts = rushdown_lib::parser::Options::default();
     parser_opts.attributes = parse_cfg.attributes;
     parser_opts.auto_heading_ids = parse_cfg.auto_heading_ids;
     parser_opts.escaped_space = parse_cfg.escaped_space;
 
-    let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext);
+    let gfm_features = gfm_opts.map(|o| o.features.clone());
 
-    if gfm {
-        rushdown_lib::parser::Parser::with_extensions(
-            parser_opts,
-            parser_ext.and(rushdown_lib::parser::gfm(rushdown_lib::parser::GfmOptions::default())),
-        )
-    } else {
-        rushdown_lib::parser::Parser::with_extensions(parser_opts, parser_ext)
-    }
+    let gfm_ext = rushdown_lib::parser::ParserExtensionFn::new(move |p: &mut rushdown_lib::parser::Parser| {
+        use rushdown_lib::parser::{
+            LinkifyParser, NoParserOptions, StrikethroughParser, TableAstTransformer,
+            TableParagraphTransformer, TaskListItemParagraphTransformer,
+        };
+        let features = gfm_features.as_ref().map(|v| v.as_slice()).unwrap_or(&[]);
+        if features.contains(&GfmFeature::Table) {
+            p.add_ast_transformer(TableAstTransformer::new, NoParserOptions, 0);
+            p.add_paragraph_transformer(TableParagraphTransformer::new, NoParserOptions, 200);
+        }
+        if features.contains(&GfmFeature::Strikethrough) {
+            p.add_inline_parser(StrikethroughParser::new, NoParserOptions, 500);
+        }
+        if features.contains(&GfmFeature::TaskList) {
+            p.add_paragraph_transformer(TaskListItemParagraphTransformer::new, NoParserOptions, 500);
+        }
+        if features.contains(&GfmFeature::Linkify) {
+            p.add_inline_parser(
+                LinkifyParser::with_options,
+                rushdown_lib::parser::LinkifyOptions::default(),
+                999,
+            );
+        }
+    });
+
+    let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext).and(gfm_ext);
+
+    rushdown_lib::parser::Parser::with_extensions(parser_opts, parser_ext)
 }
 
 fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Renderer<'_> {
@@ -124,10 +149,12 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
     opts.allows_unsafe = render_cfg.allows_unsafe;
     opts.escaped_space = render_cfg.escaped_space;
 
-    let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
-    let diagram_ext = diagram_html_renderer_extension(render_cfg.diagram_options.clone());
+    let emoji_ext = emoji::emoji_html_renderer_extension(render_cfg.emoji_options.clone());
+    let diagram_ext = diagram::diagram_html_renderer_extension(render_cfg.diagram_options.clone());
+    let math_fence_ext = math::math_html_renderer_extension(math::MathRendererOptions::default());
+    let math_inline_ext = math::math_inline_html_renderer_extension(math::MathInlineRendererOptions::default());
     
-    let base_ext = emoji_ext.and(diagram_ext);
+    let base_ext = emoji_ext.and(diagram_ext).and(math_fence_ext).and(math_inline_ext);
     
     // Add highlighting extension if enabled
     if let Some(ref highlighting_opts) = render_cfg.highlighting_options {
@@ -144,13 +171,13 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
 // Parse + render to HTML string — returns Result<String, String>
 fn parse_and_render(
     source: &str,
-    gfm: bool,
+    gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
     render_cfg: &RenderConfig,
 ) -> Result<String, String> {
     let mut output = String::new();
 
-    let parser = build_parser(gfm, parse_cfg);
+    let parser = build_parser(gfm_opts, parse_cfg);
     let renderer = build_renderer(render_cfg);
 
     let mut reader = rushdown_lib::text::BasicReader::new(source);
@@ -165,10 +192,10 @@ fn parse_and_render(
 // Parse only — returns arena + root ref (both plain Rust values, no Python)
 fn parse_only(
     source: &str,
-    gfm: bool,
+    gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
 ) -> (rushdown_lib::ast::Arena, rushdown_lib::ast::NodeRef) {
-    let parser = build_parser(gfm, parse_cfg);
+    let parser = build_parser(gfm_opts, parse_cfg);
     let mut reader = rushdown_lib::text::BasicReader::new(source);
     parser.parse(&mut reader)
 }
@@ -190,6 +217,7 @@ fn parse_config_from(
             meta_table: opts.meta_table,
             emoji_options,
             diagram_options,
+            math_options: MathParserOptions::default(),
         }
     } else {
         ParseConfig {
@@ -199,6 +227,7 @@ fn parse_config_from(
             meta_table: false,
             emoji_options,
             diagram_options,
+            math_options: MathParserOptions::default(),
         }
     }
 }
@@ -230,8 +259,8 @@ fn parse_config_from(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, highlighting_theme = None, highlighting_mode = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>) -> PyResult<String> {
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, highlighting_theme = None, highlighting_mode = None))]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
 
@@ -276,7 +305,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
     // Release GIL for CPU-heavy parse + render
     // String is Send, so it can cross the GIL boundary
     py.detach(move || {
-        parse_and_render(source, gfm, &parse_cfg, &final_render_cfg)
+        parse_and_render(source, gfm_opts, &parse_cfg, &final_render_cfg)
     }).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
 }
 
@@ -299,8 +328,8 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<
 /// print(doc.source)
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None))]
-fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>) -> PyResult<Document> {
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None))]
+fn parse(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>) -> PyResult<Document> {
     // Extract plain-Rust config (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
 
@@ -308,7 +337,7 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
     // Arena and NodeRef are now Send (via ExtensionData::Send bound),
     // so they can cross the GIL boundary.
     let (arena, root_ref) = py.detach(move || {
-        parse_only(source, gfm, &parse_cfg)
+        parse_only(source, gfm_opts, &parse_cfg)
     });
     Ok(Document::new(arena, std::rc::Rc::from(source), root_ref))
 }
@@ -337,11 +366,11 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
 ///     print(d.rule, d.line, d.message)
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, lint_config = None))]
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, lint_config = None))]
 fn lint(
     py: Python<'_>,
     source: &str,
-    gfm: bool,
+    gfm_opts: Option<&GfmOptions>,
     parse_opts: Option<&ParseOptions>,
     emoji_opts: Option<&PyEmojiParserOptions>,
     diagram_opts: Option<&PyDiagramParserOptions>,
@@ -371,7 +400,7 @@ fn lint(
     // Release GIL: parse + lint produce plain-Rust values (Arena/NodeRef are
     // Send, Violation is Send), so the whole pipeline runs detached.
     let violations = py.detach(move || {
-        let (arena, root_ref) = parse_only(source, gfm, &parse_cfg);
+        let (arena, root_ref) = parse_only(source, gfm_opts, &parse_cfg);
         linter::run_lint(source, &arena, root_ref, &lint_cfg)
     });
 
@@ -407,11 +436,11 @@ fn lint(
 /// print(result.unfixable)     # what still needs manual attention
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm = false, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None, lint_config = None))]
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None, lint_config = None))]
 fn fix(
     py: Python<'_>,
     source: &str,
-    gfm: bool,
+    gfm_opts: Option<&GfmOptions>,
     parse_opts: Option<&ParseOptions>,
     emoji_opts: Option<&PyEmojiParserOptions>,
     diagram_opts: Option<&PyDiagramParserOptions>,
@@ -435,7 +464,7 @@ fn fix(
 
     // Release GIL: parse + lint + fix produce plain-Rust values (Send).
     let outcome = py.detach(move || {
-        let (arena, root_ref) = parse_only(source, gfm, &parse_cfg);
+        let (arena, root_ref) = parse_only(source, gfm_opts, &parse_cfg);
         linter::run_fix(source, &arena, root_ref, &lint_cfg, default_language.as_deref())
     });
 
@@ -567,6 +596,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     
     m.add_function(wrap_pyfunction!(markdown_to_html, m)?)?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;
+    m.add_function(wrap_pyfunction!(math::render_math, m)?)?;
     m.add_function(wrap_pyfunction!(lint, m)?)?;
     m.add_function(wrap_pyfunction!(fix, m)?)?;
     m.add_function(wrap_pyfunction!(lint_rules, m)?)?;
@@ -579,6 +609,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;
     m.add_class::<GfmOptions>()?;
+    m.add_class::<GfmFeature>()?;
     m.add_class::<ArenaOptions>()?;
     m.add_class::<LintOptions>()?;
     m.add_class::<PyEmojiParserOptions>()?;

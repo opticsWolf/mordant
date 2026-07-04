@@ -22,3 +22,4 @@ emojis = "0.8.0"
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"] }
 syntect-assets = "0.23.6"
 jsonc-parser = { version = "0.32", features = ["serde"] }
+katex = { package = "katex-rs", version = "0.2.4" }
