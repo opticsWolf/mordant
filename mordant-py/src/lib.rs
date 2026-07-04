@@ -310,7 +310,7 @@ fn parse(py: Python<'_>, source: &str, gfm: bool, parse_opts: Option<&ParseOptio
     let (arena, root_ref) = py.detach(move || {
         parse_only(source, gfm, &parse_cfg)
     });
-    Ok(Document::new(arena, source.to_string(), root_ref))
+    Ok(Document::new(arena, std::rc::Rc::from(source), root_ref))
 }
 
 /// Lint Markdown source and return a list of Diagnostic objects.

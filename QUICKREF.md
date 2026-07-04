@@ -1086,21 +1086,21 @@ with ThreadPoolExecutor(max_workers=4) as pool:
 
 ```
 Document ──┬── arena: Rc<RefCell<Arena>>   ← shared with Node/Walker
-           ├── source: String               ← keeps source-indexed text valid
+           ├── source: Rc<str>              ← shared source (refcount bump, no deep copy)
            └── root_ref: NodeRef            ← root of AST tree
 
 Node ──────┬── arena: Rc<RefCell<Arena>>   ← same arena as Document
            ├── node_ref: NodeRef            ← pointer into arena
-           └── source: String               ← same source as Document
+           └── source: Rc<str>              ← shared source (refcount bump on navigation)
 
 Walker ────┬── arena: Rc<RefCell<Arena>>   ← same arena as Document
-           ├── source: String               ← same source as Document
+           ├── source: Rc<str>              ← shared source (refcount bump)
            ├── mode: "depth" | "breadth"
            ├── stack: Vec<NodeRef>          ← DFS stack
            └── queue: Vec<NodeRef>          ← BFS queue
 ```
 
-When `Document` is garbage-collected, the `Rc` reference count drops to 0, freeing the Arena and all AST nodes. Share `Document` between `Node` and `Walker` objects to keep the AST alive.
+`source` is shared via `Rc<str>` across all three classes. Every `Node` created during navigation or walking bumps the refcount instead of deep-copying the source. When `Document` is garbage-collected, the `Rc` reference count drops to 0, freeing the Arena and all AST nodes. Share `Document` between `Node` and `Walker` objects to keep the AST alive.
 
 ---
 

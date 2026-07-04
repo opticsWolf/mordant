@@ -352,23 +352,23 @@ This enables true parallelism across threads: mordant scales ~4.0x linearly with
 ```
 Document (Python object)
 ├── arena: Rc<RefCell<Arena>>    # Shared arena via Rc for Node/Walker sharing
-├── source: String               # Owned source string (keeps source-indexed text valid)
+├── source: Rc<str>              # Shared source string (refcount bump, no deep copy)
 └── root_ref: NodeRef            # Root of AST tree
 
 Node (Python object)
 ├── arena: Rc<RefCell<Arena>>    # Shared reference to same arena
 ├── node_ref: NodeRef            # Pointer into arena
-└── source: String               # Shared source string
+└── source: Rc<str>              # Shared source string (refcount bump on navigation)
 
 Walker (Python object)
 ├── arena: Rc<RefCell<Arena>>    # Shared reference to same arena
-├── source: String               # Shared source string
+├── source: Rc<str>              # Shared source string (refcount bump)
 ├── mode: String                 # "depth" or "breadth"
 ├── stack: Vec<NodeRef>          # DFS stack
 └── queue: Vec<NodeRef>          # BFS queue
 ```
 
-When `Document` is garbage-collected, the `Rc` reference count drops to 0, freeing the Arena and all AST nodes.
+`source` is shared via `Rc<str>` across all three classes. Every `Node` created during navigation or walking bumps the refcount instead of deep-copying the source. When `Document` is garbage-collected, the `Rc` reference count drops to 0, freeing the Arena and all AST nodes.
 
 ### 4.6. Plain-Rust Config Structs
 

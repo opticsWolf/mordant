@@ -23,7 +23,7 @@ use crate::node::Node;
 #[pyclass(module = "mordant", unsendable)]
 pub struct Walker {
     arena: Rc<RefCell<Arena>>,
-    source: String,
+    source: Rc<str>,
     mode: String,
     stack: Vec<NodeRef>, // for depth-first
     queue: Vec<NodeRef>, // for breadth-first
@@ -46,7 +46,7 @@ impl Walker {
 
 impl Walker {
     /// Create a new depth-first walker.
-    pub fn new_depth(arena: Rc<RefCell<Arena>>, root: NodeRef, source: String) -> Self {
+    pub fn new_depth(arena: Rc<RefCell<Arena>>, root: NodeRef, source: Rc<str>) -> Self {
         Walker {
             arena,
             source,
@@ -57,7 +57,7 @@ impl Walker {
     }
 
     /// Create a new breadth-first walker.
-    pub fn new_breadth(arena: Rc<RefCell<Arena>>, root: NodeRef, source: String) -> Self {
+    pub fn new_breadth(arena: Rc<RefCell<Arena>>, root: NodeRef, source: Rc<str>) -> Self {
         Walker {
             arena,
             source,

@@ -18,7 +18,7 @@ use crate::diagram::{Diagram, DiagramType};
 pub struct Node {
     arena: Rc<RefCell<Arena>>,
     node_ref: NodeRef,
-    source: String,
+    source: Rc<str>,
 }
 
 #[pymethods]
@@ -331,7 +331,7 @@ impl Node {
 
 impl Node {
     /// Create a new Node from an Arena reference and node reference.
-    pub fn new(arena: Rc<RefCell<Arena>>, node_ref: NodeRef, source: String) -> Self {
+    pub fn new(arena: Rc<RefCell<Arena>>, node_ref: NodeRef, source: Rc<str>) -> Self {
         Node { arena, node_ref, source }
     }
 }

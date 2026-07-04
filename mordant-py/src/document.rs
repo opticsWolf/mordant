@@ -19,7 +19,7 @@ use crate::walker::Walker;
 #[pyclass(module = "mordant", unsendable)]
 pub struct Document {
     arena: Rc<RefCell<Arena>>,
-    source: String,
+    source: Rc<str>,
     root_ref: NodeRef,
 }
 
@@ -187,7 +187,7 @@ impl Document {
 }
 
 impl Document {
-    pub fn new(arena: Arena, source: String, root_ref: NodeRef) -> Self {
+    pub fn new(arena: Arena, source: Rc<str>, root_ref: NodeRef) -> Self {
         Document {
             arena: Rc::new(RefCell::new(arena)),
             source,

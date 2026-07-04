@@ -294,7 +294,7 @@ except ValueError as e:
 Mordant wraps the [rushdown](https://github.com/yuin/rushdown) Rust library (CommonMark 0.31.2 + GFM) via PyO3 bindings:
 
 - **Rust core:** rushdown v0.18.0 — arena-allocated AST, priority-based parser dispatch, HTML renderer
-- **Python bindings:** PyO3 0.29 — `Document`, `Node`, `Walker` classes with shared `Rc<RefCell<Arena>>` memory model
+- **Python bindings:** PyO3 0.29 — `Document`, `Node`, `Walker` classes with shared `Rc<RefCell<Arena>>` and `Rc<str>` source memory model (refcount bump on node creation instead of deep source copy)
 - **GIL release:** Parse and render release the GIL via `Python::detach()` for multi-threaded parallelism
 - **Frontmatter:** YAML parsing via `yaml-peg` with thematic break conflict resolution
 

@@ -74,15 +74,6 @@ This project bundles theme configurations created by other developers. All bundl
 - **License:** MIT License
     
 
-## Community Material Theme
-
-- **Author:** Mattia Astorino (equinusocio)
-    
-- **Source:** [Material Theme on GitHub](https://github.com/material-theme/vsc-material-theme "null")
-    
-- **License:** MIT License
-    
-
 ## Dark Neon
 
 - **Author:** Maintained by RainyDayMedia (Neon scheme created by Peter Faria)
