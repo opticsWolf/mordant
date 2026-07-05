@@ -8,33 +8,59 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QPalette, QColor, QDragEnterEvent, QDropEvent
 
+import mordant
+
+
+# Comprehensive registry of common binary formats to fast-reject before reading the disk
+KNOWN_BINARY_EXTENSIONS = {
+    # Images
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.tiff', '.ico', '.psd', '.ai',
+    # Audio & Video
+    '.mp3', '.wav', '.flac', '.aac', '.ogg', '.mp4', '.mkv', '.avi', '.mov', '.wmv', '.flv', '.webm',
+    # Archives, Compression & Containers
+    '.zip', '.tar', '.gz', '.bz2', '.xz', '.7z', '.rar', '.iso', '.vmdk', '.cab',
+    # Executables, Libraries & Installers
+    '.exe', '.dll', '.so', '.dylib', '.bin', '.elf', '.o', '.a', '.lib', '.msi', '.dmg', '.pkg', '.apk',
+    # Rich Text Documents (Zip/Binary based underneath)
+    '.pdf', '.docx', '.xlsx', '.pptx', '.epub', '.pages', '.numbers', '.key',
+    # Database & Misc Font formats
+    '.db', '.sqlite', '.sqlite3', '.ttf', '.otf', '.woff', '.woff2', '.pyc', '.wasm'
+}
+
+
+def is_binary_file(file_path: str, block_size: int = 1024) -> bool:
+    """Performs a dual check (extension lookup + NUL byte heuristic) to detect binary files."""
+    # Layer 1: Instant Extension Guard (O(1) lookups)
+    _, ext = os.path.splitext(file_path)
+    if ext.lower() in KNOWN_BINARY_EXTENSIONS:
+        return True
+
+    # Layer 2: Byte Heuristic Fallback (For missing, spoofed, or unknown extensions)
+    try:
+        with open(file_path, "rb") as f:
+            chunk = f.read(block_size)
+            return b"\0" in chunk
+    except Exception:
+        return False
+
 
 class _DropWebEngineView(QWebEngineView):
-    """QWebEngineView that accepts markdown file drops."""
+    """QWebEngineView that accepts both markdown and code file drops."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
 
     def dragEnterEvent(self, event: QDragEnterEvent):
-        if not event.mimeData().hasUrls():
-            return
-        urls = event.mimeData().urls()
-        if any(
-            u.toLocalFile().lower().endswith(('.md', '.markdown'))
-            for u in urls
-        ):
+        if event.mimeData().hasUrls():
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent):
         for url in event.mimeData().urls():
             file_path = url.toLocalFile()
-            if file_path.lower().endswith(('.md', '.markdown')):
+            if file_path:
                 self._parent_window.load_file(file_path)
                 break
-
-
-import mordant
 
 
 def get_dark_palette():
@@ -62,13 +88,15 @@ def get_dark_palette():
 class MarkdownViewer(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Mordant Markdown Viewer")
+        self.setWindowTitle("Mordant Document Viewer")
         self.resize(1000, 750)
         self.setAcceptDrops(True)
 
         # State
         self.current_markdown_text = ""
         self.current_file_path = None
+        self.is_code_file = False
+        self.file_extension = ""
 
         self.init_ui()
         self.apply_theme_mode()
@@ -147,35 +175,61 @@ class MarkdownViewer(QMainWindow):
     # ------------------------------------------------------------------
 
     def open_file_dialog(self):
-        dialog = QFileDialog(self, "Open Markdown File")
+        dialog = QFileDialog(self, "Open Document or Code File")
         dialog.setFileMode(QFileDialog.FileMode.ExistingFile)
-        dialog.setNameFilter("Markdown (*.md *.markdown)")
+        dialog.setNameFilter("All Files (*);;Markdown (*.md *.markdown);;Source Files (*.py *.js *.ts *.rs *.go *.c *.cpp *.html *.css *.json *.yaml)")
         if dialog.exec() == QFileDialog.Accepted:
             path = dialog.selectedFiles()[0]
             self.load_file(path)
 
     def load_file(self, file_path: str):
+        # 1. Binary sanity check guard boundary
+        if is_binary_file(file_path):
+            self.current_markdown_text = (
+                f"### ❌ File load rejected\n\n"
+                f"`{os.path.basename(file_path)}` appears to be a **binary format** or utilizes incompatible encoding variants."
+            )
+            self.current_file_path = file_path
+            self.is_code_file = False
+            self.setWindowTitle(f"Error Viewing — {os.path.basename(file_path)}")
+            self.update_view()
+            return
+
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 self.current_markdown_text = f.read()
+            
             self.current_file_path = file_path
+            ext = os.path.splitext(file_path)[1].lower()
+
+            # 2. File type classification rules
+            if ext in ('.md', '.markdown'):
+                self.is_code_file = False
+                self.file_extension = ""
+            else:
+                self.is_code_file = True
+                self.file_extension = ext.lstrip('.')
+
             self.setWindowTitle(
-                f"Mordant Markdown Viewer — {os.path.basename(file_path)}"
+                f"Mordant Document Viewer — {os.path.basename(file_path)}"
             )
             self.update_view()
         except Exception as err:
             self.current_markdown_text = f"__Error loading file:__ `{err}`"
+            self.is_code_file = False
             self.update_view()
 
     def show_welcome(self):
         self.current_markdown_text = (
-            "## 👋 Welcome to Mordant Markdown Viewer\n\n"
-            "Drag & drop a `.md` file here, or click the **📄** button to open one.\n\n"
-            "The viewer uses the Rust-powered **Mordant** parser for fast, "
-            "feature-rich CommonMark + GFM rendering."
+            "## 👋 Welcome to Mordant Document Viewer\n\n"
+            "Drag & drop an `.md` markdown document or a **source code file** here to begin.\n\n"
+            "The system uses the Rust-powered **Mordant** compiler engine to process "
+            "CommonMark layouts, structural code blocks, and language syntax layouts[cite: 2]."
         )
         self.current_file_path = None
-        self.setWindowTitle("Mordant Markdown Viewer")
+        self.is_code_file = False
+        self.file_extension = ""
+        self.setWindowTitle("Mordant Document Viewer")
         self.update_view()
 
     # ------------------------------------------------------------------
@@ -218,16 +272,26 @@ class MarkdownViewer(QMainWindow):
 
         selected_highlight = self.theme_combo.currentText()
 
-        try:
-            gfm = mordant.GfmOptions()
-            html_body = mordant.markdown_to_html(
-                self.current_markdown_text,
-                gfm_opts=gfm,
-                highlighting_theme=selected_highlight,
-                highlighting_mode="Attribute",
-            )
-        except Exception as err:
-            html_body = f"<p style='color:red;'>Failed to parse: {err}</p>"
+        # 3. Dynamic Parser Dispatch Block
+        if self.is_code_file:
+            try:
+                # Initialize mordant highlighter with selected parameters
+                highlighter = mordant.Highlighter(theme=selected_highlight, mode="Attribute")
+                # If extension matching yields blank string, passing it natively invokes mordant's cascading content-heuristics
+                html_body = highlighter.highlight(self.file_extension, self.current_markdown_text)
+            except Exception as err:
+                html_body = f"<p style='color:red;'>Failed to compile syntax tree: {err}</p>"
+        else:
+            try:
+                gfm = mordant.GfmOptions()
+                html_body = mordant.markdown_to_html(
+                    self.current_markdown_text,
+                    gfm_opts=gfm,
+                    highlighting_theme=selected_highlight,
+                    highlighting_mode="Attribute"
+                )
+            except Exception as err:
+                html_body = f"<p style='color:red;'>Failed to parse: {err}</p>"
 
         full_html = f"""
         <!DOCTYPE html>
@@ -294,8 +358,6 @@ class MarkdownViewer(QMainWindow):
         </html>
         """
         self.webview.setHtml(full_html)
-
-
 
 
 if __name__ == "__main__":
