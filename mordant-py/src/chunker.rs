@@ -31,7 +31,7 @@ use std::fs::File;
 use memmap2::Mmap;
 
 use rushdown_lib::ast::KindData;
-use rushdown_lib::parser::Parser;
+use rushdown_lib::parser::{NoParserOptions, Parser, ParserExtension, ParserExtensionFn, TableAstTransformer, TableParagraphTransformer};
 use rushdown_lib::text::BasicReader;
 
 // -----------------------------------------------------------------------------
@@ -48,6 +48,7 @@ pub enum BlockType {
     List,
     Table,
     Blockquote,
+    Diagram,
     Other,
 }
 
@@ -60,6 +61,7 @@ impl BlockType {
             BlockType::List => "List",
             BlockType::Table => "Table",
             BlockType::Blockquote => "Blockquote",
+            BlockType::Diagram => "Diagram",
             BlockType::Other => "Other",
         }
     }
@@ -74,6 +76,7 @@ fn parse_block_type(s: &str) -> BlockType {
         "List" => BlockType::List,
         "Table" => BlockType::Table,
         "Blockquote" => BlockType::Blockquote,
+        "Diagram" => BlockType::Diagram,
         _ => BlockType::Other,
     }
 }
@@ -91,7 +94,22 @@ struct NodeInfo {
 /// `(block_type, start, end)` for each. `end` is the next top-level node's start, or
 /// `source.len()` for the last node. The full `Arena` is dropped on return.
 fn extract_nodes(source: &str) -> Vec<NodeInfo> {
-    let parser = Parser::new(); // == Parser::with_options(Options::default())
+    // Build parser with GFM table transformers + diagram extension
+    // so that tables and mermaid diagrams are correctly classified.
+    let gfm_ext = ParserExtensionFn::new(|p: &mut Parser| {
+        p.add_ast_transformer(TableAstTransformer::new, NoParserOptions, 0);
+        p.add_paragraph_transformer(TableParagraphTransformer::new, NoParserOptions, 200);
+    });
+
+    // Diagram extension (mermaid → Diagram node)
+    let diagram_ext = crate::diagram::diagram_parser_extension(
+        crate::diagram::DiagramParserOptions::default(),
+    );
+
+    let parser = Parser::with_extensions(
+        rushdown_lib::parser::Options::default(),
+        gfm_ext.and(diagram_ext),
+    );
     let mut reader = BasicReader::new(source);
     let (arena, doc_ref) = parser.parse(&mut reader);
 
@@ -109,6 +127,14 @@ fn extract_nodes(source: &str) -> Vec<NodeInfo> {
                 KindData::List(_) => BlockType::List,
                 KindData::Table(_) => BlockType::Table,
                 KindData::Blockquote(_) => BlockType::Blockquote,
+                KindData::Extension(ref d) => {
+                    // Check if the extension is a Diagram
+                    if (d.as_ref() as &dyn std::any::Any).is::<crate::diagram::Diagram>() {
+                        BlockType::Diagram
+                    } else {
+                        BlockType::Other
+                    }
+                }
                 // ThematicBreak, HtmlBlock, LinkReferenceDefinition, etc.
                 _ => BlockType::Other,
             };
@@ -363,7 +389,8 @@ impl PyMarkdownChunker {
                 | BlockType::CodeBlock
                 | BlockType::List
                 | BlockType::Table
-                | BlockType::Blockquote => {
+                | BlockType::Blockquote
+                | BlockType::Diagram => {
                     // Yield the body block as its own bare chunk (no heading prefix).
                     // OKF injects heading context at embed time for better embeddings.
                     return Some(raw.to_string());
@@ -412,7 +439,8 @@ impl PyMarkdownChunker {
                 | BlockType::CodeBlock
                 | BlockType::List
                 | BlockType::Table
-                | BlockType::Blockquote => {
+                | BlockType::Blockquote
+                | BlockType::Diagram => {
                     let raw = text[node.start..node.end].trim_end();
                     let chunk = PyExtractedChunk::from_strings(
                         raw.to_string(),
@@ -451,7 +479,8 @@ impl PyMarkdownChunker {
                 | BlockType::CodeBlock
                 | BlockType::List
                 | BlockType::Table
-                | BlockType::Blockquote => {
+                | BlockType::Blockquote
+                | BlockType::Diagram => {
                     let raw = text[node.start..node.end].trim_end();
 
                     // Build prefixed text if there's a heading context.
@@ -507,7 +536,8 @@ impl PyMarkdownChunker {
                 | BlockType::CodeBlock
                 | BlockType::List
                 | BlockType::Table
-                | BlockType::Blockquote => {
+                | BlockType::Blockquote
+                | BlockType::Diagram => {
                     let raw = text[node.start..node.end].trim_end();
                     let chunk = PyExtractedChunk::from_strings(
                         raw.to_string(),
@@ -544,7 +574,8 @@ impl PyMarkdownChunker {
                 | BlockType::CodeBlock
                 | BlockType::List
                 | BlockType::Table
-                | BlockType::Blockquote => {
+                | BlockType::Blockquote
+                | BlockType::Diagram => {
                     let raw = text[node.start..node.end].trim_end();
                     chunks.append(raw.to_string()).unwrap();
                 }
@@ -605,7 +636,8 @@ impl PyMarkdownChunker {
                 | BlockType::CodeBlock
                 | BlockType::List
                 | BlockType::Table
-                | BlockType::Blockquote => {
+                | BlockType::Blockquote
+                | BlockType::Diagram => {
                     let raw = text[node.start..node.end].trim_end();
 
                     // Build overlapped text.

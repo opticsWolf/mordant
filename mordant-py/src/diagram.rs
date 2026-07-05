@@ -174,6 +174,11 @@ impl AstTransformer for DiagramAstTransformer {
             let lines = _code_block.value().clone();
             let diagram = arena.new_node(Diagram::new(DiagramType::Mermaid));
             as_extension_data_mut!(arena, diagram, Diagram).set_value(lines);
+            // Copy source position from original code block so the chunker
+            // can slice the raw source correctly.
+            if let Some(pos) = arena[code_ref].pos() {
+                arena[diagram].set_pos(pos);
+            }
             arena[code_ref]
                 .parent()
                 .unwrap()

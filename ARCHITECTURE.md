@@ -1,6 +1,6 @@
 # Mordant Architecture
 
-> **Version:** 0.8.6  
+> **Version:** 0.8.7  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
 > **Tests:** 1198 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 17 diagram + 14 core + 11 VSCode theme + 9 GFM + 37 OKF chunker methods) + 51 Rust (28 linter + 14 meta + 9 emoji)
@@ -401,7 +401,7 @@ MarkdownChunker (Python object)
 
 ExtractedChunk (Python object)
 ├── text: String                 # Block content (trim_end applied)
-├── block_type: BlockType        # Heading, Paragraph, CodeBlock, List, Table, Blockquote, Other
+├── block_type: BlockType        # Heading, Paragraph, CodeBlock, List, Table, Blockquote, Diagram, Other
 ├── start_offset: usize          # Byte offset in source (inclusive)
 └── end_offset: usize            # Byte offset in source (exclusive)
 
@@ -412,6 +412,7 @@ BlockType (Rust enum, exposed via ExtractedChunk.block_type)
 ├── List
 ├── Table
 ├── Blockquote
+├── Diagram
 └── Other
 ```
 
@@ -757,6 +758,7 @@ Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (
 | List | Yes | Bare chunk, no prefix |
 | Table | Yes | Bare chunk, no prefix |
 | Blockquote | Yes | Bare chunk, no prefix |
+| Diagram | Yes | Bare chunk, no prefix |
 | ThematicBreak / HtmlBlock / LinkRefDef | No (skipped) | Does NOT reset heading context |
 
 **ExtractedChunk** — returned by `get_chunks()`, `get_all_chunks()`, `get_chunks_with_context()`:
@@ -764,7 +766,7 @@ Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (
 | Property | Type | Description |
 |----------|------|-------------|
 | `text` | str | Block content (trim_end applied) |
-| `block_type` | str | One of: `"Heading"`, `"Paragraph"`, `"CodeBlock"`, `"List"`, `"Table"`, `"Blockquote"`, `"Other"` |
+| `block_type` | str | One of: `"Heading"`, `"Paragraph"`, `"CodeBlock"`, `"List"`, `"Table"`, `"Blockquote"`, `"Diagram"`, `"Other"` |
 | `start_offset` | int | Byte offset in original source (inclusive) |
 | `end_offset` | int | Byte offset in original source (exclusive) |
 

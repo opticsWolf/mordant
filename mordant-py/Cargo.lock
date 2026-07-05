@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "mordant"
-version = "0.8.5"
+version = "0.8.7"
 dependencies = [
  "emojis",
  "jsonc-parser",

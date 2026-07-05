@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.8.6  
+> **Version:** 0.8.7  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -9,6 +9,12 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
+
+## What's New in 0.8.7
+
+- **Chunker GFM + Diagram parity** — `MarkdownChunker` now uses the same parser extensions as `parse()` and `markdown_to_html()`: GFM tables (`TableAstTransformer`, `TableParagraphTransformer`) and Mermaid diagrams (`DiagramAstTransformer`) are correctly classified as `BlockType::Table` and `BlockType::Diagram` respectively
+- **Chunker Diagram block type** — `BlockType::Diagram` added to the chunker's type system; mermaid code blocks yield as `"Diagram"` instead of `"CodeBlock"` or being silently dropped
+- **Diagram source position fix** — `DiagramAstTransformer` now copies the original code block's `pos()` to the new `Diagram` node so the chunker can slice raw source correctly
 
 ## What's New in 0.8.6
 

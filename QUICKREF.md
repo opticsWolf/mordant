@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.6  
+> **Version:** 0.8.7  
 > **Import:** `import mordant`
 
 ---
@@ -498,7 +498,7 @@ assert chunker.node_count == 4  # 2 headings + 2 paragraphs
 | Property | Type | Description |
 |----------|------|-------------|
 | `text` | `str` | Block content (trim_end applied) |
-| `block_type` | `str` | One of: `"Heading"`, `"Paragraph"`, `"CodeBlock"`, `"List"`, `"Table"`, `"Blockquote"`, `"Other"` |
+| `block_type` | `str` | One of: `"Heading"`, `"Paragraph"`, `"CodeBlock"`, `"List"`, `"Table"`, `"Blockquote"`, `"Diagram"`, `"Other"` |
 | `start_offset` | `int` | Byte offset in original source (inclusive) |
 | `end_offset` | `int` | Byte offset in original source (exclusive) |
 
@@ -512,6 +512,7 @@ assert chunker.node_count == 4  # 2 headings + 2 paragraphs
 | List | Yes | Bare chunk, no prefix |
 | Table | Yes | Bare chunk, no prefix |
 | Blockquote | Yes | Bare chunk, no prefix |
+| Diagram | Yes | Bare chunk, no prefix |
 | ThematicBreak / HtmlBlock / LinkRefDef | No (skipped) | Does NOT reset heading context |
 
 **Example — get_chunks() with metadata:**
