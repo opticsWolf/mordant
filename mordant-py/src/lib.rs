@@ -630,6 +630,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Document>()?;
     m.add_class::<Node>()?;
     m.add_class::<Walker>()?;
+    m.add_class::<chunker::PyExtractedChunk>()?;
     m.add_class::<chunker::PyMarkdownChunker>()?;
     m.add_class::<Diagnostic>()?;
     m.add_class::<FixResult>()?;

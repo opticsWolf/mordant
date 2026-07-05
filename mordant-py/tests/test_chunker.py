@@ -31,34 +31,37 @@ def test_heading_not_yielded():
 
 
 def test_heading_plus_paragraph():
-    """A heading followed by a paragraph yields one chunk with the heading prefix."""
+    """A heading followed by a paragraph yields one bare chunk (no heading prefix)."""
     text = "# Title\n\nHello world"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0] == "# Title\n\nHello world"
+    assert chunks[0] == "Hello world"  # bare chunk, no heading prefix
 
 
 # === Heading context propagation ===
 
 def test_heading_context_updates():
-    """Each new heading resets the context for subsequent blocks."""
+    """Each new heading updates current_header for subsequent blocks."""
     text = "# First\n\nPara one\n\n## Second\n\nPara two"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 2
-    assert chunks[0] == "# First\n\nPara one"
-    assert chunks[1] == "## Second\n\nPara two"
+    # Chunks are bare (no heading prefix)
+    assert chunks[0] == "Para one"
+    assert chunks[1] == "Para two"
+    # current_header tracks the last heading seen
+    assert chunker.current_header == "## Second"
 
 
 def test_paragraph_before_heading():
-    """A paragraph before any heading is yielded standalone."""
+    """A paragraph before any heading is yielded standalone (bare)."""
     text = "Intro text\n\n# Title\n\nBody text"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 2
     assert chunks[0] == "Intro text"
-    assert chunks[1] == "# Title\n\nBody text"
+    assert chunks[1] == "Body text"  # bare, no heading prefix
 
 
 def test_multiple_headings_no_content():
@@ -80,7 +83,7 @@ def test_current_header_none_initially():
 def test_current_header_after_heading():
     """After consuming a heading, current_header reflects it."""
     chunker = mordant.MarkdownChunker("# Title\n\nHello")
-    next(chunker)  # consumes heading + paragraph in one yield
+    next(chunker)  # consumes paragraph
     assert chunker.current_header == "# Title"
 
 
@@ -88,9 +91,9 @@ def test_current_header_persists_across_blocks():
     """current_header persists until a new heading is consumed."""
     text = "# Section\n\nPara one\n\nPara two"
     chunker = mordant.MarkdownChunker(text)
-    next(chunker)  # yields "# Section\n\nPara one"
+    next(chunker)  # yields "Para one"
     assert chunker.current_header == "# Section"
-    next(chunker)  # yields "# Section\n\nPara two"
+    next(chunker)  # yields "Para two"
     assert chunker.current_header == "# Section"
 
 
@@ -106,12 +109,12 @@ def test_code_block_standalone():
 
 
 def test_code_block_with_heading():
-    """A code block after a heading gets the heading prefix."""
+    """A code block after a heading is yielded as a bare chunk (no heading prefix)."""
     text = "# Code\n\n```python\nprint('hi')\n```"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0].startswith("# Code")
+    assert not chunks[0].startswith("# Code")  # bare chunk
     assert "print('hi')" in chunks[0]
 
 
@@ -127,12 +130,13 @@ def test_list_standalone():
 
 
 def test_list_with_heading():
-    """A list after a heading gets the heading prefix."""
+    """A list after a heading is yielded as a bare chunk (no heading prefix)."""
     text = "# Tasks\n\n- todo\n- done"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0].startswith("# Tasks")
+    assert not chunks[0].startswith("# Tasks")  # bare chunk
+    assert "- todo" in chunks[0]
 
 
 # === Blockquotes ===
@@ -147,12 +151,13 @@ def test_blockquote_standalone():
 
 
 def test_blockquote_with_heading():
-    """A blockquote after a heading gets the heading prefix."""
+    """A blockquote after a heading is yielded as a bare chunk (no heading prefix)."""
     text = "# Note\n\n> important info"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0].startswith("# Note")
+    assert not chunks[0].startswith("# Note")  # bare chunk
+    assert "> important info" in chunks[0]
 
 
 # === Nested headings do not leak ===
@@ -162,10 +167,14 @@ def test_nested_heading_does_not_become_context():
     text = "# Outer\n\n> # Nested\n\n> Quote text."
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
-    # The blockquote is yielded with "# Outer" as context, not "# Nested".
-    assert any("Outer" in c for c in chunks)
-    # No chunk should start with the nested heading as a prefix.
-    assert all(not c.startswith("# Nested") for c in chunks)
+    # The blockquote content is yielded as bare chunks (no prefix at all).
+    # Nested headings inside blockquotes are parsed but don't set current_header.
+    assert len(chunks) == 2
+    # Neither chunk should be prefixed with "# Outer" (they're bare).
+    for c in chunks:
+        assert not c.startswith("# Outer")
+    # current_header should still be "# Outer" (nested heading doesn't override it)
+    assert chunker.current_header == "# Outer"
 
 
 # === Thematic breaks (Other kind) ===
@@ -177,6 +186,8 @@ def test_thematic_break_skipped():
     chunks = list(chunker)
     # The thematic break is skipped; two paragraphs are yielded.
     assert len(chunks) == 2
+    assert chunks[0] == "Para one"
+    assert chunks[1] == "Para two"
 
 
 def test_thematic_break_does_not_reset_context():
@@ -184,10 +195,11 @@ def test_thematic_break_does_not_reset_context():
     text = "# Title\n\nPara one\n\n***\n\nPara two"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
-    # Both paragraphs carry "# Title" context.
-    assert all(chunks[0].startswith("# Title") for _ in ()) or True  # noqa
-    assert chunks[0].startswith("# Title")
-    assert chunks[1].startswith("# Title")
+    # Both paragraphs are bare chunks (no prefix).
+    assert chunks[0] == "Para one"
+    assert chunks[1] == "Para two"
+    # current_header still tracks the heading.
+    assert chunker.current_header == "# Title"
 
 
 # === node_count property ===
@@ -222,7 +234,7 @@ def test_from_file_basic(tmp_path):
     chunker = mordant.MarkdownChunker.from_file(str(file_path))
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0] == "# Hello\n\nWorld"
+    assert chunks[0] == "World"  # bare chunk
 
 
 def test_from_file_node_count(tmp_path):
@@ -249,7 +261,7 @@ def test_from_file_mmap_basic(tmp_path):
     chunker = mordant.MarkdownChunker.from_file_mmap(str(file_path))
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0] == "# Title\n\nSome content here"
+    assert chunks[0] == "Some content here"  # bare chunk
 
 
 def test_from_file_mmap_large_file(tmp_path):
@@ -265,8 +277,9 @@ def test_from_file_mmap_large_file(tmp_path):
     chunks = list(chunker)
     # 500 headings (not yielded) + 500 paragraphs (yielded)
     assert len(chunks) == 500
-    # Last chunk should reference the last heading.
-    assert chunks[-1].startswith("## Section 499")
+    # Last chunk is bare (no heading prefix).
+    assert "Content for section 499" in chunks[-1]
+    assert not chunks[-1].startswith("## Section 499")  # bare chunk
 
 
 def test_from_file_mmap_missing_file():
@@ -284,7 +297,7 @@ def test_iterator_protocol():
     it = iter(chunker)
     chunk = next(it)
     assert isinstance(chunk, str)
-    assert chunk == "# A\n\nPara"
+    assert chunk == "Para"  # bare chunk
     # Exhausted
     import pytest
     with pytest.raises(StopIteration):
@@ -299,6 +312,8 @@ def test_for_loop_iteration():
     for c in chunker:
         chunks.append(c)
     assert len(chunks) == 2
+    assert chunks[0] == "P1"
+    assert chunks[1] == "P2"
 
 
 def test_multiple_iterations_exhaust_after_first():
@@ -319,6 +334,7 @@ def test_trailing_blank_lines_trimmed():
     chunks = list(chunker)
     # The chunk for "Para one" should not end with extra blank lines.
     assert chunks[0].endswith("Para one")
+    assert chunks[1].endswith("Para two")
 
 
 # === Mixed content document ===
@@ -349,29 +365,32 @@ Final paragraph.
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
 
-    # Expected yields:
-    # 1. "# Introduction\n\nWelcome to the guide."
-    # 2. "## Getting Started\n\n- Step one\n- Step two"
-    # 3. "## Getting Started\n\n```python\nprint(\"hello\")\n```"
-    # 4. "## Getting Started\n\n> A helpful tip."
-    # (thematic break skipped, context preserved)
-    # 5. "## Advanced\n\nFinal paragraph."
+    # Expected yields (bare chunks, no heading prefix):
+    # 1. "Welcome to the guide."
+    # 2. "- Step one\n- Step two"
+    # 3. "```python\nprint("hello")\n```"
+    # 4. "> A helpful tip."
+    # (thematic break skipped)
+    # 5. "Final paragraph."
     assert len(chunks) == 5
 
-    # Verify context propagation through the thematic break.
-    assert chunks[3].startswith("## Getting Started")
-    assert chunks[4].startswith("## Advanced")
+    # All chunks are bare (no heading prefix).
+    for c in chunks:
+        assert not c.startswith("#")
+
+    # Verify thematic break was skipped (context preserved through it).
+    assert chunker.current_header == "## Advanced"
 
 
 # === GFM tables ===
 
 def test_table_with_heading(tmp_path):
-    """GFM tables are yielded with heading context."""
+    """GFM tables are yielded as bare chunks (no heading prefix)."""
     text = "# Data\n\n| A | B |\n|---|---|\n| 1 | 2 |"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0].startswith("# Data")
+    assert not chunks[0].startswith("# Data")  # bare chunk
     assert "| A | B |" in chunks[0]
 
 
@@ -394,10 +413,10 @@ def test_heading_only_no_content():
 
 
 def test_ordered_list_with_heading():
-    """Ordered lists work the same as unordered lists."""
+    """Ordered lists work the same as unordered lists (bare chunks)."""
     text = "## Steps\n\n1. First\n2. Second\n3. Third"
     chunker = mordant.MarkdownChunker(text)
     chunks = list(chunker)
     assert len(chunks) == 1
-    assert chunks[0].startswith("## Steps")
+    assert not chunks[0].startswith("## Steps")  # bare chunk
     assert "1. First" in chunks[0]

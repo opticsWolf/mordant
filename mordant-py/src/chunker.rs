@@ -22,6 +22,8 @@
 //!   FFI boundary.
 
 use pyo3::prelude::*;
+use pyo3::Bound;
+use pyo3::types::{PyDict, PyList};
 use pyo3::exceptions::{PyIOError, PyValueError};
 use std::borrow::Cow;
 use std::fs::File;
@@ -36,10 +38,10 @@ use rushdown_lib::text::BasicReader;
 // 1. Internal representation
 // -----------------------------------------------------------------------------
 
-/// Discriminant for chunk-relevant top-level node kinds. Our own `Copy` enum so
-/// we don't retain anything that borrows the arena.
+/// Block type discriminator for chunk-relevant top-level node kinds.
+/// Public so Python can compare `block_type` strings deterministically.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ChunkKind {
+pub enum BlockType {
     Heading,
     Paragraph,
     CodeBlock,
@@ -49,41 +51,68 @@ enum ChunkKind {
     Other,
 }
 
+impl BlockType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BlockType::Heading => "Heading",
+            BlockType::Paragraph => "Paragraph",
+            BlockType::CodeBlock => "CodeBlock",
+            BlockType::List => "List",
+            BlockType::Table => "Table",
+            BlockType::Blockquote => "Blockquote",
+            BlockType::Other => "Other",
+        }
+    }
+}
+
+/// Parse `block_type_str` to a `BlockType`.
+fn parse_block_type(s: &str) -> BlockType {
+    match s {
+        "Heading" => BlockType::Heading,
+        "Paragraph" => BlockType::Paragraph,
+        "CodeBlock" => BlockType::CodeBlock,
+        "List" => BlockType::List,
+        "Table" => BlockType::Table,
+        "Blockquote" => BlockType::Blockquote,
+        _ => BlockType::Other,
+    }
+}
+
 /// Byte-offset metadata for one top-level node. `start..end` indexes the original
 /// source and always falls on UTF-8 boundaries (block starts are line starts).
 #[derive(Clone, Copy, Debug)]
 struct NodeInfo {
-    kind: ChunkKind,
+    block_type: BlockType,
     start: usize,
     end: usize,
 }
 
 /// Parse `source`, walk the top-level children of the Document node, and record
-/// `(kind, start, end)` for each. `end` is the next top-level node's start, or
+/// `(block_type, start, end)` for each. `end` is the next top-level node's start, or
 /// `source.len()` for the last node. The full `Arena` is dropped on return.
 fn extract_nodes(source: &str) -> Vec<NodeInfo> {
     let parser = Parser::new(); // == Parser::with_options(Options::default())
     let mut reader = BasicReader::new(source);
     let (arena, doc_ref) = parser.parse(&mut reader);
 
-    // Pass 1: collect (kind, start) for each top-level child, in document order.
-    let mut starts: Vec<(ChunkKind, usize)> = Vec::new();
+    // Pass 1: collect (block_type, start) for each top-level child, in document order.
+    let mut starts: Vec<(BlockType, usize)> = Vec::new();
     let mut child = arena[doc_ref].first_child();
     while let Some(cref) = child {
         let node = &arena[cref];
         // Defensive: synthetic nodes may lack a source position; skip them.
         if let Some(start) = node.pos() {
-            let kind = match node.kind_data() {
-                KindData::Heading(_) => ChunkKind::Heading,
-                KindData::Paragraph(_) => ChunkKind::Paragraph,
-                KindData::CodeBlock(_) => ChunkKind::CodeBlock,
-                KindData::List(_) => ChunkKind::List,
-                KindData::Table(_) => ChunkKind::Table,
-                KindData::Blockquote(_) => ChunkKind::Blockquote,
+            let block_type = match node.kind_data() {
+                KindData::Heading(_) => BlockType::Heading,
+                KindData::Paragraph(_) => BlockType::Paragraph,
+                KindData::CodeBlock(_) => BlockType::CodeBlock,
+                KindData::List(_) => BlockType::List,
+                KindData::Table(_) => BlockType::Table,
+                KindData::Blockquote(_) => BlockType::Blockquote,
                 // ThematicBreak, HtmlBlock, LinkReferenceDefinition, etc.
-                _ => ChunkKind::Other,
+                _ => BlockType::Other,
             };
-            starts.push((kind, start));
+            starts.push((block_type, start));
         }
         child = arena[cref].next_sibling();
     }
@@ -92,9 +121,9 @@ fn extract_nodes(source: &str) -> Vec<NodeInfo> {
     let n = starts.len();
     let mut nodes = Vec::with_capacity(n);
     for i in 0..n {
-        let (kind, start) = starts[i];
+        let (block_type, start) = starts[i];
         let end = if i + 1 < n { starts[i + 1].1 } else { source.len() };
-        nodes.push(NodeInfo { kind, start, end });
+        nodes.push(NodeInfo { block_type, start, end });
     }
     nodes
 }
@@ -130,11 +159,95 @@ impl TextSource {
 // 3. PyO3-exposed chunker
 // -----------------------------------------------------------------------------
 
+/// Python class `mordant.ExtractedChunk`.
+///
+/// Represents a single extracted block from the markdown AST with metadata.
+#[pyclass(module = "mordant", name = "ExtractedChunk")]
+pub struct PyExtractedChunk {
+    /// The block content with trailing whitespace trimmed.
+    pub text: String,
+    /// The block type discriminator.
+    pub block_type: BlockType,
+    /// Byte offset in original source (inclusive).
+    pub start_offset: usize,
+    /// Byte offset in original source (exclusive).
+    pub end_offset: usize,
+}
+
+impl PyExtractedChunk {
+    /// Factory for Rust-side construction.
+    pub fn from_strings(
+        text: String,
+        block_type: String,
+        start_offset: usize,
+        end_offset: usize,
+    ) -> Self {
+        Self {
+            text,
+            block_type: parse_block_type(&block_type),
+            start_offset,
+            end_offset,
+        }
+    }
+}
+
+#[pymethods]
+impl PyExtractedChunk {
+    /// Create an ExtractedChunk from Python.
+    #[new]
+    fn new(
+        text: String,
+        block_type: String,
+        start_offset: usize,
+        end_offset: usize,
+    ) -> Self {
+        Self::from_strings(text, block_type, start_offset, end_offset)
+    }
+
+    /// Create an ExtractedChunk from Python (static alias).
+    #[staticmethod]
+    fn create(
+        text: String,
+        block_type: String,
+        start_offset: usize,
+        end_offset: usize,
+    ) -> Self {
+        Self::from_strings(text, block_type, start_offset, end_offset)
+    }
+
+    #[getter]
+    fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    #[getter]
+    fn block_type(&self) -> String {
+        self.block_type.as_str().to_string()
+    }
+
+    #[getter]
+    fn start_offset(&self) -> usize {
+        self.start_offset
+    }
+
+    #[getter]
+    fn end_offset(&self) -> usize {
+        self.end_offset
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "ExtractedChunk(block_type='{}', text={:?}, start={}, end={})",
+            self.block_type.as_str(), self.text, self.start_offset, self.end_offset
+        )
+    }
+}
+
 /// Python class `mordant.MarkdownChunker`.
 ///
-/// Lazy iterator yielding one chunk (a `str`) at a time. A heading updates the
-/// "current header" context; each subsequent top-level block is yielded either
-/// standalone or prefixed with that header.
+/// Lazy iterator yielding one chunk (an `ExtractedChunk`) at a time.
+/// A heading updates the "current header" context; each subsequent top-level
+/// block is yielded as its own `ExtractedChunk`.
 #[pyclass(module = "mordant", name = "MarkdownChunker")]
 pub struct PyMarkdownChunker {
     text: TextSource,
@@ -224,9 +337,12 @@ impl PyMarkdownChunker {
     }
 
     /// Advance to the next block chunk, or `None` (→ `StopIteration`).
+    ///
+    /// Yields bare `str` chunks — no heading prefixing.
+    /// Headings update `current_header` but are NOT yielded.
+    /// Body blocks are yielded as their raw content (no heading context prepended).
+    /// Other nodes (thematic breaks, etc.) are skipped.
     fn __next__(&mut self) -> Option<String> {
-        // Borrows `self.text` only; `self.index`/`self.current_header` are disjoint
-        // fields, so mutating them below is allowed while `text` is held.
         let text = self.text.as_str();
 
         while self.index < self.nodes.len() {
@@ -236,28 +352,23 @@ impl PyMarkdownChunker {
             // Raw source of this block, minus trailing inter-block blank lines.
             let raw = text[node.start..node.end].trim_end();
 
-            match node.kind {
-                ChunkKind::Heading => {
-                    // Update context; headings are not yielded on their own.
-                    // Store the trimmed range so the getter / concatenation are clean.
+            match node.block_type {
+                BlockType::Heading => {
+                    // Update heading context for OKF's embed-time injection.
+                    // Headings are NOT yielded — they are context, not content.
                     let end = node.start + raw.len();
                     self.current_header = Some((node.start, end));
                 }
-                ChunkKind::Paragraph
-                | ChunkKind::CodeBlock
-                | ChunkKind::List
-                | ChunkKind::Table
-                | ChunkKind::Blockquote => {
-                    let chunk: Cow<str> = match self.current_header {
-                        Some((h_start, h_end)) => {
-                            Cow::Owned(format!("{}\n\n{}", &text[h_start..h_end], raw))
-                        }
-                        None => Cow::Borrowed(raw),
-                    };
-                    // One copy at the FFI boundary (PyO3 converts String → PyString).
-                    return Some(chunk.into_owned());
+                BlockType::Paragraph
+                | BlockType::CodeBlock
+                | BlockType::List
+                | BlockType::Table
+                | BlockType::Blockquote => {
+                    // Yield the body block as its own bare chunk (no heading prefix).
+                    // OKF injects heading context at embed time for better embeddings.
+                    return Some(raw.to_string());
                 }
-                ChunkKind::Other => {
+                BlockType::Other => {
                     // Thematic breaks, HTML blocks, link-reference defs, etc.
                     // Ignored, and they do NOT reset the heading context.
                 }
@@ -277,5 +388,262 @@ impl PyMarkdownChunker {
     #[getter]
     fn node_count(&self) -> usize {
         self.nodes.len()
+    }
+
+    /// Get all chunks as `ExtractedChunk` objects (no heading prefix).
+    ///
+    /// Returns a list of `ExtractedChunk` with `text`, `block_type`,
+    /// `start_offset`, and `end_offset` for each bare chunk.
+    /// Headings are NOT included (they are context, not content).
+    /// Other nodes (thematic breaks, etc.) are skipped.
+    fn get_chunks<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let text = self.text.as_str();
+        let chunks = PyList::empty(py);
+
+        for node in &self.nodes {
+            match node.block_type {
+                BlockType::Heading => {
+                    // Update heading context; headings are not yielded.
+                    let raw = text[node.start..node.end].trim_end();
+                    let end = node.start + raw.len();
+                    self.current_header = Some((node.start, end));
+                }
+                BlockType::Paragraph
+                | BlockType::CodeBlock
+                | BlockType::List
+                | BlockType::Table
+                | BlockType::Blockquote => {
+                    let raw = text[node.start..node.end].trim_end();
+                    let chunk = PyExtractedChunk::from_strings(
+                        raw.to_string(),
+                        node.block_type.as_str().to_string(),
+                        node.start,
+                        node.start + raw.len(),
+                    );
+                    let item = Py::new(py, chunk)?;
+                    chunks.append(item)?;
+                }
+                BlockType::Other => {
+                    // Skipped.
+                }
+            }
+        }
+        Ok(chunks)
+    }
+
+    /// Get all chunks as `ExtractedChunk` objects WITH heading context prefix.
+    ///
+    /// Each body chunk is prefixed with the current heading context
+    /// (e.g., "# Title\n\nParagraph text"). Headings themselves are
+    /// NOT yielded.
+    fn get_chunks_with_context<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let text = self.text.as_str();
+        let chunks = PyList::empty(py);
+
+        for node in &self.nodes {
+            match node.block_type {
+                BlockType::Heading => {
+                    let raw = text[node.start..node.end].trim_end();
+                    let end = node.start + raw.len();
+                    self.current_header = Some((node.start, end));
+                }
+                BlockType::Paragraph
+                | BlockType::CodeBlock
+                | BlockType::List
+                | BlockType::Table
+                | BlockType::Blockquote => {
+                    let raw = text[node.start..node.end].trim_end();
+
+                    // Build prefixed text if there's a heading context.
+                    let text_with_context: String = match self.current_header {
+                        Some((h_start, h_end)) => {
+                            format!("{}\n\n{}", &text[h_start..h_end], raw)
+                        }
+                        None => raw.to_string(),
+                    };
+
+                    let chunk = PyExtractedChunk::from_strings(
+                        text_with_context,
+                        node.block_type.as_str().to_string(),
+                        node.start,
+                        node.start + raw.len(),
+                    );
+                    let item = Py::new(py, chunk)?;
+                    chunks.append(item)?;
+                }
+                BlockType::Other => {
+                    // Skipped.
+                }
+            }
+        }
+        Ok(chunks)
+    }
+
+    /// Get all node types (including headings and other) as `ExtractedChunk` objects.
+    ///
+    /// Unlike `get_chunks()`, this includes Heading blocks and yields them
+    /// as separate chunks with `block_type="Heading"`. Other nodes
+    /// (thematic breaks, etc.) are skipped.
+    fn get_all_chunks<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
+        let text = self.text.as_str();
+        let chunks = PyList::empty(py);
+
+        for node in &self.nodes {
+            match node.block_type {
+                BlockType::Heading => {
+                    let raw = text[node.start..node.end].trim_end();
+                    let end = node.start + raw.len();
+                    self.current_header = Some((node.start, end));
+                    let chunk = PyExtractedChunk::from_strings(
+                        raw.to_string(),
+                        "Heading".to_string(),
+                        node.start,
+                        node.start + raw.len(),
+                    );
+                    let item = Py::new(py, chunk)?;
+                    chunks.append(item)?;
+                }
+                BlockType::Paragraph
+                | BlockType::CodeBlock
+                | BlockType::List
+                | BlockType::Table
+                | BlockType::Blockquote => {
+                    let raw = text[node.start..node.end].trim_end();
+                    let chunk = PyExtractedChunk::from_strings(
+                        raw.to_string(),
+                        node.block_type.as_str().to_string(),
+                        node.start,
+                        node.start + raw.len(),
+                    );
+                    let item = Py::new(py, chunk)?;
+                    chunks.append(item)?;
+                }
+                BlockType::Other => {
+                    // Skipped.
+                }
+            }
+        }
+        Ok(chunks)
+    }
+
+    /// Get all chunks as bare `str` (backward compatible with existing iterator).
+    ///
+    /// This is equivalent to iterating the chunker directly.
+    fn get_bare_chunks<'py>(&mut self, py: Python<'py>) -> Bound<'py, PyList> {
+        let text = self.text.as_str();
+        let chunks = PyList::empty(py);
+
+        for node in &self.nodes {
+            match node.block_type {
+                BlockType::Heading => {
+                    let raw = text[node.start..node.end].trim_end();
+                    let end = node.start + raw.len();
+                    self.current_header = Some((node.start, end));
+                }
+                BlockType::Paragraph
+                | BlockType::CodeBlock
+                | BlockType::List
+                | BlockType::Table
+                | BlockType::Blockquote => {
+                    let raw = text[node.start..node.end].trim_end();
+                    chunks.append(raw.to_string()).unwrap();
+                }
+                BlockType::Other => {
+                    // Skipped.
+                }
+            }
+        }
+        chunks
+    }
+
+    /// Get the delimiter string between two consecutive block types.
+    ///
+    /// Used for document reconstruction:
+    ///   - List → List: "\n" (single newline, items belong together)
+    ///   - Blockquote → Blockquote: "\n> " (re-attach quote marker)
+    ///   - Everything else: "\n\n" (paragraph break)
+    #[staticmethod]
+    fn get_delimiter(prev: &str, curr: &str) -> String {
+        if prev == "List" && curr == "List" {
+            "\n".to_string()
+        } else if prev == "Blockquote" && curr == "Blockquote" {
+            "\n> ".to_string()
+        } else {
+            "\n\n".to_string()
+        }
+    }
+
+    /// Compute overlap payloads for embedding.
+    ///
+    /// The tail of chunk N is prepended to chunk N+1 to maintain
+    /// context across chunk boundaries. Overlap is never stored —
+    /// it is purely a query/embed time transformation.
+    ///
+    /// Args:
+    ///     overlap_words: Number of words from the tail of each chunk
+    ///                    to prepend to the next chunk.
+    ///
+    /// Returns:
+    ///     List of dicts with keys:
+    ///       - chunk_id: "chunk:N"
+    ///       - text: overlapped text for embedding
+    fn compute_overlap_payloads<'py>(&mut self, py: Python<'py>, overlap_words: usize) -> PyResult<Bound<'py, PyList>> {
+        let text = self.text.as_str();
+        let payloads = PyList::empty(py);
+
+        let mut prev_tail: String = String::new();
+        let mut chunk_index = 0;
+
+        for node in &self.nodes {
+            match node.block_type {
+                BlockType::Heading => {
+                    let raw = text[node.start..node.end].trim_end();
+                    let end = node.start + raw.len();
+                    self.current_header = Some((node.start, end));
+                }
+                BlockType::Paragraph
+                | BlockType::CodeBlock
+                | BlockType::List
+                | BlockType::Table
+                | BlockType::Blockquote => {
+                    let raw = text[node.start..node.end].trim_end();
+
+                    // Build overlapped text.
+                    let embed_text: String = if !prev_tail.is_empty() {
+                        format!("{}\n\n{}", prev_tail, raw)
+                    } else {
+                        raw.to_string()
+                    };
+
+                    // Build chunk_id.
+                    let chunk_id = format!("chunk:{}", chunk_index);
+
+                    // Create payload dict.
+                    let payload_dict = PyDict::new(py);
+                    payload_dict.set_item(chunk_id, embed_text)?;
+
+                    payloads.append(payload_dict)?;
+
+                    // Compute tail from PURE chunk text (not the overlapped text).
+                    let words: Vec<&str> = raw.split_whitespace().collect();
+                    if overlap_words > 0 && !words.is_empty() {
+                        let tail_start = if words.len() > overlap_words {
+                            words.len() - overlap_words
+                        } else {
+                            0
+                        };
+                        prev_tail = words[tail_start..].join("  ");
+                    } else {
+                        prev_tail = String::new();
+                    }
+
+                    chunk_index += 1;
+                }
+                BlockType::Other => {
+                    // Skipped.
+                }
+            }
+        }
+        Ok(payloads)
     }
 }

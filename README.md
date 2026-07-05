@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.8.5  
+> **Version:** 0.8.6  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -10,16 +10,16 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
-## What's New in 0.8.5
+## What's New in 0.8.6
 
 - **Lint engine** — 25 lint rules (MD001, MD003, MD009, MD010, MD012, MD013, MD018–MD022, MD024, MD025, MD026, MD031, MD032, MD034, MD040, MD042, MD045–MD048, MD049, MD050) with diagnostics, fix engine, and configuration
 - **Batch API** — `lint_many()` and `fix_many()` for parallel file processing via `rayon`, with GIL release for the entire batch
 - **CLI** — `python -m mordant` with `--fix`, `--dry-run`, `--format` (human/json/github), `--config`, `--enable`, `--disable`, `--default-language`, glob/directory recursion
 - **Phase 8 accuracy polish** — emoji text in heading comparison (MD024), frontmatter `title:` support (MD025), fragment anchor validation for links (MD042)
-- **Document chunking** — `MarkdownChunker` lazy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors
+- **Document chunking** — `MarkdownChunker` lazy AST-based chunk iterator yielding **bare chunks** (no heading prefix), with `get_chunks()`, `get_all_chunks()`, `get_chunks_with_context()`, `get_bare_chunks()`, `ExtractedChunk` (with `block_type`/`start_offset`/`end_offset`), `get_delimiter()`, `compute_overlap_payloads()`
 - **Inline suppression** — `<!-- markdownlint-disable MD001 -->` comments supported
 - **VSCode JSON theme support** — Custom themes from `.json` files via `add_custom_theme()` and user directory `~/.mordant/themes/`
-- **1161 tests** passing (up from 1065)
+- **1198 tests** passing (up from 1161)
 
 ## Features
 
@@ -136,35 +136,87 @@ print(doc.metadata)
 chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
 for chunk in chunker:
     print(chunk)
-# # Section
-#
 # Para one
-# ## Sub
-#
 # Para two
+# (bare chunks — no heading prefix)
+
+# get_chunks() returns ExtractedChunk with metadata
+for chunk in chunker.get_chunks():
+    print(chunk.block_type, chunk.text, chunk.start_offset, chunk.end_offset)
+# Paragraph Para one 9 17
+# Paragraph Para two 27 35
+
+# get_all_chunks() includes headings
+for chunk in chunker.get_all_chunks():
+    print(chunk.block_type, chunk.text)
+# Heading # Section
+# Paragraph Para one
+# Heading ## Sub
+# Paragraph Para two
+
+# get_chunks_with_context() adds heading prefix
+for chunk in chunker.get_chunks_with_context():
+    print(chunk.text)
+# # Section\n\nPara one
+# ## Sub\n\nPara two
+
+# compute_overlap_payloads() for embedding
+payloads = chunker.compute_overlap_payloads(2)
+# [{"chunk:0": "Para one"}, {"chunk:1": "one\n\nPara two"}]
 ```
 
 ## Document Chunking
 
-Split a document into heading-scoped chunks — each chunk carries the most recent heading as a prefix. Headings themselves are not yielded; thematic breaks and other non-body nodes are skipped without resetting context.
+Split a document into **bare chunks** — each chunk is the raw block content with no heading prefix. OKF injects heading context at embed time for better embeddings. Headings update a `current_header` context; thematic breaks and other non-body nodes are skipped without resetting context.
 
 ```python
 import mordant
 
-# Basic chunking with heading context
+# Basic chunking — bare chunks (no heading prefix)
 chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
 chunks = list(chunker)
 assert len(chunks) == 2
-assert chunks[0] == "# Section\n\nPara one"
-assert chunks[1] == "## Sub\n\nPara two"
+assert chunks[0] == "Para one"          # bare, no heading prefix
+assert chunks[1] == "Para two"          # bare, no heading prefix
 
-# current_header tracks the last heading seen
+# current_header still tracks the last heading seen
 assert chunker.current_header == "## Sub"
+
+# get_chunks() returns ExtractedChunk with metadata
+for chunk in chunker.get_chunks():
+    print(chunk.block_type, chunk.text, chunk.start_offset, chunk.end_offset)
+# Paragraph Para one 9 17
+# Paragraph Para two 27 35
+
+# get_all_chunks() includes headings as separate chunks
+for chunk in chunker.get_all_chunks():
+    print(chunk.block_type, chunk.text)
+# Heading # Section
+# Paragraph Para one
+# Heading ## Sub
+# Paragraph Para two
+
+# get_chunks_with_context() adds heading prefix for display
+for chunk in chunker.get_chunks_with_context():
+    print(chunk.text)
+# # Section\n\nPara one
+# ## Sub\n\nPara two
+
+# get_delimiter() for document reconstruction
+mordant.MarkdownChunker.get_delimiter("List", "List")           # "\n"
+mordant.MarkdownChunker.get_delimiter("Blockquote", "Blockquote")  # "\n> "
+mordant.MarkdownChunker.get_delimiter("Paragraph", "CodeBlock")  # "\n\n"
+
+# compute_overlap_payloads() for embedding context continuity
+chunker = mordant.MarkdownChunker("# Title\n\nFirst para second para third para.\n\n## Sub\n\nMore text here.")
+payloads = chunker.compute_overlap_payloads(2)
+# [{"chunk:0": "First para second para third para."},
+#  {"chunk:1": "third  para.\n\nMore text here."}]
 
 # from_file reads from disk
 chunker = mordant.MarkdownChunker.from_file("/path/to/doc.md")
 for chunk in chunker:
-    print(chunk)
+    print(chunk)  # bare chunks, no heading prefix
 
 # from_file_mmap for zero-copy large files
 chunker = mordant.MarkdownChunker.from_file_mmap("/path/to/large.md")
@@ -172,7 +224,8 @@ chunker = mordant.MarkdownChunker.from_file_mmap("/path/to/large.md")
 # Nested headings inside blockquotes never leak as context
 chunker = mordant.MarkdownChunker("# Outer\n\n> # Nested\n\n> Quote text.")
 chunks = list(chunker)
-assert all(not c.startswith("# Nested") for c in chunks)
+# current_header is "# Outer" (not "# Nested" which is nested)
+assert chunker.current_header == "# Outer"
 ```
 
 See [QUICKREF.md](QUICKREF.md#markdownchunker) for full API reference.
@@ -460,7 +513,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-1161 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, Mixed Features) + 51 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+1198 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, OKF chunker methods, Mixed Features) + 51 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## Theme Loading
 

@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.5  
+> **Version:** 0.8.6  
 > **Import:** `import mordant`
 
 ---
@@ -458,19 +458,19 @@ for node in doc.walk("breadth"):
 
 ## MarkdownChunker
 
-Lazy, low-copy chunking iterator over the rushdown AST. Yields one chunk (a `str`) at a time. Headings update a "current header" context; each subsequent body block is yielded either standalone or prefixed with that header.
+Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
 
 ```python
 import mordant
 
-# Basic usage — heading context propagation
+# Basic usage — bare chunks (no heading prefix)
 chunker = mordant.MarkdownChunker("# Section\n\nPara one\n\n## Sub\n\nPara two")
 chunks = list(chunker)
 assert len(chunks) == 2
-assert chunks[0] == "# Section\n\nPara one"
-assert chunks[1] == "## Sub\n\nPara two"
+assert chunks[0] == "Para one"          # bare, no heading prefix
+assert chunks[1] == "Para two"          # bare, no heading prefix
 
-# current_header tracks the last heading seen
+# current_header still tracks the last heading seen
 assert chunker.current_header == "## Sub"
 
 # node_count includes all top-level nodes (headings, paragraphs, thematic breaks, etc.)
@@ -483,28 +483,97 @@ assert chunker.node_count == 4  # 2 headings + 2 paragraphs
 | `MarkdownChunker.from_file(path)` | — | Read `path`, validate UTF-8, own bytes as `String`. Safe path. |
 | `MarkdownChunker.from_file_mmap(path)` | — | Zero-copy variant that memory-maps `path`. **Safety invariant:** caller MUST NOT modify/truncate the file while chunker is alive. |
 | `__iter__()` | `MarkdownChunker` | Returns self (iterator protocol). |
-| `__next__()` | `str \| None` | Advance to next block chunk, or `None` (→ `StopIteration`). |
+| `__next__()` | `str \| None` | Advance to next block chunk (bare, no prefix), or `None` (→ `StopIteration`). |
 | `current_header` | `str \| None` | Current heading context (last top-level heading seen), or `None`. |
 | `node_count` | `int` | Number of top-level nodes extracted (with a source position). |
+| `get_chunks()` | `list[ExtractedChunk]` | All body chunks as `ExtractedChunk` objects (no heading prefix, headings skipped). |
+| `get_all_chunks()` | `list[ExtractedChunk]` | All chunks **including** headings as separate chunks with `block_type="Heading"`. |
+| `get_chunks_with_context()` | `list[ExtractedChunk]` | Body chunks with heading prefix (e.g., `"# Title\n\nParagraph"`). |
+| `get_bare_chunks()` | `list[str]` | All body chunks as bare `str` (equivalent to iterating the chunker). |
+| `get_delimiter(prev, curr)` | `str` (static) | Type-aware delimiter for reconstruction: `List→List: "\n"`, `Blockquote→Blockquote: "\n> "`, else `"\n\n"`. |
+| `compute_overlap_payloads(overlap_words)` | `list[dict]` | Overlap payloads for embedding: `{"chunk:0": "text", "chunk:1": "tail\n\nnext"}`. |
 
-**Chunking behaviour:**
+**ExtractedChunk** — returned by `get_chunks()`, `get_all_chunks()`, `get_chunks_with_context()`:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `text` | `str` | Block content (trim_end applied) |
+| `block_type` | `str` | One of: `"Heading"`, `"Paragraph"`, `"CodeBlock"`, `"List"`, `"Table"`, `"Blockquote"`, `"Other"` |
+| `start_offset` | `int` | Byte offset in original source (inclusive) |
+| `end_offset` | `int` | Byte offset in original source (exclusive) |
+
+**Chunking behaviour (`__next__`):**
 
 | Node Kind | Yielded? | Context Update |
 |-----------|----------|----------------|
-| Heading | No (not yielded) | Updates `current_header` |
-| Paragraph | Yes | Uses current header as prefix |
-| CodeBlock | Yes | Uses current header as prefix |
-| List | Yes | Uses current header as prefix |
-| Table | Yes | Uses current header as prefix |
-| Blockquote | Yes | Uses current header as prefix |
+| Heading | No (not yielded by `__next__`) | Updates `current_header` |
+| Paragraph | Yes | Bare chunk, no prefix |
+| CodeBlock | Yes | Bare chunk, no prefix |
+| List | Yes | Bare chunk, no prefix |
+| Table | Yes | Bare chunk, no prefix |
+| Blockquote | Yes | Bare chunk, no prefix |
 | ThematicBreak / HtmlBlock / LinkRefDef | No (skipped) | Does NOT reset heading context |
+
+**Example — get_chunks() with metadata:**
+
+```python
+chunker = mordant.MarkdownChunker("# Title\n\nPara one")
+for chunk in chunker.get_chunks():
+    print(chunk.block_type, chunk.text, chunk.start_offset, chunk.end_offset)
+# Paragraph Para one 9 17
+```
+
+**Example — get_all_chunks() includes headings:**
+
+```python
+chunker = mordant.MarkdownChunker("# Title\n\nPara one\n\n## Sub\n\nPara two")
+for chunk in chunker.get_all_chunks():
+    print(chunk.block_type, chunk.text)
+# Heading # Title
+# Paragraph Para one
+# Heading ## Sub
+# Paragraph Para two
+```
+
+**Example — get_chunks_with_context() with heading prefix:**
+
+```python
+chunker = mordant.MarkdownChunker("# Title\n\nPara one\n\n## Sub\n\nPara two")
+for chunk in chunker.get_chunks_with_context():
+    print(chunk.text)
+# # Title\n\nPara one
+# ## Sub\n\nPara two
+```
+
+**Example — get_delimiter() for reconstruction:**
+
+```python
+# List → List: single newline (items belong together)
+mordant.MarkdownChunker.get_delimiter("List", "List")  # "\n"
+
+# Blockquote → Blockquote: re-attach quote marker
+mordant.MarkdownChunker.get_delimiter("Blockquote", "Blockquote")  # "\n> "
+
+# Everything else: paragraph break
+mordant.MarkdownChunker.get_delimiter("Paragraph", "CodeBlock")  # "\n\n"
+```
+
+**Example — compute_overlap_payloads() for embedding:**
+
+```python
+chunker = mordant.MarkdownChunker("# Title\n\nFirst para second para third para.\n\n## Sub\n\nMore text here.")
+payloads = chunker.compute_overlap_payloads(2)
+# [{"chunk:0": "First para second para third para."},
+#  {"chunk:1": "third  para.\n\nMore text here."}]
+# Tail of chunk 0 prepended to chunk 1 for context continuity
+```
 
 **Example — from_file:**
 
 ```python
 chunker = mordant.MarkdownChunker.from_file("/path/to/doc.md")
 for chunk in chunker:
-    print(chunk)
+    print(chunk)  # bare chunks, no heading prefix
 ```
 
 **Example — from_file_mmap (zero-copy):**
@@ -521,8 +590,8 @@ chunks = list(chunker)
 # A heading inside a blockquote must never become the context prefix
 chunker = mordant.MarkdownChunker("# Outer\n\n> # Nested\n\n> Quote text.")
 chunks = list(chunker)
-# The paragraph after the blockquote carries "# Outer", not "# Nested"
-assert all(not c.startswith("# Nested") for c in chunks)
+# current_header is "# Outer" (not "# Nested" which is nested inside blockquote)
+assert chunker.current_header == "# Outer"
 ```
 
 ---
