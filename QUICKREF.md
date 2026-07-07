@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.7  
+> **Version:** 0.8.8  
 > **Import:** `import mordant`
 
 ---
@@ -708,15 +708,28 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_pa
 
 ```python
 opts = mordant.PyDiagramHtmlRendererOptions(
-    mermaid_url=None,       # Custom Mermaid.js CDN URL
+    render_mode="server",   # "server" | "client" | "hybrid"
+    mermaid_url=None,       # Custom Mermaid.js CDN URL (client/hybrid only)
 )
 
-# Custom URL
+# Server mode (default): inline SVG, no CDN
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server")
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
+# Output: <div class="mermaid"><svg>...</svg></div>
+
+# Client mode (legacy): raw <pre> + script tag
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
+# Output: <pre class="mermaid">...</pre> + <script type="module">...</script>
+
+# Hybrid mode: try server, fallback to client
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="hybrid")
+
+# Custom CDN URL (only matters for client/hybrid fallback)
 opts = mordant.PyDiagramHtmlRendererOptions(
+    render_mode="hybrid",
     mermaid_url="https://cdn.example.com/mermaid.mjs"
 )
-html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
-# Script tag uses custom URL
 ```
 
 ### Diagram AST Access

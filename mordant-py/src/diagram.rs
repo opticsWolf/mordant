@@ -1,7 +1,13 @@
 //! Diagram extension for mordant.
 //!
-//! Parses ```mermaid code blocks and renders them as Mermaid diagrams
-//! with client-side rendering via the Mermaid.js ESM module.
+//! Parses ```mermaid code blocks and renders them as Mermaid diagrams.
+//! Supports three rendering modes:
+//! - **server**: Server-side SVG rendering via mermaid-rs-renderer (default).
+//!   No CDN dependency. On render failure, falls back to raw <pre> output.
+//! - **client**: Client-side rendering via Mermaid.js ESM module.
+//!   Outputs raw <pre> blocks + a <script type="module"> tag.
+//! - **hybrid**: Try server-side rendering; fall back to client-side
+//!   (Mermaid.js ESM) if server rendering fails.
 
 use pyo3::prelude::*;
 use rushdown_lib::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
@@ -140,6 +146,95 @@ impl PyDiagramParserOptions {
 }
 
 // ---------------------------------------------------------------------------
+// Render Mode
+// ---------------------------------------------------------------------------
+
+/// How Mermaid diagrams are rendered in HTML output.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub enum RenderMode {
+    /// Server-side SVG rendering via mermaid-rs-renderer.
+    /// No CDN dependency. On render failure, outputs raw <pre> (debug mode).
+    #[default]
+    Server,
+    /// Client-side rendering via Mermaid.js ESM module.
+    /// Outputs raw <pre> blocks + <script type="module"> tag.
+    Client,
+    /// Try server-side rendering first; fall back to client-side
+    /// (Mermaid.js ESM) if server rendering fails.
+    Hybrid,
+}
+
+// ---------------------------------------------------------------------------
+// Renderer Options
+// ---------------------------------------------------------------------------
+
+/// Options for the diagram HTML renderer.
+#[derive(Debug, Clone, Default)]
+pub struct DiagramHtmlRendererOptions {
+    pub mermaid: MermaidHtmlRenderingOptions,
+}
+
+impl RendererOptions for DiagramHtmlRendererOptions {}
+
+/// Options for the Mermaid diagram HTML renderer.
+#[derive(Debug, Clone)]
+pub struct MermaidHtmlRenderingOptions {
+    /// How to render diagrams.
+    pub render_mode: RenderMode,
+    /// URL to the Mermaid JavaScript module (only used for Client/Hybrid fallback).
+    pub mermaid_url: String,
+}
+
+impl Default for MermaidHtmlRenderingOptions {
+    fn default() -> Self {
+        Self {
+            render_mode: RenderMode::Server,
+            mermaid_url: "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string(),
+        }
+    }
+}
+
+/// Options for the diagram HTML renderer (Python-exposed).
+#[pyclass(module = "mordant")]
+pub struct PyDiagramHtmlRendererOptions {
+    #[pyo3(get, set)]
+    render_mode: String,
+
+    #[pyo3(get, set)]
+    mermaid_url: Option<String>,
+}
+
+#[pymethods]
+impl PyDiagramHtmlRendererOptions {
+    #[new]
+    #[pyo3(signature = (render_mode = "server", mermaid_url = None))]
+    fn new(render_mode: &str, mermaid_url: Option<String>) -> Self {
+        PyDiagramHtmlRendererOptions {
+            render_mode: render_mode.to_string(),
+            mermaid_url,
+        }
+    }
+}
+
+impl PyDiagramHtmlRendererOptions {
+    pub fn to_rushdown(&self) -> DiagramHtmlRendererOptions {
+        let mode = match self.render_mode.as_str() {
+            "client" => RenderMode::Client,
+            "hybrid" => RenderMode::Hybrid,
+            _ => RenderMode::Server,
+        };
+        DiagramHtmlRendererOptions {
+            mermaid: MermaidHtmlRenderingOptions {
+                render_mode: mode,
+                mermaid_url: self.mermaid_url.clone().unwrap_or_else(|| {
+                    "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string()
+                }),
+            },
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // AST Transformer
 // ---------------------------------------------------------------------------
 
@@ -220,73 +315,6 @@ impl From<DiagramAstTransformer> for AnyAstTransformer {
 }
 
 // ---------------------------------------------------------------------------
-// Renderer Options
-// ---------------------------------------------------------------------------
-
-/// Options for the diagram HTML renderer.
-#[derive(Debug, Clone, Default)]
-pub struct DiagramHtmlRendererOptions {
-    pub mermaid: MermaidHtmlRenderingOptions,
-}
-
-impl RendererOptions for DiagramHtmlRendererOptions {}
-
-/// Options for the Mermaid diagram HTML renderer.
-#[derive(Debug, Clone)]
-pub enum MermaidHtmlRenderingOptions {
-    /// Use client-side rendering for Mermaid diagrams.
-    Client(ClientSideMermaidHtmlRenderingOptions),
-}
-
-impl Default for MermaidHtmlRenderingOptions {
-    fn default() -> Self {
-        Self::Client(ClientSideMermaidHtmlRenderingOptions::default())
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ClientSideMermaidHtmlRenderingOptions {
-    /// URL to the Mermaid JavaScript module.
-    pub mermaid_url: String,
-}
-
-impl Default for ClientSideMermaidHtmlRenderingOptions {
-    fn default() -> Self {
-        Self {
-            mermaid_url: "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string(),
-        }
-    }
-}
-
-/// Options for the diagram HTML renderer (Python-exposed).
-#[pyclass(module = "mordant")]
-pub struct PyDiagramHtmlRendererOptions {
-    #[pyo3(get, set)]
-    mermaid_url: Option<String>,
-}
-
-#[pymethods]
-impl PyDiagramHtmlRendererOptions {
-    #[new]
-    #[pyo3(signature = (mermaid_url = None))]
-    fn new(mermaid_url: Option<String>) -> Self {
-        PyDiagramHtmlRendererOptions { mermaid_url }
-    }
-}
-
-impl PyDiagramHtmlRendererOptions {
-    pub fn to_rushdown(&self) -> DiagramHtmlRendererOptions {
-        DiagramHtmlRendererOptions {
-            mermaid: MermaidHtmlRenderingOptions::Client(ClientSideMermaidHtmlRenderingOptions {
-                mermaid_url: self.mermaid_url.clone().unwrap_or_else(|| {
-                    "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string()
-                }),
-            }),
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------
 
@@ -329,13 +357,66 @@ impl<W: TextWrite> RenderNode<W> for DiagramHtmlRenderer<W> {
     ) -> Result<WalkStatus> {
         let kd = as_extension_data!(arena, node_ref, Diagram);
         if entering {
-            ctx.insert(self.has_mermaid_diagram, true);
-            self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
-            for line in kd.value().iter(source) {
-                self.writer.raw_write(w, &line)?;
+            let diagram_value: String = {
+                let mut buf = String::new();
+                for line in kd.value().iter(source) {
+                    buf.push_str(&line);
+                }
+                buf
+            };
+            let mode = &self._options.mermaid.render_mode;
+
+            match mode {
+                RenderMode::Server => {
+                    // Try server-side SVG rendering
+                    match mermaid_rs_renderer::render(&diagram_value) {
+                        Ok(svg) => {
+                            self.writer.write_html(w, &format!("<div class=\"mermaid\">{}</div>", svg))?;
+                        }
+                        Err(_) => {
+                            // Debug fallback: show raw source so user knows what failed
+                            self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
+                            for line in kd.value().iter(source) {
+                                self.writer.raw_write(w, &line)?;
+                            }
+                            self.writer.write_safe_str(w, "</pre>\n")?;
+                        }
+                    }
+                }
+
+                RenderMode::Client => {
+                    // Pure client-side: output raw <pre> and flag for script injection
+                    ctx.insert(self.has_mermaid_diagram, true);
+                    self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
+                    for line in kd.value().iter(source) {
+                        self.writer.raw_write(w, &line)?;
+                    }
+                }
+
+                RenderMode::Hybrid => {
+                    // Try server-side first; fall back to client-side on failure
+                    match mermaid_rs_renderer::render(&diagram_value) {
+                        Ok(svg) => {
+                            self.writer.write_html(w, &format!("<div class=\"mermaid\">{}</div>", svg))?;
+                        }
+                        Err(_) => {
+                            // Server failed — fall back to client-side
+                            ctx.insert(self.has_mermaid_diagram, true);
+                            self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
+                            for line in kd.value().iter(source) {
+                                self.writer.raw_write(w, &line)?;
+                            }
+                        }
+                    }
+                }
             }
         } else {
-            self.writer.write_safe_str(w, "</pre>\n")?;
+            // Exiting node — close the appropriate tag
+            let mode = &self._options.mermaid.render_mode;
+            match mode {
+                RenderMode::Server => self.writer.write_safe_str(w, "</div>\n")?,
+                RenderMode::Client | RenderMode::Hybrid => self.writer.write_safe_str(w, "</pre>\n")?,
+            }
         }
         Ok(WalkStatus::Continue)
     }
@@ -376,10 +457,15 @@ impl<W: TextWrite> PostRender<W> for DiagramPostRenderHook<W> {
         _render: &dyn Render<W>,
         ctx: &mut renderer::Context,
     ) -> Result<()> {
+        // Never inject script tag in server mode
+        if self.options.mermaid.render_mode == RenderMode::Server {
+            return Ok(());
+        }
+
+        // Client or Hybrid mode: inject Mermaid.js script only if at least
+        // one diagram fell back to <pre> (flagged by has_mermaid_diagram).
         if *ctx.get(self.has_mermaid_diagram).unwrap_or(&false) {
-            let client_opts = match &self.options.mermaid {
-                MermaidHtmlRenderingOptions::Client(opts) => opts,
-            };
+            let url = &self.options.mermaid.mermaid_url;
             self.writer.write_html(
                 w,
                 &format!(
@@ -387,7 +473,7 @@ impl<W: TextWrite> PostRender<W> for DiagramPostRenderHook<W> {
 import mermaid from '{}';
 </script>
 "#,
-                    client_opts.mermaid_url
+                    url
                 ),
             )?;
         }

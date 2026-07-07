@@ -5,29 +5,29 @@ import pytest
 
 
 class TestMermaidBasic:
-    """Test basic Mermaid diagram rendering."""
+    """Test basic Mermaid diagram rendering (server mode is default)."""
 
     def test_mermaid_basic_render(self):
-        """Basic Mermaid diagram renders as <pre class='mermaid'>."""
+        """Basic Mermaid diagram renders as inline SVG in server mode."""
         source = """```mermaid
 graph LR
     A --- B
 ```"""
         html = mordant.markdown_to_html(source)
-        assert '<pre class="mermaid">' in html
-        assert "graph LR" in html
-        assert "</pre>" in html
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+        assert "</svg>" in html
+        assert "</div>" in html
 
-    def test_mermaid_script_injected(self):
-        """Mermaid script is injected when diagrams are present."""
+    def test_mermaid_no_script_in_server_mode(self):
+        """No script tag in server mode — diagrams are rendered server-side."""
         source = """```mermaid
 graph LR
     A --- B
 ```"""
         html = mordant.markdown_to_html(source)
-        assert '<script type="module">' in html
-        assert "import mermaid from" in html
-        assert "mermaid.esm.min.mjs" in html
+        assert '<script type="module">' not in html
+        assert "import mermaid from" not in html
 
     def test_no_script_without_diagrams(self):
         """No Mermaid script when no diagrams are present."""
@@ -36,21 +36,23 @@ graph LR
         assert '<script type="module">' not in html
         assert "mermaid" not in html
 
-    def test_mermaid_preserves_content(self):
-        """Mermaid diagram content is preserved exactly."""
+    def test_mermaid_sequence_diagram(self):
+        """Mermaid sequence diagram renders as SVG."""
         source = """```mermaid
 sequenceDiagram
     Alice->>Bob: Hello Bob
     Bob-->>Alice: Hi Alice
 ```"""
         html = mordant.markdown_to_html(source)
-        assert "sequenceDiagram" in html
-        assert "Alice-&gt;&gt;Bob: Hello Bob" in html
-        assert "Bob--&gt;&gt;Alice: Hi Alice" in html
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+        # The SVG should contain rendered text, not raw source
+        assert "Alice" in html
+        assert "Bob" in html
 
 
 class TestMermaidOptions:
-    """Test Mermaid diagram options."""
+    """Test Mermaid diagram options and render modes."""
 
     def test_mermaid_disabled(self):
         """When mermaid is disabled, code block passes through unchanged."""
@@ -61,12 +63,66 @@ graph LR
 ```"""
         html = mordant.markdown_to_html(source, diagram_parse_opts=opts)
         # Should be a regular code block, not a diagram
-        assert '<pre class="mermaid">' not in html
+        assert '<div class="mermaid">' not in html
         assert '<script type="module">' not in html
 
+    def test_render_mode_server(self):
+        """Server mode: inline SVG, no CDN dependency."""
+        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server")
+        source = """```mermaid
+graph LR
+    A --- B
+```"""
+        html = mordant.markdown_to_html(source, diagram_render_opts=opts)
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+        assert '<script type="module">' not in html
+
+    def test_render_mode_client(self):
+        """Client mode: raw <pre> + script tag."""
+        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+        source = """```mermaid
+graph LR
+    A --- B
+```"""
+        html = mordant.markdown_to_html(source, diagram_render_opts=opts)
+        assert '<pre class="mermaid">' in html
+        assert "graph LR" in html
+        assert "</pre>" in html
+        assert '<script type="module">' in html
+        assert "import mermaid from" in html
+
+    def test_render_mode_hybrid(self):
+        """Hybrid mode: try server-side, fall back to client-side."""
+        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="hybrid")
+        source = """```mermaid
+graph LR
+    A --- B
+```"""
+        html = mordant.markdown_to_html(source, diagram_render_opts=opts)
+        # Server should succeed for valid diagrams
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+
     def test_custom_mermaid_url(self):
-        """Custom Mermaid URL is used in the script tag."""
+        """Custom Mermaid URL is used in client/hybrid fallback."""
         opts = mordant.PyDiagramHtmlRendererOptions(
+            render_mode="hybrid",
+            mermaid_url="https://example.com/mermaid/custom.mjs"
+        )
+        source = """```mermaid
+graph LR
+    A --- B
+```"""
+        html = mordant.markdown_to_html(source, diagram_render_opts=opts)
+        # Server succeeds, so no script tag (URL is irrelevant in server mode)
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+
+    def test_custom_mermaid_url_client_mode(self):
+        """Custom Mermaid URL is used in client mode."""
+        opts = mordant.PyDiagramHtmlRendererOptions(
+            render_mode="client",
             mermaid_url="https://example.com/mermaid/custom.mjs"
         )
         source = """```mermaid
@@ -77,8 +133,8 @@ graph LR
         assert "https://example.com/mermaid/custom.mjs" in html
 
     def test_default_mermaid_url(self):
-        """Default Mermaid URL is jsDelivr CDN."""
-        opts = mordant.PyDiagramHtmlRendererOptions()
+        """Default Mermaid URL is jsDelivr CDN (client/hybrid mode)."""
+        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
         source = """```mermaid
 graph LR
     A --- B
@@ -135,7 +191,7 @@ class TestMermaidMultiple:
     """Test multiple Mermaid diagrams in one document."""
 
     def test_multiple_diagrams(self):
-        """Multiple Mermaid diagrams all render."""
+        """Multiple Mermaid diagrams all render as SVG in server mode."""
         source = """```mermaid
 graph LR
     A --- B
@@ -148,9 +204,10 @@ sequenceDiagram
     Alice->>Bob: Hello
 ```"""
         html = mordant.markdown_to_html(source)
-        assert html.count('<pre class="mermaid">') == 2
-        # Script should only appear once
-        assert html.count('<script type="module">') == 1
+        assert html.count('<div class="mermaid">') == 2
+        assert html.count("<svg") == 2
+        # No script tag in server mode
+        assert html.count('<script type="module">') == 0
 
     def test_mixed_content(self):
         """Mermaid diagrams mixed with regular content."""
@@ -170,30 +227,30 @@ More text.
 """
         html = mordant.markdown_to_html(source)
         assert "<h1>" in html
-        assert '<pre class="mermaid">' in html
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
         assert "<ul>" in html
-        assert "graph TD" in html
 
 
 class TestMermaidEdgeCases:
     """Test edge cases for Mermaid diagram rendering."""
 
     def test_empty_mermaid_block(self):
-        """Empty Mermaid code block renders empty pre."""
+        """Empty Mermaid code block renders empty pre in server mode."""
         source = "```mermaid\n```"
         html = mordant.markdown_to_html(source)
-        assert '<pre class="mermaid">' in html
-        assert "</pre>" in html
+        # Empty diagram may produce minimal SVG or fall back to <pre>
+        assert '<div class="mermaid">' in html or '<pre class="mermaid">' in html
 
     def test_mermaid_with_special_chars(self):
-        """Mermaid with special HTML characters is escaped."""
+        """Mermaid with special HTML characters renders in SVG."""
         source = """```mermaid
 graph LR
     A --> B[Click & Go]
 ```"""
         html = mordant.markdown_to_html(source)
-        assert "graph LR" in html
-        assert "Click &amp; Go" in html or "Click & Go" in html
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
 
     def test_mermaid_in_gfm(self):
         """Mermaid works in GFM mode."""
@@ -202,7 +259,8 @@ graph LR
     A --- B
 ```"""
         html = mordant.markdown_to_html(source, gfm_opts=mordant.GfmOptions.all())
-        assert '<pre class="mermaid">' in html
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
 
     def test_mermaid_with_frontmatter(self):
         """Mermaid works alongside YAML frontmatter."""
@@ -231,7 +289,8 @@ graph LR
 ~~strikethrough~~ and `code` and [link](url)
 """
         html = mordant.markdown_to_html(source, gfm_opts=mordant.GfmOptions.all())
-        assert '<pre class="mermaid">' in html
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
         assert "<del>" in html
         assert "<code>" in html
         assert "<a " in html

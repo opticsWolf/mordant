@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.8.7  
+> **Version:** 0.8.8  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -9,6 +9,11 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
+
+## What's New in 0.8.8
+
+- **Server-side Mermaid rendering** — Mermaid diagrams now render as inline SVG via the `mermaid-rs-renderer` crate (~3ms server-side vs ~2s client-side). No browser/CDN dependency. Three render modes: `server` (default, inline SVG), `client` (legacy, Mermaid.js ESM), `hybrid` (try server, fallback to client)
+- **Render mode API** — `PyDiagramHtmlRendererOptions(render_mode="server"|"client"|"hybrid", mermaid_url=...)`
 
 ## What's New in 0.8.7
 

@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.8.7  
+> **Version:** 0.8.8  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1198 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 17 diagram + 14 core + 11 VSCode theme + 9 GFM + 37 OKF chunker methods) + 51 Rust (28 linter + 14 meta + 9 emoji)
+> **Tests:** 1202 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 21 diagram + 14 core + 11 VSCode theme + 9 GFM + 37 OKF chunker methods) + 51 Rust (28 linter + 14 meta + 9 emoji)
 
 ---
 
@@ -45,7 +45,7 @@ mordant/                          # Rushdown Rust crate (unchanged upstream)
 │   └── error.rs                  # Error types
 
 mordant-py/                       # PyO3 Python bindings
-├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json, syntect, syntect-assets
+├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json, syntect, syntect-assets, mermaid-rs-renderer 0.3
 ├── src/
 │   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), lint(), fix(), lint_many(), fix_many(), lint_rules(), GIL detach
 │   ├── document.rs               # Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix()
@@ -149,13 +149,13 @@ Arena + NodeRef(root)
 │               │       • render_code_block() → "<pre><code>...</code></pre>"
 │               │       • render_table() → "<table><thead>...</thead>..."
 │               │       • render_strikethrough() → "<del>...</del>"
-│               │       • render_diagram() → "<pre class=\"mermaid\">...</pre>"
+│               │       • render_diagram() → "<div class=\"mermaid\"><svg>...</svg></div>" (server mode)
 └──────────────┘
     │
     ▼
 ┌──────────────┐
-│  Post-Render  │  ──►  DiagramPostRenderHook (injects Mermaid.js ESM script)
-│  Hook         │       • Only runs if diagrams were rendered
+│  Post-Render  │  ──►  DiagramPostRenderHook (injects Mermaid.js ESM script only in client/hybrid mode)
+│  Hook         │       • Server mode: no script tag (diagrams rendered server-side)
 └──────────────┘
     │
     ▼
@@ -659,12 +659,25 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_pa
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `mermaid_url` | str\|None | `https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs` | URL to Mermaid.js ESM module |
+| `render_mode` | str | `"server"` | `"server"` (inline SVG, no CDN), `"client"` (legacy, Mermaid.js ESM), `"hybrid"` (try server, fallback to client) |
+| `mermaid_url` | str\|None | `https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs` | URL to Mermaid.js ESM module (client/hybrid only) |
 
 ```python
-opts = mordant.PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")
+# Server mode (default): inline SVG, no CDN dependency
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server")
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
-# Script tag uses custom URL
+# Output: <div class="mermaid"><svg>...</svg></div>
+
+# Client mode (legacy): raw <pre> + script tag
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
+# Output: <pre class="mermaid">...</pre> + <script type="module">...</script>
+
+# Custom CDN URL (only matters for client/hybrid fallback)
+opts = mordant.PyDiagramHtmlRendererOptions(
+    render_mode="hybrid",
+    mermaid_url="https://cdn.example.com/mermaid.mjs"
+)
 ```
 
 ### 5.12. PyHighlighter
