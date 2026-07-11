@@ -12,3 +12,5 @@ mordant-py/target/
 mordant-py/mordant/__pycache__/
 
 mordant-py/tests/__pycache__/
+
+mordant-py/example/__pycache__/

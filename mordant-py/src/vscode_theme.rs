@@ -249,17 +249,20 @@ pub fn vscode_theme_to_syntect(vscode: &VscodeTheme) -> Result<Theme, String> {
 }
 
 /// Parse font style string to FontStyle.
+///
+/// Must match syntect 5.x's `FontStyle` bit layout:
+/// `BOLD = 1`, `UNDERLINE = 2`, `ITALIC = 4`.
+/// (syntect 5.3.0 has no `strikethrough` bit.)
 fn parse_font_style(s: &str) -> Option<FontStyle> {
     let s = s.trim().to_lowercase();
     let mut flags: u32 = 0;
-    
+
     for part in s.split(',') {
         let part = part.trim();
         match part {
-            "bold" => flags |= 1 << 0,
-            "italic" => flags |= 1 << 1,
-            "underline" | "underlined" => flags |= 1 << 2,
-            "strikethrough" => flags |= 1 << 3,
+            "bold" => flags |= 1 << 0,                                  // BOLD = 1
+            "underline" | "underlined" => flags |= 1 << 1,             // UNDERLINE = 2
+            "italic" => flags |= 1 << 2,                               // ITALIC = 4
             _ => {}
         }
     }

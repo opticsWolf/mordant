@@ -150,6 +150,35 @@ class TestHighlightingWithVsCodeTheme:
         lower = html.lower()
         assert any(color.lower() in lower for color in ["#6A7A3E", "#FF6B6B", "#4EC6FB"])
 
+    def test_font_style_italic_not_rendered_as_underline(self):
+        """Regression test for the FontStyle bit-mapping bug.
+
+        syntect 5.x defines BOLD=1, UNDERLINE=2, ITALIC=4. A VSCode
+        `italic` font style must render as `font-style:italic`, NOT as
+        `text-decoration:underline` (which is what the swapped mapping
+        previously produced for many JSON themes).
+        """
+        mordant.add_custom_theme("test-vscode-italic", VS_CODE_THEME_JSON)
+        hl = mordant.Highlighter(theme="test-vscode-italic")
+        # `comment` scope is styled `italic` in VS_CODE_THEME_JSON
+        html = hl.highlight("javascript", 'let x = 1; // a comment')
+        assert "font-style:italic" in html
+        assert "text-decoration:underline" not in html
+
+    def test_font_style_explicit_underline(self):
+        """An explicit `underline` font style must render as underline."""
+        underline_theme = '''{
+            "name": "UnderlineTest",
+            "tokenColors": [
+                {"scope": "markup.underline", "settings": {"foreground": "#ff0000", "fontStyle": "underline"}}
+            ]
+        }'''
+        mordant.add_custom_theme("test-vscode-underline", underline_theme)
+        hl = mordant.Highlighter(theme="test-vscode-underline")
+        html = hl.highlight("markdown", "see [link](url)")
+        assert "text-decoration:underline" in html
+        assert "font-style:italic" not in html
+
 
 class TestMarkdownWithVsCodeHighlighting:
     def test_markdown_rendered_with_highlighting(self):
