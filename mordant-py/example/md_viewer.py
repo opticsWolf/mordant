@@ -269,6 +269,7 @@ class MarkdownViewer(QMainWindow):
         text_color = "#ffffff" if is_dark else "#000000"
         accent_color = "#353535" if is_dark else "#f6f8fa"
         border_color = "#444444" if is_dark else "#d0d7de"
+        scheme = "dark" if is_dark else "light"
 
         selected_highlight = self.theme_combo.currentText()
 
@@ -299,6 +300,9 @@ class MarkdownViewer(QMainWindow):
         <head>
         <meta charset="utf-8">
         <style>
+            :root {{
+                color-scheme: {scheme};
+            }}
             body {{
                 background-color: {bg_color};
                 color: {text_color};
@@ -309,11 +313,12 @@ class MarkdownViewer(QMainWindow):
                 margin: 0 auto;
             }}
             pre {{
-                background-color: {accent_color} !important;
-                border: 1px solid {border_color};
-                padding: 16px;
-                border-radius: 6px;
-                overflow: auto;
+                /* Background is supplied by the selected syntax theme
+                   (mordant sets it inline on <pre>); do not override it here. */
+                border: 1px solid {border_color} !important;
+                padding: 16px !important;
+                border-radius: 6px !important;
+                overflow: auto !important;
             }}
             code {{
                 font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
@@ -349,6 +354,20 @@ class MarkdownViewer(QMainWindow):
             }}
             a:hover {{
                 text-decoration: underline;
+            }}
+            ::-webkit-scrollbar-track {{
+                background: {bg_color};
+            }}
+            ::-webkit-scrollbar-thumb {{
+                background: {border_color};
+                border-radius: 5px;
+            }}
+            ::-webkit-scrollbar-thumb:hover {{
+                background: {accent_color};
+            }}
+            * {{
+                scrollbar-color: {border_color} {bg_color};
+                scrollbar-width: auto;
             }}
         </style>
         </head>
