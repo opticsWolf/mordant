@@ -3,7 +3,7 @@
 > **Version:** 0.8.8  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1202 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 21 diagram + 14 core + 11 VSCode theme + 9 GFM + 37 OKF chunker methods) + 51 Rust (28 linter + 14 meta + 9 emoji)
+> **Tests:** 1212 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 21 diagram + 14 core + 11 VSCode theme + 9 GFM + 37 OKF chunker methods) + 54 Rust (28 linter + 14 meta + 9 emoji + 3 mermaid_theme)
 
 ---
 
@@ -55,9 +55,9 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── errors.rs                 # RushdownError Python exception type
 │   ├── meta.rs                   # YAML frontmatter parser extension + unit tests (14)
 │   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests (9)
-│   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook
+│   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook (with native/derived theme support)
 │   ├── linter.rs                 # Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API, RuleMetadata + unit tests (28)
-│   ├── highlighter.rs            # Syntax highlighting via syntect-assets: PyHighlighter, add_custom_theme(), list_themes(), list_syntaxes(), load_builtin_themes()
+│   ├── highlighter.rs            # Syntax highlighting via syntect-assets: PyHighlighter, add_custom_theme(), list_themes(), list_syntaxes(), load_builtin_themes(), resolve_theme()
 │   ├── vscode_theme.rs           # VSCode JSON theme parser (JSONC with comments → syntect Theme)
 │   └── themes.rs                 # Theme loading utilities
 ├── mordant/
@@ -155,7 +155,8 @@ Arena + NodeRef(root)
     ▼
 ┌──────────────┐
 │  Post-Render  │  ──►  DiagramPostRenderHook (injects Mermaid.js ESM script only in client/hybrid mode)
-│  Hook         │       • Server mode: no script tag (diagrams rendered server-side)
+│  Hook         │       • Server mode: no script tag (diagrams rendered server-side, themed via render_with_options)
+│               │       • Client/hybrid: injects mermaid.initialize(...) — native theme (`theme:'<name>'`) or derived (`theme:'base'` + themeVariables)
 └──────────────┘
     │
     ▼
@@ -239,6 +240,8 @@ W: TextWrite (String by default)
 | `allows_unsafe` | false | Allow raw HTML / dangerous URLs |
 | `escaped_space` | false | Don't render backslash-escaped space |
 | `attribute_filters` | `Option<Rc<AttributeFilters>>` | Filters for rendering node attributes (per-kind `AsciiWordSet`) |
+
+**Diagram theming.** `PyDiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme. The name resolves as a union: built-in mermaid presets (`modern`/`mermaid_default`/`dark`/`forest`/`neutral`) are used natively; any syntect theme is derived into a custom `base` theme (`derive_mermaid_theme` in `mermaid_theme.rs`). A `theme=` kwarg on `markdown_to_html` fans out to both code highlighting and diagrams, with explicit per-param args taking precedence.
 
 ### 3.8. Parser Priority Constants
 
@@ -333,7 +336,7 @@ The `mordant` module (via `#[pymodule]`) registers:
 
 | Function | Source |
 |----------|--------|
-| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts, diagram_parse_opts, diagram_render_opts, footnote_render_opts, highlighting_theme, highlighting_mode)` | `lib.rs` |
+| `markdown_to_html(source, gfm, parse_opts, render_opts, emoji_parse_opts, emoji_render_opts, diagram_parse_opts, diagram_render_opts, footnote_render_opts, highlighting_theme, highlighting_mode, theme)` | `lib.rs` |
 | `parse(source, gfm, parse_opts, emoji_opts, diagram_opts)` | `lib.rs` |
 | `lint(source, gfm, parse_opts, emoji_opts, diagram_opts, lint_opts, lint_config)` | `lib.rs` |
 | `fix(source, gfm, parse_opts, emoji_opts, diagram_opts, lint_opts, default_language, lint_config)` | `lib.rs` |
@@ -661,6 +664,7 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_pa
 |-------|------|---------|-------------|
 | `render_mode` | str | `"server"` | `"server"` (inline SVG, no CDN), `"client"` (legacy, Mermaid.js ESM), `"hybrid"` (try server, fallback to client) |
 | `mermaid_url` | str\|None | `https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs` | URL to Mermaid.js ESM module (client/hybrid only) |
+| `theme` | str\|None | `None` | Theme name for the diagram. A syntect (code-highlighting) theme name derives Mermaid colors; a built-in mermaid name (`modern`/`dark`/`forest`/`neutral`) is used natively. `None` = legacy behavior |
 
 ```python
 # Server mode (default): inline SVG, no CDN dependency
@@ -678,6 +682,14 @@ opts = mordant.PyDiagramHtmlRendererOptions(
     render_mode="hybrid",
     mermaid_url="https://cdn.example.com/mermaid.mjs"
 )
+
+# Themed diagram — color scheme derived from a code-highlighting theme
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server", theme="Dracula")
+html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
+# Server SVG uses Dracula's palette; client mode injects mermaid.initialize + themeVariables
+
+# Single `theme=` kwarg themes BOTH code and diagrams
+html = mordant.markdown_to_html("# T\n```mermaid\ngraph LR\nA---B\n```\n```python\nx=1\n```", theme="Dracula")
 ```
 
 ### 5.12. PyHighlighter

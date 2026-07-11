@@ -294,3 +294,84 @@ graph LR
         assert "<del>" in html
         assert "<code>" in html
         assert "<a " in html
+
+
+class TestMermaidTheming:
+    """Mermaid diagrams themed from code-highlighting (syntect) themes.
+
+    See MERMAID_THEME_PLAN.md. A `theme` name resolves as a union of mermaid
+    built-in presets (native, no derivation) and syntect code-highlighting
+    themes (derived custom "base" theme).
+    """
+
+    def _mermaid(self, theme=None, render_mode="server", **kw):
+        opts = mordant.PyDiagramHtmlRendererOptions(render_mode=render_mode, theme=theme)
+        source = "```mermaid\ngraph LR\n    A --- B\n```"
+        return mordant.markdown_to_html(source, diagram_render_opts=opts, **kw)
+
+    def test_mermaid_themed_server(self):
+        """Server mode with a syntect theme renders a themed SVG."""
+        html = self._mermaid(theme="Dracula")
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+        # Dracula-derived colors should appear in the SVG.
+        dracula_colors = ("#282a36", "#44475a", "#ff79c6", "#50fa7b", "#8be9fd")
+        assert any(c in html.lower() for c in dracula_colors)
+
+    def test_mermaid_themed_client(self):
+        """Client mode with a syntect theme injects mermaid.initialize + themeVariables."""
+        html = self._mermaid(theme="Dracula", render_mode="client")
+        assert '<pre class="mermaid">' in html
+        assert "mermaid.initialize" in html
+        assert "themeVariables" in html
+        # The derived themeVariables must carry Dracula colors.
+        assert "#282a36" in html.lower()
+        assert "theme: 'base'" in html
+
+    def test_mermaid_native_theme_server(self):
+        """A built-in mermaid theme is used natively on the server (no derivation)."""
+        html = self._mermaid(theme="dark")
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+
+    def test_mermaid_native_theme_client(self):
+        """A built-in mermaid theme injects `theme: 'dark'` with no themeVariables."""
+        html = self._mermaid(theme="dark", render_mode="client")
+        assert '<pre class="mermaid">' in html
+        assert "mermaid.initialize" in html
+        assert "theme: 'dark'" in html
+        # Native themes do NOT use the custom 'base' + themeVariables path.
+        assert "themeVariables" not in html
+
+    def test_mermaid_no_theme_legacy(self):
+        """Omitting `theme` reproduces legacy behavior (no initialize in server)."""
+        html = mordant.markdown_to_html("```mermaid\ngraph LR\n    A --- B\n```")
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+        assert "mermaid.initialize" not in html
+
+    def test_mermaid_unknown_theme(self):
+        """An unknown theme name falls back gracefully (legacy), no panic."""
+        html = self._mermaid(theme="no-such-theme-xyz")
+        assert '<div class="mermaid">' in html
+        assert "<svg" in html
+
+    def test_single_command_theme_kwarg(self):
+        """The `theme=` kwarg themes both code highlighting and diagrams."""
+        source = "```mermaid\ngraph LR\n    A --- B\n```\n\n```python\nx = 1\n```"
+        html = mordant.markdown_to_html(source, theme="Dracula")
+        # diagram themed
+        assert '<div class="mermaid">' in html
+        # code highlighting also themed (Dracula background on the <pre>)
+        assert "background-color: #282a36" in html
+
+    def test_explicit_override_beats_kwarg(self):
+        """Explicit diagram_render_opts.theme overrides the single `theme=` kwarg."""
+        source = "```mermaid\ngraph LR\n    A --- B\n```\n\n```python\nx = 1\n```"
+        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client", theme="dark")
+        html = mordant.markdown_to_html(source, theme="Dracula", diagram_render_opts=opts)
+        # diagram uses native dark (no themeVariables) ...
+        assert "theme: 'dark'" in html
+        assert "themeVariables" not in html
+        # ... while code highlighting still uses the convenience theme (Dracula).
+        assert "background-color: #282a36" in html

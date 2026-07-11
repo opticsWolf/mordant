@@ -591,6 +591,15 @@ pub fn list_themes() -> Vec<String> {
     ts.themes.keys().cloned().collect()
 }
 
+/// Resolve a registered syntect theme by name (clone from the global set).
+///
+/// Returns `None` if no theme with that name is registered. Used by the
+/// Mermaid theme derivation to look up code-highlighting themes.
+pub fn resolve_theme(name: &str) -> Option<syntect::highlighting::Theme> {
+    let ts = THEME_SET.read().unwrap();
+    ts.themes.get(name).cloned()
+}
+
 /// List all available syntaxes from syntect-assets.
 ///
 /// # Returns

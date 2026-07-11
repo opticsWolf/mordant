@@ -26,6 +26,7 @@ mod node;
 mod options;
 mod vscode_theme;
 mod walker;
+mod mermaid_theme;
 
 use document::Document;
 use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
@@ -252,9 +253,12 @@ fn parse_config_from(
 /// * `emoji_parse_opts` - Optional emoji parser options (blacklist)
 /// * `emoji_render_opts` - Optional emoji renderer options (template)
 /// * `diagram_parse_opts` - Optional diagram parser options
-/// * `diagram_render_opts` - Optional diagram renderer options (mermaid_url)
+/// * `diagram_render_opts` - Optional diagram renderer options (mermaid_url, theme)
 /// * `highlighting_theme` - Optional theme name for code highlighting (default: "InspiredGitHub")
 /// * `highlighting_mode` - Optional highlighting mode ("Attribute" or "Class", default: "Attribute")
+/// * `theme` - Optional single theme name applied to BOTH code highlighting and
+///   Mermaid diagrams. Explicit `highlighting_theme` / `diagram_render_opts.theme`
+///   override this convenience.
 ///
 /// # Returns
 /// HTML string
@@ -265,10 +269,30 @@ fn parse_config_from(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>) -> PyResult<String> {
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None, theme = None))]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>, theme: Option<&str>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
+
+    // Single-command theming: `theme` fans out to both code highlighting and
+    // diagram rendering. Explicit per-param args (highlighting_theme /
+    // diagram_render_opts.theme) take precedence over this convenience.
+    let mut eff_diagram_opts = diagram_render_opts.cloned();
+    if let Some(t) = theme {
+        match eff_diagram_opts {
+            // Explicit diagram theme already set -> it wins; leave it alone.
+            Some(ref mut d) if d.theme.is_none() => d.theme = Some(t.to_string()),
+            // No diagram opts at all -> create one with the convenience theme.
+            None => eff_diagram_opts = Some(PyDiagramHtmlRendererOptions::new("server", None, Some(t.to_string()))),
+            // Explicit diagram theme present -> keep it.
+            Some(_) => {}
+        }
+    }
+    let hl_theme = highlighting_theme.or(theme);
+    let diagram_options = eff_diagram_opts
+        .as_ref()
+        .map(|d| d.to_rushdown())
+        .unwrap_or_default();
 
     let render_cfg = if let Some(opts) = render_opts {
         RenderConfig {
@@ -277,7 +301,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             allows_unsafe: opts.allows_unsafe,
             escaped_space: opts.escaped_space,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
-            diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_options.clone(),
             footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
         }
@@ -288,14 +312,14 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             allows_unsafe: false,
             escaped_space: false,
             emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
-            diagram_options: diagram_render_opts.map(|d| d.to_rushdown()).unwrap_or_default(),
+            diagram_options: diagram_options.clone(),
             footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
         }
     };
 
     // Add highlighting options if provided
-    let final_render_cfg = if let Some(theme) = highlighting_theme {
+    let final_render_cfg = if let Some(theme) = hl_theme {
         let mode = match highlighting_mode {
             Some("Class") => highlighter::HighlightingMode::Class,
             _ => highlighter::HighlightingMode::Attribute,

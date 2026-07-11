@@ -22,7 +22,12 @@ use std::fmt;
 use std::fmt::Write as FmtWrite;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use core::any::TypeId;
+
+use crate::mermaid_theme::{derive_mermaid_theme, MermaidThemeSpec};
+use mermaid_rs_renderer::theme::Theme as MermaidRsTheme;
+use mermaid_rs_renderer::{LayoutConfig, RenderOptions};
 
 // ---------------------------------------------------------------------------
 // AST Node Data
@@ -183,6 +188,9 @@ pub struct MermaidHtmlRenderingOptions {
     pub render_mode: RenderMode,
     /// URL to the Mermaid JavaScript module (only used for Client/Hybrid fallback).
     pub mermaid_url: String,
+    /// Resolved Mermaid theme spec (native mermaid preset or derived syntect theme).
+    /// `None` (default) keeps legacy behavior.
+    pub theme_spec: MermaidThemeSpec,
 }
 
 impl Default for MermaidHtmlRenderingOptions {
@@ -190,28 +198,34 @@ impl Default for MermaidHtmlRenderingOptions {
         Self {
             render_mode: RenderMode::Server,
             mermaid_url: "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string(),
+            theme_spec: MermaidThemeSpec::None,
         }
     }
 }
 
 /// Options for the diagram HTML renderer (Python-exposed).
 #[pyclass(module = "mordant")]
+#[derive(Clone)]
 pub struct PyDiagramHtmlRendererOptions {
     #[pyo3(get, set)]
     render_mode: String,
 
     #[pyo3(get, set)]
     mermaid_url: Option<String>,
+
+    #[pyo3(get, set)]
+    pub theme: Option<String>,
 }
 
 #[pymethods]
 impl PyDiagramHtmlRendererOptions {
     #[new]
-    #[pyo3(signature = (render_mode = "server", mermaid_url = None))]
-    fn new(render_mode: &str, mermaid_url: Option<String>) -> Self {
+    #[pyo3(signature = (render_mode = "server", mermaid_url = None, theme = None))]
+    pub fn new(render_mode: &str, mermaid_url: Option<String>, theme: Option<String>) -> Self {
         PyDiagramHtmlRendererOptions {
             render_mode: render_mode.to_string(),
             mermaid_url,
+            theme,
         }
     }
 }
@@ -223,12 +237,17 @@ impl PyDiagramHtmlRendererOptions {
             "hybrid" => RenderMode::Hybrid,
             _ => RenderMode::Server,
         };
+        let theme_spec = match &self.theme {
+            Some(name) => crate::mermaid_theme::resolve_mermaid_theme(name),
+            None => MermaidThemeSpec::None,
+        };
         DiagramHtmlRendererOptions {
             mermaid: MermaidHtmlRenderingOptions {
                 render_mode: mode,
                 mermaid_url: self.mermaid_url.clone().unwrap_or_else(|| {
                     "https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs".to_string()
                 }),
+                theme_spec,
             },
         }
     }
@@ -320,11 +339,40 @@ impl From<DiagramAstTransformer> for AnyAstTransformer {
 
 const HAS_MERMAID_DIAGRAM: &str = "mordant-diagram-hmd";
 
+/// Precomputed Mermaid theme for rendering (avoids per-node re-derivation).
+struct ResolvedMermaidTheme {
+    rs_theme: MermaidRsTheme,
+    client_vars: HashMap<String, String>,
+    /// `Some(name)` => client uses `theme: name` (native preset, no themeVariables).
+    /// `None` => client uses `theme: 'base'` + derived `themeVariables`.
+    client_native_name: Option<String>,
+}
+
 struct DiagramHtmlRenderer<W: TextWrite> {
     _phantom: core::marker::PhantomData<W>,
     _options: DiagramHtmlRendererOptions,
     writer: html::Writer,
     has_mermaid_diagram: ContextKey<BoolValue>,
+    resolved: Option<ResolvedMermaidTheme>,
+}
+
+fn resolve_for_render(spec: &MermaidThemeSpec) -> Option<ResolvedMermaidTheme> {
+    match spec {
+        MermaidThemeSpec::Native { theme, name } => Some(ResolvedMermaidTheme {
+            rs_theme: theme.clone(),
+            client_vars: HashMap::new(),
+            client_native_name: Some(name.clone()),
+        }),
+        MermaidThemeSpec::Derived(syn) => {
+            let s = derive_mermaid_theme(syn);
+            Some(ResolvedMermaidTheme {
+                rs_theme: s.rs_theme,
+                client_vars: s.client_vars,
+                client_native_name: None,
+            })
+        }
+        MermaidThemeSpec::None => None,
+    }
 }
 
 impl<W: TextWrite> DiagramHtmlRenderer<W> {
@@ -336,11 +384,13 @@ impl<W: TextWrite> DiagramHtmlRenderer<W> {
         let has_mermaid_diagram = reg
             .borrow_mut()
             .get_or_create::<BoolValue>(HAS_MERMAID_DIAGRAM);
+        let resolved = resolve_for_render(&options.mermaid.theme_spec);
         Self {
             _phantom: core::marker::PhantomData,
             _options: options,
             writer: html::Writer::with_options(html_opts),
             has_mermaid_diagram,
+            resolved,
         }
     }
 }
@@ -367,22 +417,38 @@ impl<W: TextWrite> RenderNode<W> for DiagramHtmlRenderer<W> {
             let mode = &self._options.mermaid.render_mode;
 
             match mode {
-                RenderMode::Server => {
-                    // Try server-side SVG rendering
-                    match mermaid_rs_renderer::render(&diagram_value) {
+                RenderMode::Server => match &self.resolved {
+                    Some(r) => match mermaid_rs_renderer::render_with_options(
+                        &diagram_value,
+                        RenderOptions {
+                            theme: r.rs_theme.clone(),
+                            layout: LayoutConfig::default(),
+                        },
+                    ) {
                         Ok(svg) => {
                             self.writer.write_html(w, &format!("<div class=\"mermaid\">{}</div>", svg))?;
                         }
                         Err(_) => {
-                            // Debug fallback: show raw source so user knows what failed
                             self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
                             for line in kd.value().iter(source) {
                                 self.writer.raw_write(w, &line)?;
                             }
                             self.writer.write_safe_str(w, "</pre>\n")?;
                         }
-                    }
-                }
+                    },
+                    None => match mermaid_rs_renderer::render(&diagram_value) {
+                        Ok(svg) => {
+                            self.writer.write_html(w, &format!("<div class=\"mermaid\">{}</div>", svg))?;
+                        }
+                        Err(_) => {
+                            self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
+                            for line in kd.value().iter(source) {
+                                self.writer.raw_write(w, &line)?;
+                            }
+                            self.writer.write_safe_str(w, "</pre>\n")?;
+                        }
+                    },
+                },
 
                 RenderMode::Client => {
                     // Pure client-side: output raw <pre> and flag for script injection
@@ -394,12 +460,22 @@ impl<W: TextWrite> RenderNode<W> for DiagramHtmlRenderer<W> {
                 }
 
                 RenderMode::Hybrid => {
-                    // Try server-side first; fall back to client-side on failure
-                    match mermaid_rs_renderer::render(&diagram_value) {
-                        Ok(svg) => {
+                    let rendered = match &self.resolved {
+                        Some(r) => mermaid_rs_renderer::render_with_options(
+                            &diagram_value,
+                            RenderOptions {
+                                theme: r.rs_theme.clone(),
+                                layout: LayoutConfig::default(),
+                            },
+                        )
+                        .ok(),
+                        None => mermaid_rs_renderer::render(&diagram_value).ok(),
+                    };
+                    match rendered {
+                        Some(svg) => {
                             self.writer.write_html(w, &format!("<div class=\"mermaid\">{}</div>", svg))?;
                         }
-                        Err(_) => {
+                        None => {
                             // Server failed — fall back to client-side
                             ctx.insert(self.has_mermaid_diagram, true);
                             self.writer.write_safe_str(w, "<pre class=\"mermaid\">\n")?;
@@ -427,6 +503,7 @@ struct DiagramPostRenderHook<W: TextWrite> {
     writer: html::Writer,
     options: DiagramHtmlRendererOptions,
     has_mermaid_diagram: ContextKey<BoolValue>,
+    resolved: Option<ResolvedMermaidTheme>,
 }
 
 impl<W: TextWrite> DiagramPostRenderHook<W> {
@@ -438,11 +515,13 @@ impl<W: TextWrite> DiagramPostRenderHook<W> {
         let has_mermaid_diagram = reg
             .borrow_mut()
             .get_or_create::<BoolValue>(HAS_MERMAID_DIAGRAM);
+        let resolved = resolve_for_render(&options.mermaid.theme_spec);
         Self {
             _phantom: core::marker::PhantomData,
             writer: html::Writer::with_options(html_opts),
             options,
             has_mermaid_diagram,
+            resolved,
         }
     }
 }
@@ -466,16 +545,52 @@ impl<W: TextWrite> PostRender<W> for DiagramPostRenderHook<W> {
         // one diagram fell back to <pre> (flagged by has_mermaid_diagram).
         if *ctx.get(self.has_mermaid_diagram).unwrap_or(&false) {
             let url = &self.options.mermaid.mermaid_url;
-            self.writer.write_html(
-                w,
-                &format!(
-                    r#"<script type="module">
+            match &self.resolved {
+                // Native mermaid theme: let mermaid.js apply it directly.
+                Some(r) if r.client_native_name.is_some() => {
+                    let name = r.client_native_name.as_ref().unwrap();
+                    self.writer.write_html(
+                        w,
+                        &format!(
+                            r#"<script type="module">
+import mermaid from '{}';
+mermaid.initialize({{ startOnLoad: true, theme: '{}' }});
+</script>
+"#,
+                            url, name
+                        ),
+                    )?;
+                }
+                // Derived syntect theme: custom "base" theme + themeVariables.
+                Some(r) => {
+                    let vars = serde_json::to_string(&r.client_vars)
+                        .unwrap_or_else(|_| " {}".to_string());
+                    self.writer.write_html(
+                        w,
+                        &format!(
+                            r#"<script type="module">
+import mermaid from '{}';
+mermaid.initialize({{ startOnLoad: true, theme: 'base', themeVariables: {} }});
+</script>
+"#,
+                            url, vars
+                        ),
+                    )?;
+                }
+                // Legacy: bare import, no initialize.
+                None => {
+                    self.writer.write_html(
+                        w,
+                        &format!(
+                            r#"<script type="module">
 import mermaid from '{}';
 </script>
 "#,
-                    url
-                ),
-            )?;
+                            url
+                        ),
+                    )?;
+                }
+            }
         }
         Ok(())
     }

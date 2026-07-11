@@ -2,7 +2,7 @@ import sys
 import os
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QComboBox, QLabel, QStyleFactory, QFileDialog, QPushButton
+    QComboBox, QCheckBox, QLabel, QStyleFactory, QFileDialog, QPushButton
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtCore import Qt, QUrl
@@ -151,6 +151,23 @@ class MarkdownViewer(QMainWindow):
         self.mode_combo.currentTextChanged.connect(self.apply_theme_mode)
         toolbar_layout.addWidget(self.mode_combo)
 
+        toolbar_layout.addSpacing(16)
+
+        # Sync mermaid with code highlighting
+        self.sync_check = QCheckBox("Sync mermaid")
+        self.sync_check.setChecked(True)
+        self.sync_check.stateChanged.connect(self.on_sync_changed)
+        toolbar_layout.addWidget(self.sync_check)
+
+        # Mermaid native theme dropdown
+        toolbar_layout.addWidget(QLabel("Mermaid:"))
+        self.mermaid_combo = QComboBox()
+        self.mermaid_combo.addItems(["", "modern", "dark", "forest", "neutral"])
+        self.mermaid_combo.setCurrentIndex(0)  # "" = no override
+        self.mermaid_combo.currentTextChanged.connect(self.update_view)
+        self.mermaid_combo.setEnabled(False)  # disabled when sync is checked (default)
+        toolbar_layout.addWidget(self.mermaid_combo)
+
         toolbar_layout.addStretch()
 
         # ── Web view (also handles drag & drop) ──────────────────────
@@ -256,6 +273,11 @@ class MarkdownViewer(QMainWindow):
         if self.mode_combo.currentText() == "Auto":
             self.apply_theme_mode()
 
+    def on_sync_changed(self, state):
+        """Enable/disable the mermaid theme dropdown when sync toggle changes."""
+        self.mermaid_combo.setEnabled(state != Qt.Checked)
+        self.update_view()
+
     # ------------------------------------------------------------------
     # Rendering
     # ------------------------------------------------------------------
@@ -285,11 +307,24 @@ class MarkdownViewer(QMainWindow):
         else:
             try:
                 gfm = mordant.GfmOptions()
+
+                # Determine the mermaid diagram theme
+                if self.sync_check.isChecked():
+                    # Sync with code highlighting: use the same them name
+                    diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=selected_highlight)
+                else:
+                    mermaid_theme = self.mermaid_combo.currentText()
+                    if mermaid_theme:
+                        diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=mermaid_theme)
+                    else:
+                        diag_opts = None  # legacy behavior (no explicit theme)
+
                 html_body = mordant.markdown_to_html(
                     self.current_markdown_text,
                     gfm_opts=gfm,
                     highlighting_theme=selected_highlight,
-                    highlighting_mode="Attribute"
+                    highlighting_mode="Attribute",
+                    diagram_render_opts=diag_opts,
                 )
             except Exception as err:
                 html_body = f"<p style='color:red;'>Failed to parse: {err}</p>"

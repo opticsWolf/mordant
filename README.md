@@ -14,6 +14,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 
 - **Server-side Mermaid rendering** — Mermaid diagrams now render as inline SVG via the `mermaid-rs-renderer` crate (~3ms server-side vs ~2s client-side). No browser/CDN dependency. Three render modes: `server` (default, inline SVG), `client` (legacy, Mermaid.js ESM), `hybrid` (try server, fallback to client)
 - **Render mode API** — `PyDiagramHtmlRendererOptions(render_mode="server"|"client"|"hybrid", mermaid_url=...)`
+- **Customizable Mermaid themes** — Mermaid color schemes derived from code-highlighting (syntect) themes. `PyDiagramHtmlRendererOptions(theme="Dracula")` themes server-side SVG (via `mermaid-rs-renderer`) and client-side rendering (via `mermaid.initialize` + `themeVariables`). A single `theme=` kwarg on `markdown_to_html` themes both code and diagrams; native mermaid themes (`modern`/`dark`/`forest`/`neutral`) are also supported.
 
 ## What's New in 0.8.7
 
@@ -41,7 +42,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Multi-threaded.** Parse and render release the GIL — scale ~4.0x linearly with thread count.
 - **Emoji support.** :joy: `:heart:` `:smile:` — shortcode-style emoji rendering with blacklist and custom templates.
 - **Math support.** LaTeX math via KaTeX — fenced ```math/```latex blocks, inline `$...$`/`$$...$$` math, standalone `render_math()` function.
-- **Mermaid diagrams.** `graph LR`, `sequenceDiagram` — render Mermaid diagrams from code blocks with client-side JS loading.
+- **Mermaid diagrams.** `graph LR`, `sequenceDiagram` — render Mermaid diagrams from code blocks, server-side as inline SVG by default. Customizable color schemes derived from code-highlighting themes (a single `theme=` kwarg themes both code and diagrams).
 - **Footnotes.** PHP Markdown Extra style footnotes (`[^1]`, `[^hello]`) with `<sup>` references, `<div class="footnotes">` endnotes, and backlinks.
 - **Document chunking.** `MarkdownChunker` — lazy, low-copy AST-based chunk iterator with heading-context propagation, `from_file()` and `from_file_mmap()` constructors.
 - **Extensible.** Custom node types, parsers, transformers, and renderers via Rust extensions.
@@ -129,6 +130,21 @@ html = mordant.markdown_to_html("""```mermaid
 graph TD
     A --> B
 ```""", diagram_render_opts=opts)
+
+# Themed Mermaid diagram — color scheme derived from a code-highlighting theme
+opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server", theme="Dracula")
+html = mordant.markdown_to_html("""```mermaid
+graph TD
+    A --> B
+```""", diagram_render_opts=opts)
+# Server-rendered SVG uses Dracula's palette (background #282a36, pink edges, ...)
+
+# Single `theme=` kwarg themes BOTH code blocks and Mermaid diagrams
+html = mordant.markdown_to_html(
+    "# Title\n```mermaid\ngraph LR\n A---B\n```\n```python\nx=1\n```",
+    theme="Dracula",
+)
+# Code block and diagram share Dracula's colors
 
 # YAML frontmatter
 md = """---
@@ -441,6 +457,7 @@ Mordant currently implements Mermaid support only. Key features:
 - **Code block detection:** ```` ```mermaid ```` code blocks are automatically detected and converted to diagram nodes via an AST transformer
 - **Client-side rendering:** Diagrams render as `<pre class="mermaid">` with automatic Mermaid.js ESM script injection (single script tag for all diagrams)
 - **Custom Mermaid URL:** `PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")` — use a custom Mermaid.js CDN or local file
+- **Customizable themes:** `PyDiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme — server-side SVG via `render_with_options`, client-side via `mermaid.initialize` + `themeVariables`. Built-in mermaid themes (`modern`/`dark`/`forest`/`neutral`) are used natively. A single `theme=` kwarg on `markdown_to_html` themes both code and diagrams; explicit per-param args override it.
 - **Parser options:** `PyDiagramParserOptions(mermaid_enabled=False)` — disable diagram transformation to keep code blocks as regular fenced code blocks
 - **AST node access:** Diagram nodes expose `diagram_type` ("mermaid") and `diagram_value` (source content) properties via the `Diagram` node kind
 - **Multiple diagrams:** Multiple Mermaid blocks in one document all render correctly with a single script tag

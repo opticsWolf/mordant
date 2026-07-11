@@ -30,7 +30,7 @@ assert "Rust" in syntaxes
 
 ---
 
-### `markdown_to_html(source, gfm_opts=None, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, highlighting_theme=None, highlighting_mode=None) -> str`
+### `markdown_to_html(source, gfm_opts=None, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, footnote_render_opts=None, highlighting_theme=None, highlighting_mode=None, theme=None) -> str`
 
 One-call parse + render. GIL is released during the CPU-heavy parse + render phase.
 
@@ -38,6 +38,7 @@ One-call parse + render. GIL is released during the CPU-heavy parse + render pha
 |----------|------|---------|-------------|
 | `highlighting_theme` | `str \| None` | `"InspiredGitHub"` | Theme name for code highlighting |
 | `highlighting_mode` | `str \| None` | `"Attribute"` | `"Attribute"` (inline `style`) or `"Class"` (CSS `class`) |
+| `theme` | `str \| None` | `None` | Single theme name applied to BOTH code highlighting and Mermaid diagrams. Overridden by explicit `highlighting_theme` / `diagram_render_opts.theme` |
 
 ```python
 import mordant
@@ -69,6 +70,22 @@ html = mordant.markdown_to_html("""```python
 x = 1
 ```""", highlighting_theme="GitHub", highlighting_mode="Class")
 # Code block rendered with CSS class attributes
+
+# Themed Mermaid diagram (color scheme derived from a code-highlighting theme)
+html = mordant.markdown_to_html(
+    """```mermaid
+graph TD
+    A --> B
+```""",
+    diagram_render_opts=mordant.PyDiagramHtmlRendererOptions(render_mode="server", theme="Dracula"),
+)
+# Server SVG uses Dracula's palette; client mode injects mermaid.initialize + themeVariables
+
+# Single `theme=` kwarg themes BOTH code and diagrams
+html = mordant.markdown_to_html(
+    "# Title\n```mermaid\ngraph LR\n A---B\n```\n```python\nx=1\n```",
+    theme="Dracula",
+)
 ```
 
 ### `parse(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None) -> Document`
