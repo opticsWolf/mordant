@@ -68,6 +68,7 @@ def get_dark_palette():
     palette = QPalette()
     dark_gray = QColor(53, 53, 53)
     darker_gray = QColor(35, 35, 35)
+    disabled_gray = QColor(127, 127, 127)
 
     palette.setColor(QPalette.ColorRole.Window, dark_gray)
     palette.setColor(QPalette.ColorRole.WindowText, Qt.GlobalColor.white)
@@ -82,6 +83,12 @@ def get_dark_palette():
     palette.setColor(QPalette.ColorRole.Link, QColor(42, 130, 218))
     palette.setColor(QPalette.ColorRole.Highlight, QColor(42, 130, 218))
     palette.setColor(QPalette.ColorRole.HighlightedText, Qt.GlobalColor.white)
+
+    # Disabled state — gray out text and button text so disabled widgets are visible
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.Text, disabled_gray)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.WindowText, disabled_gray)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.ButtonText, disabled_gray)
+    palette.setColor(QPalette.ColorGroup.Disabled, QPalette.ColorRole.BrightText, disabled_gray)
     return palette
 
 
@@ -156,16 +163,16 @@ class MarkdownViewer(QMainWindow):
         # Sync mermaid with code highlighting
         self.sync_check = QCheckBox("Sync mermaid")
         self.sync_check.setChecked(True)
-        self.sync_check.stateChanged.connect(self.on_sync_changed)
         toolbar_layout.addWidget(self.sync_check)
 
         # Mermaid native theme dropdown
-        toolbar_layout.addWidget(QLabel("Mermaid:"))
+        self.mermaid_label = QLabel("Mermaid:")
+        toolbar_layout.addWidget(self.mermaid_label)
         self.mermaid_combo = QComboBox()
         self.mermaid_combo.addItems(["Default", "modern", "dark", "forest", "neutral"])
         self.mermaid_combo.setCurrentIndex(0)  # "Default" = no override
         self.mermaid_combo.currentTextChanged.connect(self.update_view)
-        self.mermaid_combo.setEnabled(False)  # disabled when sync is checked (default)
+        self.sync_check.toggled.connect(self.on_sync_changed)
         toolbar_layout.addWidget(self.mermaid_combo)
 
         toolbar_layout.addSpacing(16)
@@ -194,6 +201,9 @@ class MarkdownViewer(QMainWindow):
         main_layout.addWidget(self.webview, 1)
 
         self.setCentralWidget(central)
+
+        # Force initial disabled state for mermaid group (sync is checked by default)
+        self.on_sync_changed(self.sync_check.isChecked())
 
         QApplication.styleHints().colorSchemeChanged.connect(self.on_system_theme_changed)
 
@@ -283,9 +293,10 @@ class MarkdownViewer(QMainWindow):
         if self.mode_combo.currentText() == "Auto":
             self.apply_theme_mode()
 
-    def on_sync_changed(self, state):
+    def on_sync_changed(self, checked: bool):
         """Enable/disable the mermaid theme dropdown when sync toggle changes."""
-        self.mermaid_combo.setEnabled(state != Qt.Checked)
+        self.mermaid_label.setEnabled(not checked)
+        self.mermaid_combo.setEnabled(not checked)
         self.update_view()
 
     # ------------------------------------------------------------------
