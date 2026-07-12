@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.8  
+> **Version:** 0.8.9  
 > **Import:** `import mordant`
 
 ---
@@ -897,6 +897,28 @@ result = mordant.render_math(r"\\nonexistentcommand{}")
 | `display` | `bool` | `False` | `True` for display mode (`$$...$$`), `False` for inline (`$...$`) |
 | `output` | `str` | `"both"` | Output format: `"both"` (HTML+MathML), `"html"`, or `"mathml"` |
 
+### `markdown_to_html()` — `math_renderer_opts` parameter
+
+Control the math output format for ALL math in a document (fenced ` ```math `, inline `$...$`, block `$$...$$`).
+
+```python
+import mordant
+
+# Default: "both" (HTML + MathML)
+html = mordant.markdown_to_html("$$E = mc^2$$")
+
+# MathML only — native browser rendering, no CSS needed
+html = mordant.markdown_to_html(
+    "$$E = mc^2$$",
+    math_renderer_opts=mordant.PyMathRendererOptions(output="mathml"),
+)
+
+# KaTeX HTML only — requires KATEX_CSS
+html = mordant.markdown_to_html(
+    "$$E = mc^2$$",
+    math_renderer_opts=mordant.PyMathRendererOptions(output="html"),
+)
+
 **Output formats:**
 
 | Format | Description | Requires |
@@ -904,6 +926,33 @@ result = mordant.render_math(r"\\nonexistentcommand{}")
 | `"both"` (default) | Styled HTML + MathML | KaTeX CSS + web fonts |
 | `"html"` | Styled HTML only | KaTeX CSS + web fonts |
 | `"mathml"` | Semantic MathML only | MathML-capable browser |
+
+### `KATEX_CSS` constant
+
+Embedded KaTeX 0.16.21 minified CSS (~23KB). Inject into your page's `<head>` for correct rendering of `"both"` / `"html"` output.
+
+```python
+import mordant
+
+# Access the CSS
+css = mordant.KATEX_CSS  # ~23KB minified string
+
+# Typical usage — wrap KaTeX HTML output in a page with the stylesheet:
+full_html = f"""
+<!DOCTYPE html>
+<html><head>
+<style>{mordant.KATEX_CSS}</style>
+</head>
+<body>
+{mordant.markdown_to_html("```math\nE = mc^2\n```")}
+</body></html>
+"""
+```
+
+> **Note:** The CSS includes `@font-face` rules that reference KaTeX web fonts
+> (`fonts/KaTeX_Main-Regular.woff2`, etc.). For full offline rendering you must
+> serve those font files or use a CDN link. For `"mathml"` output no CSS or fonts
+> are needed — Chromium ≥ 109 renders MathML natively.
 
 ### Inline `$...$` and block `$$...$$` math
 

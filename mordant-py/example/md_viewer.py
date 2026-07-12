@@ -162,11 +162,21 @@ class MarkdownViewer(QMainWindow):
         # Mermaid native theme dropdown
         toolbar_layout.addWidget(QLabel("Mermaid:"))
         self.mermaid_combo = QComboBox()
-        self.mermaid_combo.addItems(["", "modern", "dark", "forest", "neutral"])
-        self.mermaid_combo.setCurrentIndex(0)  # "" = no override
+        self.mermaid_combo.addItems(["Default", "modern", "dark", "forest", "neutral"])
+        self.mermaid_combo.setCurrentIndex(0)  # "Default" = no override
         self.mermaid_combo.currentTextChanged.connect(self.update_view)
         self.mermaid_combo.setEnabled(False)  # disabled when sync is checked (default)
         toolbar_layout.addWidget(self.mermaid_combo)
+
+        toolbar_layout.addSpacing(16)
+
+        # Math output format
+        toolbar_layout.addWidget(QLabel("Math:"))
+        self.math_combo = QComboBox()
+        self.math_combo.addItems(["both", "html", "mathml"])
+        self.math_combo.setCurrentText("both")
+        self.math_combo.currentTextChanged.connect(self.update_view)
+        toolbar_layout.addWidget(self.math_combo)
 
         toolbar_layout.addStretch()
 
@@ -314,10 +324,12 @@ class MarkdownViewer(QMainWindow):
                     diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=selected_highlight)
                 else:
                     mermaid_theme = self.mermaid_combo.currentText()
-                    if mermaid_theme:
-                        diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=mermaid_theme)
-                    else:
-                        diag_opts = None  # legacy behavior (no explicit theme)
+                    # "Default" maps to mermaid's built-in "default" theme
+                    theme_name = "default" if mermaid_theme == "Default" else mermaid_theme
+                    diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=theme_name)
+
+                math_output = self.math_combo.currentText()
+                math_opts = mordant.PyMathRendererOptions(output=math_output)
 
                 html_body = mordant.markdown_to_html(
                     self.current_markdown_text,
@@ -325,6 +337,7 @@ class MarkdownViewer(QMainWindow):
                     highlighting_theme=selected_highlight,
                     highlighting_mode="Attribute",
                     diagram_render_opts=diag_opts,
+                    math_renderer_opts=math_opts,
                 )
             except Exception as err:
                 html_body = f"<p style='color:red;'>Failed to parse: {err}</p>"
@@ -334,6 +347,7 @@ class MarkdownViewer(QMainWindow):
         <html>
         <head>
         <meta charset="utf-8">
+        <style>{mordant.KATEX_CSS}</style>
         <style>
             :root {{
                 color-scheme: {scheme};

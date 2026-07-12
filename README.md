@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.8.8  
+> **Version:** 0.8.9  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -10,7 +10,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
-## What's New in 0.8.8
+## What's New in 0.8.9
 
 - **Server-side Mermaid rendering** — Mermaid diagrams now render as inline SVG via the `mermaid-rs-renderer` crate (~3ms server-side vs ~2s client-side). No browser/CDN dependency. Three render modes: `server` (default, inline SVG), `client` (legacy, Mermaid.js ESM), `hybrid` (try server, fallback to client)
 - **Render mode API** — `PyDiagramHtmlRendererOptions(render_mode="server"|"client"|"hybrid", mermaid_url=...)`
@@ -31,7 +31,7 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Document chunking** — `MarkdownChunker` lazy AST-based chunk iterator yielding **bare chunks** (no heading prefix), with `get_chunks()`, `get_all_chunks()`, `get_chunks_with_context()`, `get_bare_chunks()`, `ExtractedChunk` (with `block_type`/`start_offset`/`end_offset`), `get_delimiter()`, `compute_overlap_payloads()`
 - **Inline suppression** — `<!-- markdownlint-disable MD001 -->` comments supported
 - **VSCode JSON theme support** — Custom themes from `.json` files via `add_custom_theme()` and user directory `~/.mordant/themes/`
-- **1198 tests** passing (up from 1161)
+- **1297 tests** passing (up from 1161)
 
 ## Features
 
@@ -541,7 +541,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-1198 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, OKF chunker methods, Mixed Features) + 51 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+1233 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, OKF chunker methods, Extracted Chunk, Mixed Features) + 64 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## Theme Loading
 

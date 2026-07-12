@@ -345,3 +345,196 @@ let x = 1;
         opts = ParseOptions(attributes=True)
         html = mordant.markdown_to_html(md, parse_opts=opts)
         assert 'katex' in html.lower()
+
+
+# =============================================================================
+# Bug A: fenced ```math / ```latex must render as KaTeX even WITH a theme
+# =============================================================================
+
+class TestMathFenceWithHighlighting:
+    """Regression for Bug A.
+
+    md_viewer always passes a highlighting_theme. Previously the code highlighter
+    (last-registered CodeBlock renderer) shadowed the math-fence renderer, so
+    ```math / ```latex blocks were emitted as highlighted code instead of KaTeX.
+    """
+
+    def test_math_fence_with_highlighting(self):
+        html = mordant.markdown_to_html(
+            "```math\nE = mc^2\n```",
+            highlighting_theme="InspiredGitHub",
+        )
+        assert "katex" in html.lower()
+        assert "katex-display" in html
+        assert "language-math" not in html  # not rendered as a code block
+
+    def test_latex_fence_with_highlighting(self):
+        html = mordant.markdown_to_html(
+            "```latex\nE = mc^2\n```",
+            highlighting_theme="InspiredGitHub",
+        )
+        assert "katex" in html.lower()
+        assert "language-latex" not in html
+
+    def test_other_code_blocks_still_highlighted(self):
+        html = mordant.markdown_to_html(
+            "```python\nx = 1\n```",
+            highlighting_theme="InspiredGitHub",
+        )
+        assert "language-python" in html  # still highlighted
+        assert "katex" not in html        # not mistaken for math
+
+
+# =============================================================================
+# Bug B: multi-line $$...$$ display math
+# =============================================================================
+
+class TestMultiLineDisplayMath:
+    """Regression for Bug B: `$$` on its own line, content on following lines."""
+
+    def test_multiline_display_math(self):
+        html = mordant.markdown_to_html("$$\nE = mc^2\n$$")
+        assert "katex" in html.lower()
+        assert "katex-display" in html
+        assert "E = mc" in html  # content preserved
+
+    def test_multiline_display_math_with_highlighting(self):
+        html = mordant.markdown_to_html(
+            "$$\nE = mc^2\n$$",
+            highlighting_theme="InspiredGitHub",
+        )
+        assert "katex" in html.lower()
+        assert "E = mc" in html
+
+    def test_inline_math_regression(self):
+        html = mordant.markdown_to_html("Inline $x^2$ here.")
+        assert "katex" in html.lower()
+        assert "katex-display" not in html
+
+    def test_single_line_display_math_regression(self):
+        html = mordant.markdown_to_html("$$x^2$$")
+        assert "katex" in html.lower()
+        assert "katex-display" in html
+
+    def test_unbalanced_display_math_stays_literal(self):
+        html = mordant.markdown_to_html("$$\nthis has no closer")
+        assert "katex" not in html.lower()
+        assert "$$" in html
+        assert "this has no closer" in html
+
+
+# =============================================================================
+# KATEX_CSS constant
+# =============================================================================
+
+class TestKatexCss:
+    """Test the embedded KaTeX CSS constant."""
+
+    def test_katex_css_exists(self):
+        """mordant.KATEX_CSS is accessible and non-empty."""
+        assert hasattr(mordant, "KATEX_CSS")
+        assert isinstance(mordant.KATEX_CSS, str)
+        assert len(mordant.KATEX_CSS) > 10000  # ~23KB minified
+
+    def test_katex_css_contains_font_face(self):
+        """CSS contains @font-face declarations."""
+        assert "@font-face" in mordant.KATEX_CSS
+        assert "KaTeX_Main" in mordant.KATEX_CSS
+
+    def test_katex_css_contains_class_rules(self):
+        """CSS contains .katex and .katex-display rules."""
+        assert ".katex" in mordant.KATEX_CSS
+        assert ".katex-display" in mordant.KATEX_CSS
+
+    def test_katex_css_version(self):
+        """CSS declares version 0.16.21."""
+        assert "0.16.21" in mordant.KATEX_CSS
+
+
+# =============================================================================
+# MathRendererOptions
+# =============================================================================
+
+class TestMathRendererOptions:
+    """Test the PyMathRendererOptions class and math_renderer_opts parameter."""
+
+    def test_pymathrendereroptions_default(self):
+        """PyMathRendererOptions() defaults to 'both'."""
+        opts = mordant.PyMathRendererOptions()
+        assert opts.output == "both"
+
+    def test_pymathrendereroptions_html(self):
+        """PyMathRendererOptions(output='html')."""
+        opts = mordant.PyMathRendererOptions(output="html")
+        assert opts.output == "html"
+
+    def test_pymathrendereroptions_mathml(self):
+        """PyMathRendererOptions(output='mathml')."""
+        opts = mordant.PyMathRendererOptions(output="mathml")
+        assert opts.output == "mathml"
+
+    def test_math_renderer_opts_mathml(self):
+        """markdown_to_html with math_renderer_opts=output='mathml' produces MathML (no katex-mathml wrapper)."""
+        opts = mordant.PyMathRendererOptions(output="mathml")
+        html = mordant.markdown_to_html(
+            "```math\nE = mc^2\n```",
+            highlighting_theme="InspiredGitHub",
+            math_renderer_opts=opts,
+        )
+        assert "<math" in html
+        # "mathml" output: MathML directly inside katex spans (no katex-mathml wrapper)
+        assert "katex-mathml" not in html
+
+    def test_math_renderer_opts_html_only(self):
+        """markdown_to_html with math_renderer_opts=output='html' produces only KaTeX HTML."""
+        opts = mordant.PyMathRendererOptions(output="html")
+        html = mordant.markdown_to_html(
+            "```math\nE = mc^2\n```",
+            highlighting_theme="InspiredGitHub",
+            math_renderer_opts=opts,
+        )
+        assert "katex" in html
+        assert "<math" not in html
+
+    def test_math_renderer_opts_both(self):
+        """markdown_to_html with math_renderer_opts=output='both' produces both (katex-mathml wrapper)."""
+        opts = mordant.PyMathRendererOptions(output="both")
+        html = mordant.markdown_to_html(
+            "```math\nE = mc^2\n```",
+            highlighting_theme="InspiredGitHub",
+            math_renderer_opts=opts,
+        )
+        assert "katex" in html
+        assert "<math" in html
+        # "both" output: MathML inside katex-mathml wrapper span
+        assert "katex-mathml" in html
+
+    def test_math_renderer_opts_inline_math(self):
+        """math_renderer_opts also affects inline $...$ and block $$...$$."""
+        opts = mordant.PyMathRendererOptions(output="mathml")
+        html = mordant.markdown_to_html(
+            "Inline $x^2$ and block $$y^2$$.",
+            math_renderer_opts=opts,
+        )
+        assert "<math" in html
+        assert "katex-mathml" not in html
+
+    def test_math_renderer_opts_multiline_display(self):
+        """math_renderer_opts works with multi-line $$...$."""
+        opts = mordant.PyMathRendererOptions(output="mathml")
+        html = mordant.markdown_to_html(
+            "$$\na + b = c\n$$",
+            math_renderer_opts=opts,
+        )
+        assert "<math" in html
+        assert "katex-mathml" not in html
+
+    def test_math_renderer_opts_without_highlighting(self):
+        """math_renderer_opts works without a highlighting theme (math fence path)."""
+        opts = mordant.PyMathRendererOptions(output="mathml")
+        html = mordant.markdown_to_html(
+            "```math\n" + "\\int_0^1 x dx" + "\n```",
+            math_renderer_opts=opts,
+        )
+        assert "<math" in html
+        assert "katex-mathml" not in html

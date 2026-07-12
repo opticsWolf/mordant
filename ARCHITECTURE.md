@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.8.8  
+> **Version:** 0.8.9  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1212 Python (652 commonmark spec + 133 lint + 61 AST + 55 mixed features + 41 frontmatter + 39 math + 37 chunker + 29 emoji + 25 footnote + 19 options + 19 highlighting + 21 diagram + 14 core + 11 VSCode theme + 9 GFM + 37 OKF chunker methods) + 54 Rust (28 linter + 14 meta + 9 emoji + 3 mermaid_theme)
+> **Tests:** 1233 Python (652 commonmark spec + 133 lint + 61 AST + 60 math + 55 mixed features + 41 frontmatter + 37 chunker + 29 emoji + 29 diagram + 25 footnote + 19 options + 19 highlighting + 19 OKF chunker methods + 18 extracted chunk + 14 core + 13 VSCode theme + 9 GFM) + 64 Rust (28 linter + 14 meta + 9 emoji + 3 mermaid_theme + 10 math)
 
 ---
 
@@ -1630,6 +1630,35 @@ let math_inline_ext = math_inline_html_renderer_extension(math::MathInlineRender
 - **Standalone `render_math()`:** inline/display mode, output formats (both/html/mathml), case-insensitive output, invalid output raises ValueError, caching, different display/output produce different output
 - **Level 2 (inline math):** `$...$` inline, `$$...$$` block, multiple expressions, mixed with emphasis, inside lists
 - **Integration:** math with code highlighting, math with emoji, GFM mode with math, math doesn't break regular code blocks, parse options with math
+
+### 7.12.8. Embedded KaTeX CSS
+
+The library embeds KaTeX 0.16.21 minified CSS (~23KB) as a Rust constant
+(`math::KATEX_CSS`) and exposes it to Python as `mordant.KATEX_CSS`.
+
+- **Purpose:** Consumers rendering `"both"` or `"html"` output must load KaTeX CSS
+  for correct positioning of the nested `<span>` elements. Without CSS the spans
+  render as a vertical stack of characters.
+- **Access:** `mordant.KATEX_CSS` returns the full minified CSS string.
+- **Usage:** Inject into the page's `<head>` as a `<style>` block. The CSS includes
+  `@font-face` rules referencing KaTeX web fonts (`fonts/KaTeX_Main-Regular.woff2`,
+  etc.) — for full offline rendering serve those fonts or use a CDN.
+- **MathML fallback:** `"mathml"` output renders correctly in Chromium ≥ 109
+  (QtWebEngine) with **no CSS or fonts needed**.
+
+### 7.12.9. Math Renderer Options
+
+The `math_renderer_opts` parameter on `markdown_to_html()` controls the output
+format for ALL math in the document (fenced ` ```math `, inline `$...$`, block `$$...$$`).
+
+- **Python class:** `mordant.PyMathRendererOptions(output="both")`
+- **Output formats:** `"both"` (default, HTML+MathML), `"html"` (KaTeX only), `"mathml"` (MathML only)
+- **Implementation:** The output format is threaded through both the fence renderer
+  (`MathRendererOptions`) and the inline renderer (`MathInlineRendererOptions`) via
+  `RenderConfig`. The highlighter's math branch (Bug A fix) also reads the same
+  output format from `HighlightingRendererOptions.math_options`.
+- **md_viewer.py:** A "Math:" combo box in the toolbar lets users switch between
+  `"both"`, `"html"`, and `"mathml"` at runtime.
 
 ---
 

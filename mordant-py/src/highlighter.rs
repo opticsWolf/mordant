@@ -21,6 +21,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::util::LinesWithEndings;
 use syntect_assets::assets::HighlightingAssets;
 
+use crate::math::{render_math_cached, MathRendererOptions};
 use crate::vscode_theme::{parse_vscode_theme_jsonc, is_vscode_json_theme, is_plist_xml_theme};
 
 // ---------------------------------------------------------------------------
@@ -80,6 +81,7 @@ pub enum HighlightingMode {
 pub struct HighlightingRendererOptions {
     pub theme: String,
     pub mode: HighlightingMode,
+    pub math_options: Option<MathRendererOptions>,
 }
 
 impl Default for HighlightingRendererOptions {
@@ -87,6 +89,7 @@ impl Default for HighlightingRendererOptions {
         Self {
             theme: "InspiredGitHub".to_string(),
             mode: HighlightingMode::Attribute,
+            math_options: None,
         }
     }
 }
@@ -660,6 +663,22 @@ impl<W: TextWrite> RenderNode<W> for HighlightingHtmlRenderer<W> {
                 code.push_str(&line);
             }
             let lang = kd.language_str(source).unwrap_or("");
+
+            // Math fences (```math / ```latex) render as KaTeX, not as highlighted
+            // code. The math-fence renderer in math.rs is shadowed by this
+            // highlighter whenever a theme is set (the renderer registry keeps a
+            // single CodeBlock renderer, last-registered wins), so we intercept
+            // the math languages here to keep fenced math working under themes.
+            if lang == "math" || lang == "latex" {
+                let latex = code.trim_end_matches('\n');
+                let output = self.options.math_options
+                    .as_ref()
+                    .map(|o| o.output)
+                    .unwrap_or_else(|| MathRendererOptions::default().output);
+                let markup = render_math_cached(latex, true, output);
+                w.write_str(&markup)?;
+                return Ok(WalkStatus::Continue);
+            }
 
             // Apply highlighting
             let html_output = highlight_code(

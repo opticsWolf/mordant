@@ -34,7 +34,7 @@ use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRend
 use footnote::{footnote_html_renderer_extension, footnote_parser_extension, FootnoteHtmlRendererOptions, PyFootnoteHtmlRendererOptions};
 use highlighter::{add_custom_theme, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
 use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
-use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions};
+use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions, MathInlineRendererOptions, MathRendererOptions, PyMathRendererOptions, KATEX_CSS};
 use node::Node;
 use options::{ArenaOptions, GfmFeature, GfmOptions, ParseOptions, RenderOptions};
 use walker::Walker;
@@ -78,6 +78,8 @@ struct RenderConfig {
     diagram_options: DiagramHtmlRendererOptions,
     footnote_options: FootnoteHtmlRendererOptions,
     highlighting_options: Option<HighlightingRendererOptions>,
+    math_options: MathRendererOptions,
+    math_inline_options: MathInlineRendererOptions,
 }
 
 impl Default for RenderConfig {
@@ -91,6 +93,8 @@ impl Default for RenderConfig {
             diagram_options: DiagramHtmlRendererOptions::default(),
             footnote_options: FootnoteHtmlRendererOptions::default(),
             highlighting_options: None,
+            math_options: MathRendererOptions::default(),
+            math_inline_options: MathInlineRendererOptions::default(),
         }
     }
 }
@@ -157,8 +161,8 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
 
     let emoji_ext = emoji::emoji_html_renderer_extension(render_cfg.emoji_options.clone());
     let diagram_ext = diagram::diagram_html_renderer_extension(render_cfg.diagram_options.clone());
-    let math_fence_ext = math::math_html_renderer_extension(math::MathRendererOptions::default());
-    let math_inline_ext = math::math_inline_html_renderer_extension(math::MathInlineRendererOptions::default());
+    let math_fence_ext = math::math_html_renderer_extension(render_cfg.math_options.clone());
+    let math_inline_ext = math::math_inline_html_renderer_extension(render_cfg.math_inline_options.clone());
     
     let footnote_ext = footnote_html_renderer_extension(render_cfg.footnote_options.clone());
     let base_ext = emoji_ext.and(diagram_ext).and(math_fence_ext).and(math_inline_ext).and(footnote_ext);
@@ -259,6 +263,7 @@ fn parse_config_from(
 /// * `theme` - Optional single theme name applied to BOTH code highlighting and
 ///   Mermaid diagrams. Explicit `highlighting_theme` / `diagram_render_opts.theme`
 ///   override this convenience.
+/// * `math_renderer_opts` - Optional math renderer options (output format).
 ///
 /// # Returns
 /// HTML string
@@ -269,8 +274,8 @@ fn parse_config_from(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None, theme = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>, theme: Option<&str>) -> PyResult<String> {
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None, theme = None, math_renderer_opts = None))]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>, theme: Option<&str>, math_renderer_opts: Option<&PyMathRendererOptions>) -> PyResult<String> {
     // Extract plain-Rust configs (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
 
@@ -293,6 +298,13 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
         .as_ref()
         .map(|d| d.to_rushdown())
         .unwrap_or_default();
+    let math_options = math_renderer_opts
+        .map(|m| m.to_rushdown())
+        .unwrap_or_default();
+    // Inline math uses the same output format as fenced math.
+    let math_inline_options = MathInlineRendererOptions {
+        output: math_options.output,
+    };
 
     let render_cfg = if let Some(opts) = render_opts {
         RenderConfig {
@@ -304,6 +316,8 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             diagram_options: diagram_options.clone(),
             footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
+            math_options: math_options.clone(),
+            math_inline_options: math_inline_options.clone(),
         }
     } else {
         RenderConfig {
@@ -315,6 +329,8 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             diagram_options: diagram_options.clone(),
             footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
+            math_options: math_options.clone(),
+            math_inline_options: math_inline_options.clone(),
         }
     };
 
@@ -328,6 +344,7 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
         cfg.highlighting_options = Some(HighlightingRendererOptions {
             theme: theme.to_string(),
             mode,
+            math_options: Some(math_options.clone()),
         });
         cfg
     } else {
@@ -649,6 +666,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyDiagramParserOptions>()?;
     m.add_class::<PyDiagramHtmlRendererOptions>()?;
     m.add_class::<PyFootnoteHtmlRendererOptions>()?;
+    m.add_class::<PyMathRendererOptions>()?;
     m.add_class::<PyHighlighter>()?;
     m.add_class::<PyHighlightingMode>()?;
     m.add_class::<Document>()?;
@@ -658,5 +676,6 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<chunker::PyMarkdownChunker>()?;
     m.add_class::<Diagnostic>()?;
     m.add_class::<FixResult>()?;
+    m.add("KATEX_CSS", KATEX_CSS)?;
     Ok(())
 }
