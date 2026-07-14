@@ -26,7 +26,7 @@ jobs:
         run: pip install maturin
 
       - name: Build wheels (CPython)
-        uses: maturin-rs/maturin-action@v1
+        uses: PyO3/maturin-action@v1
         with:
           container: false
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || '' }}
@@ -49,7 +49,7 @@ jobs:
         run: pip install maturin
 
       - name: Build sdist
-        uses: maturin-rs/maturin-action@v1
+        uses: PyO3/maturin-action@v1
         with:
           container: true
           args: --sdist -m mordant-py/Cargo.toml
