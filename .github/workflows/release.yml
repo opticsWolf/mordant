@@ -28,7 +28,7 @@ jobs:
       - name: Build wheels (CPython)
         uses: PyO3/maturin-action@v1
         with:
-          container: false
+          container: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || '' }}
           args: --release -m mordant-py/Cargo.toml
 
