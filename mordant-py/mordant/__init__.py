@@ -29,8 +29,8 @@ try:
         PyDiagramHtmlRendererOptions,
         PyFootnoteHtmlRendererOptions,
         GfmFeature,
-        PyHighlighter,
-        PyHighlightingMode,
+        Highlighter,
+        HighlightingMode,
         add_custom_theme,
         list_themes,
         list_syntaxes,
@@ -39,7 +39,10 @@ try:
         Walker,
         Diagnostic,
         FixResult,
-        RuleMetadata,
+        PyMathRendererOptions,
+        MarkdownChunker,
+        ExtractedChunk,
+        KATEX_CSS,
     )
 except ImportError:
     # Fallback for development builds where the module name may differ
@@ -102,8 +105,8 @@ __all__ = [
     "PyDiagramHtmlRendererOptions",
     "PyFootnoteHtmlRendererOptions",
     "GfmFeature",
-    "PyHighlighter",
-    "PyHighlightingMode",
+    "Highlighter",
+    "HighlightingMode",
     "add_custom_theme",
     "list_themes",
     "list_syntaxes",
@@ -112,6 +115,8 @@ __all__ = [
     "Walker",
     "Diagnostic",
     "FixResult",
-    "RuleMetadata",
+    "PyMathRendererOptions",
     "MarkdownChunker",
+    "ExtractedChunk",
+    "KATEX_CSS",
 ]

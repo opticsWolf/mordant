@@ -7,10 +7,33 @@ name = "mordant"
 version = "0.8.9"
 description = "Mordant - A fast CommonMark + GFM Markdown parser for Python"
 requires-python = ">=3.9"
+license = {file = "../LICENSE"}
+readme = {file = "../README.md", content-type = "text/markdown"}
+authors = [
+    {name = "Yusuke Inuzuka"},
+]
+keywords = ["markdown", "commonmark", "gfm", "parser", "renderer", "mermaid", "math", "katex", "lint", "syntax-highlighting"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+urls = {
+    "Repository" = "https://github.com/YusukeInuzuka/mordant-py",
+    "Documentation" = "https://github.com/YusukeInuzuka/mordant-py#readme",
+}
 
 [tool.maturin]
 # Include the themes directory as package data
 package-dir = "mordant"
+include = ["mordant/themes/**/*"]
 
 [tool.maturin.modules]
 # The Rust extension
