@@ -332,15 +332,15 @@ class MarkdownViewer(QMainWindow):
                 # Determine the mermaid diagram theme
                 if self.sync_check.isChecked():
                     # Sync with code highlighting: use the same them name
-                    diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=selected_highlight)
+                    diag_opts = mordant.DiagramHtmlRendererOptions(theme=selected_highlight)
                 else:
                     mermaid_theme = self.mermaid_combo.currentText()
                     # "Default" maps to mermaid's built-in "default" theme
                     theme_name = "default" if mermaid_theme == "Default" else mermaid_theme
-                    diag_opts = mordant.PyDiagramHtmlRendererOptions(theme=theme_name)
+                    diag_opts = mordant.DiagramHtmlRendererOptions(theme=theme_name)
 
                 math_output = self.math_combo.currentText()
-                math_opts = mordant.PyMathRendererOptions(output=math_output)
+                math_opts = mordant.MathRendererOptions(output=math_output)
 
                 html_body = mordant.markdown_to_html(
                     self.current_markdown_text,

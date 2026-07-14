@@ -76,7 +76,7 @@ def test_footnote_multiline_definition():
 def test_footnote_options_custom_classes():
     """Custom link_class, backlink_class."""
     md = "Text with footnote.[^1]\n\n[^1]: The footnote.\n"
-    opts = mordant.PyFootnoteHtmlRendererOptions(
+    opts = mordant.FootnoteHtmlRendererOptions(
         link_class="my-ref",
         backlink_class="my-back",
     )
@@ -88,7 +88,7 @@ def test_footnote_options_custom_classes():
 def test_footnote_options_custom_backlink():
     """Custom backlink_html."""
     md = "Text with footnote.[^1]\n\n[^1]: The footnote.\n"
-    opts = mordant.PyFootnoteHtmlRendererOptions(
+    opts = mordant.FootnoteHtmlRendererOptions(
         backlink_html="↑ back",
     )
     html = mordant.markdown_to_html(md, footnote_render_opts=opts)
@@ -98,7 +98,7 @@ def test_footnote_options_custom_backlink():
 def test_footnote_options_id_prefix():
     """Custom id_prefix."""
     md = "Text with footnote.[^1]\n\n[^1]: The footnote.\n"
-    opts = mordant.PyFootnoteHtmlRendererOptions(
+    opts = mordant.FootnoteHtmlRendererOptions(
         id_prefix="note-",
     )
     html = mordant.markdown_to_html(md, footnote_render_opts=opts)
@@ -246,8 +246,8 @@ def test_footnote_xhtml():
 # ---------------------------------------------------------------------------
 
 def test_footnote_default_options():
-    """Default PyFootnoteHtmlRendererOptions values."""
-    opts = mordant.PyFootnoteHtmlRendererOptions()
+    """Default FootnoteHtmlRendererOptions values."""
+    opts = mordant.FootnoteHtmlRendererOptions()
     assert opts.link_class == "footnote-ref"
     assert opts.backlink_class == "footnote-backref"
     assert opts.backlink_html == "&#x21a9;&#xfe0e;"
@@ -256,7 +256,7 @@ def test_footnote_default_options():
 
 def test_footnote_setter_options():
     """Setting options via setters."""
-    opts = mordant.PyFootnoteHtmlRendererOptions()
+    opts = mordant.FootnoteHtmlRendererOptions()
     opts.link_class = "custom-ref"
     opts.backlink_class = "custom-back"
     opts.backlink_html = "↩"

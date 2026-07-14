@@ -456,26 +456,26 @@ class TestKatexCss:
 # =============================================================================
 
 class TestMathRendererOptions:
-    """Test the PyMathRendererOptions class and math_renderer_opts parameter."""
+    """Test the MathRendererOptions class and math_renderer_opts parameter."""
 
     def test_pymathrendereroptions_default(self):
-        """PyMathRendererOptions() defaults to 'both'."""
-        opts = mordant.PyMathRendererOptions()
+        """MathRendererOptions() defaults to 'both'."""
+        opts = mordant.MathRendererOptions()
         assert opts.output == "both"
 
     def test_pymathrendereroptions_html(self):
-        """PyMathRendererOptions(output='html')."""
-        opts = mordant.PyMathRendererOptions(output="html")
+        """MathRendererOptions(output='html')."""
+        opts = mordant.MathRendererOptions(output="html")
         assert opts.output == "html"
 
     def test_pymathrendereroptions_mathml(self):
-        """PyMathRendererOptions(output='mathml')."""
-        opts = mordant.PyMathRendererOptions(output="mathml")
+        """MathRendererOptions(output='mathml')."""
+        opts = mordant.MathRendererOptions(output="mathml")
         assert opts.output == "mathml"
 
     def test_math_renderer_opts_mathml(self):
         """markdown_to_html with math_renderer_opts=output='mathml' produces MathML (no katex-mathml wrapper)."""
-        opts = mordant.PyMathRendererOptions(output="mathml")
+        opts = mordant.MathRendererOptions(output="mathml")
         html = mordant.markdown_to_html(
             "```math\nE = mc^2\n```",
             highlighting_theme="InspiredGitHub",
@@ -487,7 +487,7 @@ class TestMathRendererOptions:
 
     def test_math_renderer_opts_html_only(self):
         """markdown_to_html with math_renderer_opts=output='html' produces only KaTeX HTML."""
-        opts = mordant.PyMathRendererOptions(output="html")
+        opts = mordant.MathRendererOptions(output="html")
         html = mordant.markdown_to_html(
             "```math\nE = mc^2\n```",
             highlighting_theme="InspiredGitHub",
@@ -498,7 +498,7 @@ class TestMathRendererOptions:
 
     def test_math_renderer_opts_both(self):
         """markdown_to_html with math_renderer_opts=output='both' produces both (katex-mathml wrapper)."""
-        opts = mordant.PyMathRendererOptions(output="both")
+        opts = mordant.MathRendererOptions(output="both")
         html = mordant.markdown_to_html(
             "```math\nE = mc^2\n```",
             highlighting_theme="InspiredGitHub",
@@ -511,7 +511,7 @@ class TestMathRendererOptions:
 
     def test_math_renderer_opts_inline_math(self):
         """math_renderer_opts also affects inline $...$ and block $$...$$."""
-        opts = mordant.PyMathRendererOptions(output="mathml")
+        opts = mordant.MathRendererOptions(output="mathml")
         html = mordant.markdown_to_html(
             "Inline $x^2$ and block $$y^2$$.",
             math_renderer_opts=opts,
@@ -521,7 +521,7 @@ class TestMathRendererOptions:
 
     def test_math_renderer_opts_multiline_display(self):
         """math_renderer_opts works with multi-line $$...$."""
-        opts = mordant.PyMathRendererOptions(output="mathml")
+        opts = mordant.MathRendererOptions(output="mathml")
         html = mordant.markdown_to_html(
             "$$\na + b = c\n$$",
             math_renderer_opts=opts,
@@ -531,7 +531,7 @@ class TestMathRendererOptions:
 
     def test_math_renderer_opts_without_highlighting(self):
         """math_renderer_opts works without a highlighting theme (math fence path)."""
-        opts = mordant.PyMathRendererOptions(output="mathml")
+        opts = mordant.MathRendererOptions(output="mathml")
         html = mordant.markdown_to_html(
             "```math\n" + "\\int_0^1 x dx" + "\n```",
             math_renderer_opts=opts,

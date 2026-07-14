@@ -13,8 +13,8 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 ## What's New in 0.8.9
 
 - **Server-side Mermaid rendering** — Mermaid diagrams now render as inline SVG via the `mermaid-rs-renderer` crate (~3ms server-side vs ~2s client-side). No browser/CDN dependency. Three render modes: `server` (default, inline SVG), `client` (legacy, Mermaid.js ESM), `hybrid` (try server, fallback to client)
-- **Render mode API** — `PyDiagramHtmlRendererOptions(render_mode="server"|"client"|"hybrid", mermaid_url=...)`
-- **Customizable Mermaid themes** — Mermaid color schemes derived from code-highlighting (syntect) themes. `PyDiagramHtmlRendererOptions(theme="Dracula")` themes server-side SVG (via `mermaid-rs-renderer`) and client-side rendering (via `mermaid.initialize` + `themeVariables`). A single `theme=` kwarg on `markdown_to_html` themes both code and diagrams; native mermaid themes (`modern`/`dark`/`forest`/`neutral`) are also supported.
+- **Render mode API** — `DiagramHtmlRendererOptions(render_mode="server"|"client"|"hybrid", mermaid_url=...)`
+- **Customizable Mermaid themes** — Mermaid color schemes derived from code-highlighting (syntect) themes. `DiagramHtmlRendererOptions(theme="Dracula")` themes server-side SVG (via `mermaid-rs-renderer`) and client-side rendering (via `mermaid.initialize` + `themeVariables`). A single `theme=` kwarg on `markdown_to_html` themes both code and diagrams; native mermaid themes (`modern`/`dark`/`forest`/`neutral`) are also supported.
 
 ## What's New in 0.8.7
 
@@ -92,7 +92,7 @@ html = mordant.markdown_to_html("I'm :joy: and :heart:")
 # '<p>I'm 😀 and ❤️</p>\n'
 
 # Emoji blacklist
-opts = mordant.PyEmojiParserOptions(blacklist="joy")
+opts = mordant.EmojiParserOptions(blacklist="joy")
 html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
 # ':joy:' passes through; :heart: renders as ❤️
 
@@ -110,7 +110,7 @@ html = mordant.markdown_to_html("Text[^1]\n\n[^1]: The footnote.")
 # '<p>Text<sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup></p>\n<div class="footnotes" role="doc-endnotes">\n<hr>\n<ol><li id="fn:1">The footnote.&#160;<a href="#fnref:1" class="footnote-backref" role="doc-backlink">&#x21a9;&#xfe0e;</a></li></ol></div>'
 
 # Custom footnote options
-opts = mordant.PyFootnoteHtmlRendererOptions(
+opts = mordant.FootnoteHtmlRendererOptions(
     link_class="my-ref",
     backlink_class="my-back",
     backlink_html="↑ back",
@@ -125,14 +125,14 @@ graph LR
 # '<pre class="mermaid">\ngraph LR\n    A --- B\n</pre>\n<script type="module">...'
 
 # Mermaid with custom URL
-opts = mordant.PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")
+opts = mordant.DiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")
 html = mordant.markdown_to_html("""```mermaid
 graph TD
     A --> B
 ```""", diagram_render_opts=opts)
 
 # Themed Mermaid diagram — color scheme derived from a code-highlighting theme
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server", theme="Dracula")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="server", theme="Dracula")
 html = mordant.markdown_to_html("""```mermaid
 graph TD
     A --> B
@@ -434,8 +434,8 @@ Emoji shortcode support (`:joy:`, `:heart:`, `:smile:`, etc.) is provided by [ru
 Key features of the integrated emoji extension:
 
 - **Shortcode parsing:** `:joy:` → 😀, `:heart:` → ❤️, 1,500+ emojis from the `emojis` crate (v0.8.0)
-- **Blacklist support:** `PyEmojiParserOptions(blacklist="joy,heart")` — blacklisted shortcodes pass through as literal text
-- **Custom HTML templates:** `PyEmojiHtmlRendererOptions(template='<img src="{shortcode}.png" />')` — render emojis as `<img>` tags or any custom format
+- **Blacklist support:** `EmojiParserOptions(blacklist="joy,heart")` — blacklisted shortcodes pass through as literal text
+- **Custom HTML templates:** `EmojiHtmlRendererOptions(template='<img src="{shortcode}.png" />')` — render emojis as `<img>` tags or any custom format
 - **Template placeholders:** `{emoji}` (Unicode char), `{shortcode}` (e.g. `"joy"`), `{name}` (e.g. `"grinning face with smiling eyes"`)
 - **Code span protection:** Emojis inside `` `code` `` are not parsed — `:joy:` stays literal in code spans
 - **AST node access:** Emoji nodes expose `emoji`, `shortcode`, and `name` properties via the `Extension` node kind
@@ -456,9 +456,9 @@ Mordant currently implements Mermaid support only. Key features:
 
 - **Code block detection:** ```` ```mermaid ```` code blocks are automatically detected and converted to diagram nodes via an AST transformer
 - **Client-side rendering:** Diagrams render as `<pre class="mermaid">` with automatic Mermaid.js ESM script injection (single script tag for all diagrams)
-- **Custom Mermaid URL:** `PyDiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")` — use a custom Mermaid.js CDN or local file
-- **Customizable themes:** `PyDiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme — server-side SVG via `render_with_options`, client-side via `mermaid.initialize` + `themeVariables`. Built-in mermaid themes (`modern`/`dark`/`forest`/`neutral`) are used natively. A single `theme=` kwarg on `markdown_to_html` themes both code and diagrams; explicit per-param args override it.
-- **Parser options:** `PyDiagramParserOptions(mermaid_enabled=False)` — disable diagram transformation to keep code blocks as regular fenced code blocks
+- **Custom Mermaid URL:** `DiagramHtmlRendererOptions(mermaid_url="https://cdn.example.com/mermaid.mjs")` — use a custom Mermaid.js CDN or local file
+- **Customizable themes:** `DiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme — server-side SVG via `render_with_options`, client-side via `mermaid.initialize` + `themeVariables`. Built-in mermaid themes (`modern`/`dark`/`forest`/`neutral`) are used natively. A single `theme=` kwarg on `markdown_to_html` themes both code and diagrams; explicit per-param args override it.
+- **Parser options:** `DiagramParserOptions(mermaid_enabled=False)` — disable diagram transformation to keep code blocks as regular fenced code blocks
 - **AST node access:** Diagram nodes expose `diagram_type` ("mermaid") and `diagram_value` (source content) properties via the `Diagram` node kind
 - **Multiple diagrams:** Multiple Mermaid blocks in one document all render correctly with a single script tag
 - **GFM compatible:** Works alongside other GFM features (tables, task lists, strikethrough; autolink disabled by default, enable with `GfmOptions.all()`)
@@ -517,7 +517,7 @@ Key features:
 - **Multiple refs:** Multiple `[^1]` to same `[^1]:` — each gets a superscript ref, definition rendered once
 - **Backlinks:** Each definition has a backlink anchor (`&#x21a9;&#xfe0e;`) to return to the reference
 - **Accessibility:** `role="doc-endnotes"`, `role="doc-noteref"`, `role="doc-backlink"` ARIA attributes
-- **Custom options:** `PyFootnoteHtmlRendererOptions` for custom CSS classes, backlink HTML, and ID prefixes
+- **Custom options:** `FootnoteHtmlRendererOptions` for custom CSS classes, backlink HTML, and ID prefixes
 - **AST node access:** `node.footnote_label`, `node.footnote_index`, `node.footnote_references` properties
 - **No parser options:** Footnotes are always enabled (matches math extension pattern)
 

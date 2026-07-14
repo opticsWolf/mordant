@@ -57,11 +57,11 @@ mordant-py/                       # PyO3 Python bindings
 │   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests (9)
 │   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook (with native/derived theme support)
 │   ├── linter.rs                 # Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API, RuleMetadata + unit tests (28)
-│   ├── highlighter.rs            # Syntax highlighting via syntect-assets: PyHighlighter, add_custom_theme(), list_themes(), list_syntaxes(), load_builtin_themes(), resolve_theme()
+│   ├── highlighter.rs            # Syntax highlighting via syntect-assets: Highlighter, add_custom_theme(), list_themes(), list_syntaxes(), load_builtin_themes(), resolve_theme()
 │   ├── vscode_theme.rs           # VSCode JSON theme parser (JSONC with comments → syntect Theme)
 │   └── themes.rs                 # Theme loading utilities
 ├── mordant/
-│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, lint_rules, RuleMetadata, Diagnostic, FixResult, PyHighlighter, PyHighlightingMode, add_custom_theme, list_themes, list_syntaxes, Document, Node, Walker, MarkdownChunker
+│   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, lint_rules, RuleMetadata, Diagnostic, FixResult, Highlighter, HighlightingMode, add_custom_theme, list_themes, list_syntaxes, Document, Node, Walker, MarkdownChunker
 │   └── __main__.py               # CLI: argparse, formatters (human/json/github), config loading, glob expansion, exit codes
 ├── mordant/themes/               # 21 embedded themes (.tmTheme + .json)
 ├── tests/
@@ -241,7 +241,7 @@ W: TextWrite (String by default)
 | `escaped_space` | false | Don't render backslash-escaped space |
 | `attribute_filters` | `Option<Rc<AttributeFilters>>` | Filters for rendering node attributes (per-kind `AsciiWordSet`) |
 
-**Diagram theming.** `PyDiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme. The name resolves as a union: built-in mermaid presets (`modern`/`mermaid_default`/`dark`/`forest`/`neutral`) are used natively; any syntect theme is derived into a custom `base` theme (`derive_mermaid_theme` in `mermaid_theme.rs`). A `theme=` kwarg on `markdown_to_html` fans out to both code highlighting and diagrams, with explicit per-param args taking precedence.
+**Diagram theming.** `DiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme. The name resolves as a union: built-in mermaid presets (`modern`/`mermaid_default`/`dark`/`forest`/`neutral`) are used natively; any syntect theme is derived into a custom `base` theme (`derive_mermaid_theme` in `mermaid_theme.rs`). A `theme=` kwarg on `markdown_to_html` fans out to both code highlighting and diagrams, with explicit per-param args taking precedence.
 
 ### 3.8. Parser Priority Constants
 
@@ -321,13 +321,13 @@ The `mordant` module (via `#[pymodule]`) registers:
 | `RuleMetadata` | `linter.rs` |
 | `Diagnostic` | `linter.rs` |
 | `FixResult` | `linter.rs` |
-| `PyEmojiParserOptions` | `emoji.rs` |
-| `PyEmojiHtmlRendererOptions` | `emoji.rs` |
-| `PyDiagramParserOptions` | `diagram.rs` |
-| `PyDiagramHtmlRendererOptions` | `diagram.rs` |
-| `PyFootnoteHtmlRendererOptions` | `footnote.rs` |
-| `PyHighlighter` | `highlighter.rs` |
-| `PyHighlightingMode` | `highlighter.rs` |
+| `EmojiParserOptions` | `emoji.rs` |
+| `EmojiHtmlRendererOptions` | `emoji.rs` |
+| `DiagramParserOptions` | `diagram.rs` |
+| `DiagramHtmlRendererOptions` | `diagram.rs` |
+| `FootnoteHtmlRendererOptions` | `footnote.rs` |
+| `Highlighter` | `highlighter.rs` |
+| `HighlightingMode` | `highlighter.rs` |
 | `ExtractedChunk` | `chunker.rs` |
 | `MarkdownChunker` | `chunker.rs` |
 | `Document` | `document.rs` |
@@ -621,44 +621,44 @@ result = mordant.render_math(r"\int_0^\infty e^{-x^2} dx", display=True, output=
 | `__iter__()` | Walker | Returns self (iterator protocol) |
 | `__next__()` | Node\|None | Next node in traversal order |
 
-### 5.8. PyEmojiParserOptions
+### 5.8. EmojiParserOptions
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `blacklist` | str\|None | None | Comma-separated shortcodes to ignore (e.g. `"joy,heart"`) |
 
 ```python
-opts = mordant.PyEmojiParserOptions(blacklist="joy,heart")
+opts = mordant.EmojiParserOptions(blacklist="joy,heart")
 html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
 # ':joy:' passes through as-is (blacklisted)
 # :heart: renders as ❤️
 ```
 
-### 5.9. PyEmojiHtmlRendererOptions
+### 5.9. EmojiHtmlRendererOptions
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `template` | str\|None | None | Custom template: `{emoji}`, `{shortcode}`, `{name}` |
 
 ```python
-opts = mordant.PyEmojiHtmlRendererOptions(template='<img src="https://cdn.example.com/{shortcode}.png" />')
+opts = mordant.EmojiHtmlRendererOptions(template='<img src="https://cdn.example.com/{shortcode}.png" />')
 html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
 # '<img src="https://cdn.example.com/joy.png" />'
 ```
 
-### 5.10. PyDiagramParserOptions
+### 5.10. DiagramParserOptions
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `mermaid_enabled` | bool | true | Enable/disable Mermaid diagram transformation |
 
 ```python
-opts = mordant.PyDiagramParserOptions(mermaid_enabled=False)
+opts = mordant.DiagramParserOptions(mermaid_enabled=False)
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_parse_opts=opts)
 # Renders as regular <pre><code>...</code></pre> (not a diagram)
 ```
 
-### 5.11. PyDiagramHtmlRendererOptions
+### 5.11. DiagramHtmlRendererOptions
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -668,23 +668,23 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_pa
 
 ```python
 # Server mode (default): inline SVG, no CDN dependency
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="server")
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
 # Output: <div class="mermaid"><svg>...</svg></div>
 
 # Client mode (legacy): raw <pre> + script tag
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="client")
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
 # Output: <pre class="mermaid">...</pre> + <script type="module">...</script>
 
 # Custom CDN URL (only matters for client/hybrid fallback)
-opts = mordant.PyDiagramHtmlRendererOptions(
+opts = mordant.DiagramHtmlRendererOptions(
     render_mode="hybrid",
     mermaid_url="https://cdn.example.com/mermaid.mjs"
 )
 
 # Themed diagram — color scheme derived from a code-highlighting theme
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server", theme="Dracula")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="server", theme="Dracula")
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
 # Server SVG uses Dracula's palette; client mode injects mermaid.initialize + themeVariables
 
@@ -692,7 +692,7 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_re
 html = mordant.markdown_to_html("# T\n```mermaid\ngraph LR\nA---B\n```\n```python\nx=1\n```", theme="Dracula")
 ```
 
-### 5.12. PyHighlighter
+### 5.12. Highlighter
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -704,14 +704,14 @@ hl = mordant.Highlighter(theme="Dracula", mode="Attribute")
 html = hl.highlight("python", "def hello(): pass")
 ```
 
-### 5.13. PyHighlightingMode
+### 5.13. HighlightingMode
 
 | Value | Description |
 |-------|-------------|
 | `Attribute` | Inline `style` attributes (default) |
 | `Class` | CSS `class` attributes |
 
-### 5.12. PyFootnoteHtmlRendererOptions
+### 5.12. FootnoteHtmlRendererOptions
 
 ```python
 import mordant
@@ -732,7 +732,7 @@ html = mordant.markdown_to_html(md)
 
 ```python
 # Custom classes
-opts = mordant.PyFootnoteHtmlRendererOptions(
+opts = mordant.FootnoteHtmlRendererOptions(
     link_class="my-ref",
     backlink_class="my-back",
 )
@@ -740,10 +740,10 @@ html = mordant.markdown_to_html("Text[^1]", footnote_render_opts=opts)
 # class="my-ref" and class="my-back"
 
 # Custom backlink
-opts = mordant.PyFootnoteHtmlRendererOptions(backlink_html="↑ back")
+opts = mordant.FootnoteHtmlRendererOptions(backlink_html="↑ back")
 
 # Custom ID prefix
-opts = mordant.PyFootnoteHtmlRendererOptions(id_prefix="note-")
+opts = mordant.FootnoteHtmlRendererOptions(id_prefix="note-")
 # id="note-fnref:1", href="#note-fn:1"
 ```
 
@@ -1346,7 +1346,7 @@ The footnote HTML renderer converts `FootnoteReference` nodes to `<sup><a>` elem
 
 #### 7.14.5. Options
 
-The footnote extension has **no parser options** — it is always enabled. The renderer accepts `PyFootnoteHtmlRendererOptions` for customizing CSS classes, backlink HTML, and ID prefixes.
+The footnote extension has **no parser options** — it is always enabled. The renderer accepts `FootnoteHtmlRendererOptions` for customizing CSS classes, backlink HTML, and ID prefixes.
 
 #### 7.14.6. Footnote Extension Registration
 
@@ -1511,7 +1511,7 @@ Source Code
     │
     ▼
 ┌──────────────┐
-│  PyHighlighter│  ──►  syntect HighlighterSet
+│  Highlighter│  ──►  syntect HighlighterSet
 │  (theme, mode)│       Theme: InspiredGitHub / Dracula / GitHub / ...
 │               │       Mode: Attribute (inline style) | Class (CSS class)
 └──────────────┘
@@ -1551,8 +1551,8 @@ JSONC (with comments) is supported via `jsonc-parser`. Failed loads print warnin
 
 | Class | Description |
 |-------|-------------|
-| `PyHighlighter` | `theme` (default: `"InspiredGitHub"`), `mode` (`"Attribute"` or `"Class"`) |
-| `PyHighlightingMode` | `Attribute` (inline style), `Class` (CSS class) |
+| `Highlighter` | `theme` (default: `"InspiredGitHub"`), `mode` (`"Attribute"` or `"Class"`) |
+| `HighlightingMode` | `Attribute` (inline style), `Class` (CSS class) |
 
 | Function | Description |
 |----------|-------------|
@@ -1651,7 +1651,7 @@ The library embeds KaTeX 0.16.21 minified CSS (~23KB) as a Rust constant
 The `math_renderer_opts` parameter on `markdown_to_html()` controls the output
 format for ALL math in the document (fenced ` ```math `, inline `$...$`, block `$$...$$`).
 
-- **Python class:** `mordant.PyMathRendererOptions(output="both")`
+- **Python class:** `mordant.MathRendererOptions(output="both")`
 - **Output formats:** `"both"` (default, HTML+MathML), `"html"` (KaTeX only), `"mathml"` (MathML only)
 - **Implementation:** The output format is threaded through both the fence renderer
   (`MathRendererOptions`) and the inline renderer (`MathInlineRendererOptions`) via
@@ -1928,9 +1928,9 @@ python benchmarks.py -o results.json  # Save JSON
 | `mordant-py/src/meta.rs` | 655 | YAML frontmatter parser + unit tests |
 | `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
 | `mordant-py/src/diagram.rs` | ~350 | Mermaid diagram AST transformer + HTML renderer + post-render hook |
-| `mordant-py/src/footnote.rs` | 829 | Footnote inline/block parser, HTML renderer, post-render hook, PyFootnoteHtmlRendererOptions |
+| `mordant-py/src/footnote.rs` | 829 | Footnote inline/block parser, HTML renderer, post-render hook, FootnoteHtmlRendererOptions |
 | `mordant-py/src/linter.rs` | ~1,800 | Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API |
-| `mordant-py/src/chunker.rs` | ~260 | Markdown chunking engine: PyMarkdownChunker, lazy AST-based chunk iterator, heading context, from_file(), from_file_mmap() |
+| `mordant-py/src/chunker.rs` | ~260 | Markdown chunking engine: MarkdownChunker, lazy AST-based chunk iterator, heading context, from_file(), from_file_mmap() |
 | `mordant-py/src/document.rs` | 250 | Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix() |
 | `mordant-py/mordant/__init__.py` | ~100 | Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, etc. |
 | `mordant-py/mordant/__main__.py` | ~300 | CLI: argparse, formatters (human/json/github), config loading, glob expansion |

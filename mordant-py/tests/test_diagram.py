@@ -56,7 +56,7 @@ class TestMermaidOptions:
 
     def test_mermaid_disabled(self):
         """When mermaid is disabled, code block passes through unchanged."""
-        opts = mordant.PyDiagramParserOptions(mermaid_enabled=False)
+        opts = mordant.DiagramParserOptions(mermaid_enabled=False)
         source = """```mermaid
 graph LR
     A --- B
@@ -68,7 +68,7 @@ graph LR
 
     def test_render_mode_server(self):
         """Server mode: inline SVG, no CDN dependency."""
-        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server")
+        opts = mordant.DiagramHtmlRendererOptions(render_mode="server")
         source = """```mermaid
 graph LR
     A --- B
@@ -80,7 +80,7 @@ graph LR
 
     def test_render_mode_client(self):
         """Client mode: raw <pre> + script tag."""
-        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+        opts = mordant.DiagramHtmlRendererOptions(render_mode="client")
         source = """```mermaid
 graph LR
     A --- B
@@ -94,7 +94,7 @@ graph LR
 
     def test_render_mode_hybrid(self):
         """Hybrid mode: try server-side, fall back to client-side."""
-        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="hybrid")
+        opts = mordant.DiagramHtmlRendererOptions(render_mode="hybrid")
         source = """```mermaid
 graph LR
     A --- B
@@ -106,7 +106,7 @@ graph LR
 
     def test_custom_mermaid_url(self):
         """Custom Mermaid URL is used in client/hybrid fallback."""
-        opts = mordant.PyDiagramHtmlRendererOptions(
+        opts = mordant.DiagramHtmlRendererOptions(
             render_mode="hybrid",
             mermaid_url="https://example.com/mermaid/custom.mjs"
         )
@@ -121,7 +121,7 @@ graph LR
 
     def test_custom_mermaid_url_client_mode(self):
         """Custom Mermaid URL is used in client mode."""
-        opts = mordant.PyDiagramHtmlRendererOptions(
+        opts = mordant.DiagramHtmlRendererOptions(
             render_mode="client",
             mermaid_url="https://example.com/mermaid/custom.mjs"
         )
@@ -134,7 +134,7 @@ graph LR
 
     def test_default_mermaid_url(self):
         """Default Mermaid URL is jsDelivr CDN (client/hybrid mode)."""
-        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+        opts = mordant.DiagramHtmlRendererOptions(render_mode="client")
         source = """```mermaid
 graph LR
     A --- B
@@ -175,7 +175,7 @@ graph LR
 
     def test_parse_mermaid_disabled(self):
         """When disabled, no Diagram nodes in AST."""
-        opts = mordant.PyDiagramParserOptions(mermaid_enabled=False)
+        opts = mordant.DiagramParserOptions(mermaid_enabled=False)
         source = """```mermaid
 graph LR
     A --- B
@@ -305,7 +305,7 @@ class TestMermaidTheming:
     """
 
     def _mermaid(self, theme=None, render_mode="server", **kw):
-        opts = mordant.PyDiagramHtmlRendererOptions(render_mode=render_mode, theme=theme)
+        opts = mordant.DiagramHtmlRendererOptions(render_mode=render_mode, theme=theme)
         source = "```mermaid\ngraph LR\n    A --- B\n```"
         return mordant.markdown_to_html(source, diagram_render_opts=opts, **kw)
 
@@ -368,7 +368,7 @@ class TestMermaidTheming:
     def test_explicit_override_beats_kwarg(self):
         """Explicit diagram_render_opts.theme overrides the single `theme=` kwarg."""
         source = "```mermaid\ngraph LR\n    A --- B\n```\n\n```python\nx = 1\n```"
-        opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client", theme="dark")
+        opts = mordant.DiagramHtmlRendererOptions(render_mode="client", theme="dark")
         html = mordant.markdown_to_html(source, theme="Dracula", diagram_render_opts=opts)
         # diagram uses native dark (no themeVariables) ...
         assert "theme: 'dark'" in html

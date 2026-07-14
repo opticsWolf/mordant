@@ -77,7 +77,7 @@ html = mordant.markdown_to_html(
 graph TD
     A --> B
 ```""",
-    diagram_render_opts=mordant.PyDiagramHtmlRendererOptions(render_mode="server", theme="Dracula"),
+    diagram_render_opts=mordant.DiagramHtmlRendererOptions(render_mode="server", theme="Dracula"),
 )
 # Server SVG uses Dracula's palette; client mode injects mermaid.initialize + themeVariables
 
@@ -426,7 +426,7 @@ Multiple rules:
 
 ## Highlighter Classes
 
-### PyHighlighter
+### Highlighter
 
 ```python
 hl = mordant.Highlighter(theme="Dracula", mode="Attribute")
@@ -443,7 +443,7 @@ html = hl.highlight("python", "def hello():
 |--------|-------------|-------------|
 | `highlight(language, code)` | `str` | Highlight code snippet and return HTML |
 
-### PyHighlightingMode
+### HighlightingMode
 
 | Value | Description |
 |-------|-------------|
@@ -638,36 +638,36 @@ html = mordant.markdown_to_html("` :joy: `")
 # '<p><code> :joy: </code></p>\n'
 ```
 
-### PyEmojiParserOptions
+### EmojiParserOptions
 
 ```python
-opts = mordant.PyEmojiParserOptions(
+opts = mordant.EmojiParserOptions(
     blacklist=None,       # Comma-separated shortcodes to ignore
 )
 
 # Blacklist example
-opts = mordant.PyEmojiParserOptions(blacklist="joy,heart")
+opts = mordant.EmojiParserOptions(blacklist="joy,heart")
 html = mordant.markdown_to_html(":joy: :heart:", emoji_parse_opts=opts)
 # ':joy:' passes through (blacklisted)
 # :heart: renders as ❤️ (if not blacklisted)
 ```
 
-### PyEmojiHtmlRendererOptions
+### EmojiHtmlRendererOptions
 
 ```python
-opts = mordant.PyEmojiHtmlRendererOptions(
+opts = mordant.EmojiHtmlRendererOptions(
     template=None,        # Custom template: {emoji}, {shortcode}, {name}
 )
 
 # Custom HTML img tag
-opts = mordant.PyEmojiHtmlRendererOptions(
+opts = mordant.EmojiHtmlRendererOptions(
     template='<img src="https://cdn.example.com/{shortcode}.png" />'
 )
 html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
 # '<img src="https://cdn.example.com/joy.png" />'
 
 # Name-based template
-opts = mordant.PyEmojiHtmlRendererOptions(template="{name} emoji")
+opts = mordant.EmojiHtmlRendererOptions(template="{name} emoji")
 html = mordant.markdown_to_html(":joy:", emoji_render_opts=opts)
 # 'grinning face with smiling eyes emoji'
 ```
@@ -708,42 +708,42 @@ sequenceDiagram
 # Two <pre class="mermaid"> blocks, one <script> tag
 ```
 
-### PyDiagramParserOptions
+### DiagramParserOptions
 
 ```python
-opts = mordant.PyDiagramParserOptions(
+opts = mordant.DiagramParserOptions(
     mermaid_enabled=True,   # Enable/disable Mermaid diagram transformation
 )
 
 # Disable diagrams (keeps as regular code block)
-opts = mordant.PyDiagramParserOptions(mermaid_enabled=False)
+opts = mordant.DiagramParserOptions(mermaid_enabled=False)
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_parse_opts=opts)
 # '<pre><code>graph LR\n    A --- B\n</code></pre>\n'
 ```
 
-### PyDiagramHtmlRendererOptions
+### DiagramHtmlRendererOptions
 
 ```python
-opts = mordant.PyDiagramHtmlRendererOptions(
+opts = mordant.DiagramHtmlRendererOptions(
     render_mode="server",   # "server" | "client" | "hybrid"
     mermaid_url=None,       # Custom Mermaid.js CDN URL (client/hybrid only)
 )
 
 # Server mode (default): inline SVG, no CDN
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="server")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="server")
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
 # Output: <div class="mermaid"><svg>...</svg></div>
 
 # Client mode (legacy): raw <pre> + script tag
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="client")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="client")
 html = mordant.markdown_to_html("```mermaid\ngraph LR\nA --- B\n```", diagram_render_opts=opts)
 # Output: <pre class="mermaid">...</pre> + <script type="module">...</script>
 
 # Hybrid mode: try server, fallback to client
-opts = mordant.PyDiagramHtmlRendererOptions(render_mode="hybrid")
+opts = mordant.DiagramHtmlRendererOptions(render_mode="hybrid")
 
 # Custom CDN URL (only matters for client/hybrid fallback)
-opts = mordant.PyDiagramHtmlRendererOptions(
+opts = mordant.DiagramHtmlRendererOptions(
     render_mode="hybrid",
     mermaid_url="https://cdn.example.com/mermaid.mjs"
 )
@@ -797,10 +797,10 @@ html = mordant.markdown_to_html(md)
 # No footnotes div in output
 ```
 
-### PyFootnoteHtmlRendererOptions
+### FootnoteHtmlRendererOptions
 
 ```python
-opts = mordant.PyFootnoteHtmlRendererOptions(
+opts = mordant.FootnoteHtmlRendererOptions(
     link_class="footnote-ref",
     backlink_class="footnote-backref",
     backlink_html="&#x21a9;&#xfe0e;",
@@ -808,7 +808,7 @@ opts = mordant.PyFootnoteHtmlRendererOptions(
 )
 
 # Custom classes
-opts = mordant.PyFootnoteHtmlRendererOptions(
+opts = mordant.FootnoteHtmlRendererOptions(
     link_class="my-ref",
     backlink_class="my-back",
 )
@@ -816,10 +816,10 @@ html = mordant.markdown_to_html("Text[^1]", footnote_render_opts=opts)
 # class="my-ref" and class="my-back"
 
 # Custom backlink
-opts = mordant.PyFootnoteHtmlRendererOptions(backlink_html="↑ back")
+opts = mordant.FootnoteHtmlRendererOptions(backlink_html="↑ back")
 
 # Custom ID prefix
-opts = mordant.PyFootnoteHtmlRendererOptions(id_prefix="note-")
+opts = mordant.FootnoteHtmlRendererOptions(id_prefix="note-")
 # id="note-fnref:1", href="#note-fn:1"
 ```
 
@@ -910,13 +910,13 @@ html = mordant.markdown_to_html("$$E = mc^2$$")
 # MathML only — native browser rendering, no CSS needed
 html = mordant.markdown_to_html(
     "$$E = mc^2$$",
-    math_renderer_opts=mordant.PyMathRendererOptions(output="mathml"),
+    math_renderer_opts=mordant.MathRendererOptions(output="mathml"),
 )
 
 # KaTeX HTML only — requires KATEX_CSS
 html = mordant.markdown_to_html(
     "$$E = mc^2$$",
-    math_renderer_opts=mordant.PyMathRendererOptions(output="html"),
+    math_renderer_opts=mordant.MathRendererOptions(output="html"),
 )
 
 **Output formats:**

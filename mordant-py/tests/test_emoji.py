@@ -61,7 +61,7 @@ def test_emoji_empty_shortcode():
 
 def test_emoji_blacklist_single():
     """Blacklisted shortcodes should not be parsed."""
-    opts = mordant.PyEmojiParserOptions(blacklist="joy")
+    opts = mordant.EmojiParserOptions(blacklist="joy")
     html = mordant.markdown_to_html("I'm :joy:", emoji_parse_opts=opts)
     assert ":joy:" in html
     assert "\U0001F602" not in html
@@ -69,7 +69,7 @@ def test_emoji_blacklist_single():
 
 def test_emoji_blacklist_multiple():
     """Multiple blacklisted shortcodes should all be ignored."""
-    opts = mordant.PyEmojiParserOptions(blacklist="joy,heart,smile")
+    opts = mordant.EmojiParserOptions(blacklist="joy,heart,smile")
     html = mordant.markdown_to_html(":joy: :heart: :smile:", emoji_parse_opts=opts)
     # Blacklisted emojis should pass through as-is
     assert ":joy:" in html or "\U0001F602" not in html
@@ -78,14 +78,14 @@ def test_emoji_blacklist_multiple():
 
 def test_emoji_blacklist_empty():
     """Empty blacklist should parse all emojis."""
-    opts = mordant.PyEmojiParserOptions(blacklist="")
+    opts = mordant.EmojiParserOptions(blacklist="")
     html = mordant.markdown_to_html("I'm :joy:", emoji_parse_opts=opts)
     assert "\U0001F602" in html  # 😂
 
 
 def test_emoji_blacklist_whitespace():
     """Blacklist with whitespace should be handled correctly."""
-    opts = mordant.PyEmojiParserOptions(blacklist=" joy , heart ")
+    opts = mordant.EmojiParserOptions(blacklist=" joy , heart ")
     html = mordant.markdown_to_html(":joy: :heart: :smile:", emoji_parse_opts=opts)
     # joy and heart should be blacklisted, smile should render
     assert "\U0001F602" not in html  # joy blacklisted
@@ -103,7 +103,7 @@ def test_emoji_template_default():
 def test_emoji_template_custom():
     """Custom template should render as HTML img tag."""
     template = '<img src="https://example.com/{shortcode}.png" />'
-    opts = mordant.PyEmojiHtmlRendererOptions(template=template)
+    opts = mordant.EmojiHtmlRendererOptions(template=template)
     html = mordant.markdown_to_html("I'm :joy:", emoji_render_opts=opts)
     assert 'src="https://example.com/joy.png"' in html
 
@@ -111,7 +111,7 @@ def test_emoji_template_custom():
 def test_emoji_template_name():
     """Template with {name} should use emoji name."""
     template = "{name} emoji"
-    opts = mordant.PyEmojiHtmlRendererOptions(template=template)
+    opts = mordant.EmojiHtmlRendererOptions(template=template)
     html = mordant.markdown_to_html("I'm :joy:", emoji_render_opts=opts)
     assert "joy" in html
 
@@ -119,7 +119,7 @@ def test_emoji_template_name():
 def test_emoji_template_emoji():
     """Template with {emoji} should use emoji character."""
     template = "Emoji: {emoji}"
-    opts = mordant.PyEmojiHtmlRendererOptions(template=template)
+    opts = mordant.EmojiHtmlRendererOptions(template=template)
     html = mordant.markdown_to_html("I'm :joy:", emoji_render_opts=opts)
     assert "\U0001F602" in html
 
@@ -127,7 +127,7 @@ def test_emoji_template_emoji():
 def test_emoji_template_unknown_placeholder():
     """Template with unknown placeholder should pass through unchanged."""
     template = "{unknown} {shortcode}"
-    opts = mordant.PyEmojiHtmlRendererOptions(template=template)
+    opts = mordant.EmojiHtmlRendererOptions(template=template)
     html = mordant.markdown_to_html("I'm :joy:", emoji_render_opts=opts)
     assert "{unknown}" in html
     assert "joy" in html

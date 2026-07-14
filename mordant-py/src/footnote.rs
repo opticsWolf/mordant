@@ -770,7 +770,7 @@ where
 ///     footnote_render_opts=opts,
 /// )
 /// ```
-#[pyclass(module = "mordant")]
+#[pyclass(module = "mordant", name = "FootnoteHtmlRendererOptions")]
 pub struct PyFootnoteHtmlRendererOptions {
     /// CSS class for footnote reference links.
     #[pyo3(get, set)]

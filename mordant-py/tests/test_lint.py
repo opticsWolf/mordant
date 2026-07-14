@@ -1139,7 +1139,7 @@ def test_md024_emoji_headings_different_text():
 
 def test_emoji_in_heading_text_collected():
     """Emoji in heading text is collected as the Unicode character, not the shortcode."""
-    doc = mordant.parse("# Hello :smile:", emoji_opts=mordant.PyEmojiParserOptions(blacklist=None))
+    doc = mordant.parse("# Hello :smile:", emoji_opts=mordant.EmojiParserOptions(blacklist=None))
     # Find the heading node and check its text includes the emoji
     heading = None
     for child in doc.children:

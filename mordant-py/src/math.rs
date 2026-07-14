@@ -191,7 +191,7 @@ impl Default for MathRendererOptions {
 impl rushdown_lib::renderer::RendererOptions for MathRendererOptions {}
 
 /// Python-exposed math renderer options.
-#[pyclass(module = "mordant")]
+#[pyclass(module = "mordant", name = "MathRendererOptions")]
 #[derive(Clone)]
 pub struct PyMathRendererOptions {
     #[pyo3(get, set)]

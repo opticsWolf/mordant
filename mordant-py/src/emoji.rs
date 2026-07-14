@@ -93,7 +93,7 @@ pub struct EmojiParserOptions {
 impl ParserOptions for EmojiParserOptions {}
 
 /// Options for the emoji parser (Python-exposed).
-#[pyclass(module = "mordant")]
+#[pyclass(module = "mordant", name = "EmojiParserOptions")]
 pub struct PyEmojiParserOptions {
     /// A comma-separated list of emoji shortcodes to ignore.
     #[pyo3(get)]
@@ -136,7 +136,7 @@ pub struct EmojiHtmlRendererOptions {
 impl RendererOptions for EmojiHtmlRendererOptions {}
 
 /// Options for the emoji HTML renderer (Python-exposed).
-#[pyclass(module = "mordant")]
+#[pyclass(module = "mordant", name = "EmojiHtmlRendererOptions")]
 pub struct PyEmojiHtmlRendererOptions {
     /// A template string for rendering emojis. Supports {emoji}, {shortcode}, {name}.
     #[pyo3(get)]

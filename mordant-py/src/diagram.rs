@@ -124,7 +124,7 @@ impl Default for MermaidParserOptions {
 }
 
 /// Options for the diagram parser (Python-exposed).
-#[pyclass(module = "mordant")]
+#[pyclass(module = "mordant", name = "DiagramParserOptions")]
 pub struct PyDiagramParserOptions {
     #[pyo3(get, set)]
     #[allow(dead_code)]
@@ -204,7 +204,7 @@ impl Default for MermaidHtmlRenderingOptions {
 }
 
 /// Options for the diagram HTML renderer (Python-exposed).
-#[pyclass(module = "mordant")]
+#[pyclass(module = "mordant", name = "DiagramHtmlRendererOptions")]
 #[derive(Clone)]
 pub struct PyDiagramHtmlRendererOptions {
     #[pyo3(get, set)]

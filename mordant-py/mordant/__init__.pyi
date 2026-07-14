@@ -27,16 +27,16 @@ class PyEmojiParserOptions:
 class PyEmojiHtmlRendererOptions:
     def __init__(self, **kwargs) -> None: ...
 
-class PyDiagramParserOptions:
+class DiagramParserOptions:
     def __init__(self, **kwargs) -> None: ...
 
-class PyDiagramHtmlRendererOptions:
+class DiagramHtmlRendererOptions:
     def __init__(self, theme: str | None = ..., render_mode: str | None = ..., mermaid_url: str | None = ...) -> None: ...
 
-class PyFootnoteHtmlRendererOptions:
+class FootnoteHtmlRendererOptions:
     def __init__(self, **kwargs) -> None: ...
 
-class PyMathRendererOptions:
+class MathRendererOptions:
     def __init__(self, output: Literal["both", "html", "mathml"] = ...) -> None: ...
 
 class LintConfig:
@@ -59,18 +59,18 @@ def markdown_to_html(
     render_opts: RenderOptions | None = ...,
     emoji_parse_opts: PyEmojiParserOptions | None = ...,
     emoji_render_opts: PyEmojiHtmlRendererOptions | None = ...,
-    diagram_parse_opts: PyDiagramParserOptions | None = ...,
-    diagram_render_opts: PyDiagramHtmlRendererOptions | None = ...,
-    footnote_render_opts: PyFootnoteHtmlRendererOptions | None = ...,
+    diagram_parse_opts: DiagramParserOptions | None = ...,
+    diagram_render_opts: DiagramHtmlRendererOptions | None = ...,
+    footnote_render_opts: FootnoteHtmlRendererOptions | None = ...,
     highlighting_theme: str | None = ...,
     highlighting_mode: str | None = ...,
     theme: str | None = ...,
-    math_renderer_opts: PyMathRendererOptions | None = ...,
+    math_renderer_opts: MathRendererOptions | None = ...,
 ) -> str: ...
 
 def parse(source: str, opts: ParseOptions | None = ...) -> Document: ...
 
-def render_math(source: str, opts: PyMathRendererOptions | None = ...) -> str: ...
+def render_math(source: str, opts: MathRendererOptions | None = ...) -> str: ...
 
 def lint(source: str, opts: LintOptions | None = ..., config: LintConfig | None = ...) -> list[Diagnostic]: ...
 
