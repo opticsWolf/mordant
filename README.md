@@ -1,6 +1,6 @@
 # Mordant
 
-> **Version:** 0.8.9  
+> **Version:** 0.8.11  
 > **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
@@ -10,7 +10,14 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
 
-## What's New in 0.8.9
+## What's New in 0.8.11
+
+- **`RuleMetadata` export fixed** — `RuleMetadata` is now properly exported from the `mordant` package (`from mordant import RuleMetadata` works). Previously it was only returned by `lint_rules()` but not importable.
+- **`LintConfig.from_dict`** — CLI `--config` now works correctly; `LintConfig.from_dict()` parses `.markdownlint.json` into a config object.
+- **Stub file corrected** — `__init__.pyi` has accurate signatures for all public functions (`parse`, `render_math`, `lint`, `fix`, `lint_many`, `fix_many`) and correct class names (`EmojiParserOptions`, `EmojiHtmlRendererOptions` without `Py` prefix).
+- **`MarkdownChunker` API documented** — Stub file now lists all actual methods (`get_chunks`, `get_all_chunks`, `get_chunks_with_context`, `get_bare_chunks`, `compute_overlap_payloads`) instead of the non-existent `chunk` method.
+
+## What's New in 0.8.10
 
 - **Server-side Mermaid rendering** — Mermaid diagrams now render as inline SVG via the `mermaid-rs-renderer` crate (~3ms server-side vs ~2s client-side). No browser/CDN dependency. Three render modes: `server` (default, inline SVG), `client` (legacy, Mermaid.js ESM), `hybrid` (try server, fallback to client)
 - **Render mode API** — `DiagramHtmlRendererOptions(render_mode="server"|"client"|"hybrid", mermaid_url=...)`

@@ -655,6 +655,7 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(list_themes, m)?)?;
     m.add_function(wrap_pyfunction!(list_syntaxes, m)?)?;
     m.add_class::<linter::LintConfig>()?;
+    m.add_class::<linter::RuleMetadata>()?;
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;
     m.add_class::<GfmOptions>()?;

@@ -4,13 +4,13 @@ build-backend = "maturin"
 
 [project]
 name = "mordant"
-version = "0.8.9"
+version = "0.8.11"
 description = "Mordant - A fast CommonMark + GFM Markdown parser for Python"
 requires-python = ">=3.9"
 license = {text = "MIT"}
 readme = "README.md"
 authors = [
-    {name = "Yusuke Inuzuka"},
+    {name = "opticsWolf"},
 ]
 keywords = ["markdown", "commonmark", "gfm", "parser", "renderer", "mermaid", "math", "katex", "lint", "syntax-highlighting"]
 classifiers = [
@@ -26,8 +26,10 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 [project.urls]
-Repository = "https://github.com/YusukeInuzuka/mordant-py"
-Documentation = "https://github.com/YusukeInuzuka/mordant-py#readme"
+Homepage = "https://github.com/opticsWolf/mordant"
+Repository = "https://github.com/opticsWolf/mordant"
+Documentation = "https://github.com/opticsWolf/mordant/blob/main/README.md"
+"Bug Tracker" = "https://github.com/opticsWolf/mordant/issues"
 
 [tool.maturin]
 # Include the themes directory as package data

@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.9  
+> **Version:** 0.8.11  
 > **Import:** `import mordant`
 
 ---
