@@ -11,6 +11,9 @@ pub mod test;
 pub mod text;
 pub mod util;
 
+#[cfg(feature = "meta")]
+pub mod meta;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
