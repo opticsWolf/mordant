@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-Mordant is a fast CommonMark + GFM Markdown parser and renderer, available as a native Rust library ([`mordant` on crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka) and as Python bindings (`pip install mordant`). Both are built on the same core crate and share its version number. It provides:
+Mordant is a fast CommonMark + GFM Markdown parser and renderer — available as a native Rust library on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka, and as Python bindings via `pip install mordant`. Both are built on the same core crate and share its version number. It provides:
 
 - **Single-call parse + render:** `markdown_to_html("# Hello")`
 - **AST access:** `parse("# Hello")` returns a `Document` with full tree traversal
