@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.20.0"
+version = "0.21.0"
 authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
@@ -36,6 +36,7 @@ std = ["dep:memchr", "memchr/std"]
 alloc = ["dep:memchr", "memchr/alloc"]
 meta = ["dep:yaml-peg", "std"]
 emoji = ["std"]
+footnotes = ["std"]
 html-entities = []
 hashbrown = ["dep:hashbrown"]
 no-std = ["alloc", "hashbrown"]

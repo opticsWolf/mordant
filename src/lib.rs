@@ -17,6 +17,9 @@ pub mod meta;
 #[cfg(feature = "emoji")]
 pub mod emoji;
 
+#[cfg(feature = "footnotes")]
+pub mod footnote;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
