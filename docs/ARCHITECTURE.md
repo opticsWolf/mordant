@@ -1,15 +1,15 @@
 # Mordant Architecture
 
 > **Version:** 0.9.0 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.9.0 (CommonMark 0.31.2 + GFM)  
+> **Rust crate:** mordant v0.9.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1233 Python (652 commonmark spec + 133 lint + 61 AST + 60 math + 55 mixed features + 41 frontmatter + 37 chunker + 29 emoji + 29 diagram + 25 footnote + 19 options + 19 highlighting + 19 OKF chunker methods + 18 extracted chunk + 14 core + 13 VSCode theme + 9 GFM) + 64 Rust (28 linter + 14 meta + 9 emoji + 3 mermaid_theme + 10 math)
+> **Tests:** 1233 Python + 134 core Rust unit tests (all engines: linter, meta, emoji, mermaid_theme, math, highlighter, chunker)
 
 ---
 
 ## 1. Overview
 
-Mordant is a fast CommonMark + GFM Markdown parser and renderer, available as a native Rust library ([`mordant` on crates.io](https://crates.io/crates/mordant)) and as Python bindings (`pip install mordant`). Both are built on the same core crate and share its version number. It provides:
+Mordant is a fast CommonMark + GFM Markdown parser and renderer, available as a native Rust library ([`mordant` on crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka) and as Python bindings (`pip install mordant`). Both are built on the same core crate and share its version number. It provides:
 
 - **Single-call parse + render:** `markdown_to_html("# Hello")`
 - **AST access:** `parse("# Hello")` returns a `Document` with full tree traversal
@@ -1843,7 +1843,7 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 ### 11.1. Dependencies
 
 **Core crate (`mordant` on crates.io)** — engines and their optional dependencies are wired
-together by cargo features; see the feature table in the [README](README.md#rust-crate).
+together by cargo features; see the feature table in the [README](../README.md#rust-crate).
 
 | Dependency | Version | Purpose | Feature |
 |------------|---------|---------|---------|

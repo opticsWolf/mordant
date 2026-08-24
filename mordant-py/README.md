@@ -7,8 +7,8 @@
 
 A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [mordant](https://crates.io/crates/mordant) Rust library.
 
-- [Architecture](ARCHITECTURE.md) — Full architecture documentation
-- [Quick Reference](QUICKREF.md) — Python bindings quick reference
+- [Architecture](../docs/ARCHITECTURE.md) — Full architecture documentation
+- [Quick Reference](../docs/QUICKREF.md) — Python bindings quick reference
 
 ## What's New in 0.8.11
 
@@ -262,7 +262,7 @@ chunks = list(chunker)
 assert chunker.current_header == "# Outer"
 ```
 
-See [QUICKREF.md](QUICKREF.md#markdownchunker) for full API reference.
+See [QUICKREF.md](../docs/QUICKREF.md#markdownchunker) for full API reference.
 
 ## AST Traversal
 
@@ -432,7 +432,7 @@ Key features of the integrated meta parser:
 - **AST table rendering:** Optional `meta_table` option renders metadata as an HTML table in the AST
 - **Error handling:** YAML parse errors are inserted as HTML comments in the AST; Python raises `ValueError` on `doc.metadata` access
 
-See [ARCHITECTURE.md §6](ARCHITECTURE.md#6-yaml-frontmatter-meta-rs) for full details.
+See [ARCHITECTURE.md §6](../docs/ARCHITECTURE.md#6-yaml-frontmatter-meta-rs) for full details.
 
 ### mordant-emoji
 
@@ -448,7 +448,7 @@ Key features of the integrated emoji extension:
 - **AST node access:** Emoji nodes expose `emoji`, `shortcode`, and `name` properties via the `Extension` node kind
 - **Error handling:** Unknown shortcodes pass through as-is (`:invalid:` → `:invalid:`)
 
-See [ARCHITECTURE.md §7.10](ARCHITECTURE.md#710-emoji-extension-mordant-emoji) for full details.
+See [ARCHITECTURE.md §7.10](../docs/ARCHITECTURE.md#710-emoji-extension-mordant-emoji) for full details.
 
 ### mordant-diagram
 
@@ -471,7 +471,7 @@ Mordant currently implements Mermaid support only. Key features:
 - **GFM compatible:** Works alongside other GFM features (tables, task lists, strikethrough; autolink disabled by default, enable with `GfmOptions.all()`)
 - **Frontmatter compatible:** Works alongside YAML frontmatter
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
+See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) for full details.
 
 ### mordant-math
 
@@ -487,7 +487,7 @@ Key features:
 - **Caching:** Rendered markup is memoized on `(display, output, latex)` for repeated formulas
 - **GIL released:** Math rendering runs with the GIL released for multi-threaded parallelism
 
-See [ARCHITECTURE.md §7.12](ARCHITECTURE.md#712-math-extension-katex) for full details.
+See [ARCHITECTURE.md §7.12](../docs/ARCHITECTURE.md#712-math-extension-katex) for full details.
 
 ### mordant-footnote
 
@@ -528,7 +528,7 @@ Key features:
 - **AST node access:** `node.footnote_label`, `node.footnote_index`, `node.footnote_references` properties
 - **No parser options:** Footnotes are always enabled (matches math extension pattern)
 
-See [ARCHITECTURE.md §7.14](ARCHITECTURE.md#714-footnote-extension-mordant-footnote) for full details.
+See [ARCHITECTURE.md §7.14](../docs/ARCHITECTURE.md#714-footnote-extension-mordant-footnote) for full details.
 
 ## Benchmarks
 
@@ -561,7 +561,7 @@ Themes are loaded from multiple sources:
 
 Both VSCode JSON and Sublime `.tmTheme` formats are supported. VSCode JSON themes are automatically converted to the syntect format via the `parse_vscode_theme_jsonc` → `vscode_theme_to_syntect` pipeline, allowing you to use any VSCode theme file directly.
 
-See [QUICKREF.md](QUICKREF.md#theme-loading) for details.
+See [QUICKREF.md](../docs/QUICKREF.md#theme-loading) for details.
 
 ## License
 
