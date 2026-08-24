@@ -1,15 +1,15 @@
 # Mordant Architecture
 
-> **Version:** 0.8.11  
-> **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
+> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.9.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1233 Python (652 commonmark spec + 133 lint + 61 AST + 60 math + 55 mixed features + 41 frontmatter + 37 chunker + 29 emoji + 29 diagram + 25 footnote + 19 options + 19 highlighting + 19 OKF chunker methods + 18 extracted chunk + 14 core + 13 VSCode theme + 9 GFM) + 64 Rust (28 linter + 14 meta + 9 emoji + 3 mermaid_theme + 10 math)
+> **Tests:** 1233 Python + 134 core Rust unit tests (all engines: linter, meta, emoji, mermaid_theme, math, highlighter, chunker)
 
 ---
 
 ## 1. Overview
 
-Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library. It provides:
+Mordant is a fast CommonMark + GFM Markdown parser and renderer — available as a native Rust library on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka, and as Python bindings via `pip install mordant`. Both are built on the same core crate and share its version number. It provides:
 
 - **Single-call parse + render:** `markdown_to_html("# Hello")`
 - **AST access:** `parse("# Hello")` returns a `Document` with full tree traversal
@@ -33,32 +33,47 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 ## 2. Repository Layout
 
 ```
-mordant/                          # Rushdown Rust crate (unchanged upstream)
-├── src/                          # Core parser/renderer (27,801 lines)
-│   ├── lib.rs                    # Public API: markdown_to_html_string, new_markdown_to_html
+mordant/                          # Monorepo: core Rust crate + Python bindings
+├── src/                          # Core crate — parser, renderer, all engines
+│   ├── lib.rs                    # Public API: markdown_to_html_string, new_markdown_to_html; cfg-gated engine modules
 │   ├── ast.rs                    # Arena, NodeRef, KindData (24 node kinds)
 │   ├── parser/                   # Block + inline parsers, extensions
 │   ├── renderer/                 # HTML renderer, BuiltinNodesRenderer
 │   ├── text.rs                   # Index, Value, Lines, BasicReader
 │   ├── context.rs                # Type-safe KV store for parser/renderer
 │   ├── scanner/                  # re2c-generated scanners (HTML, URLs, etc.)
-│   └── error.rs                  # Error types
-
-mordant-py/                       # PyO3 Python bindings
-├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json, syntect, syntect-assets, mermaid-rs-renderer 0.3
+│   ├── error.rs                  # Error types
+│   ├── meta.rs                   # [meta] YAML frontmatter parser extension + tests
+│   ├── emoji.rs                  # [emoji] Emoji shortcode inline parser + renderer + tests
+│   ├── footnote.rs               # [footnotes] Footnote AST data + parser/renderer extensions
+│   ├── linter.rs                 # [linter] 25 MD rules, fix engine, config, suppressions + tests
+│   ├── diagram.rs                # [diagram] Mermaid parser/renderer (server SVG / client ESM / hybrid)
+│   ├── mermaid_theme.rs          # [diagram] syntect → Mermaid theme derivation + tests
+│   ├── chunker.rs                # [chunker] MarkdownChunker engine, TextSource (owned/mmap) + tests
+│   ├── math.rs                   # [math] KaTeX rendering, fenced + inline math extensions + tests
+│   ├── highlighter.rs            # [highlighter] syntect highlighting, theme registry, detection + tests
+│   └── vscode_theme.rs           # [highlighter] VSCode JSON/JSONC theme converter
+├── Cargo.toml                    # Core crate: optional deps per feature (yaml-peg, katex-rs,
+│                                 #   mermaid-rs-renderer, syntect, memmap2, ...)
+│
+mordant-py/                       # PyO3 Python bindings (thin shim layer over the core crate)
+├── Cargo.toml                    # pyo3 0.29, mordant (path dep, all features), rayon, serde, serde_json
 ├── src/
 │   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), lint(), fix(), lint_many(), fix_many(), lint_rules(), GIL detach
 │   ├── document.rs               # Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix()
 │   ├── node.rs                   # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 │   ├── walker.rs                 # DFS/BFS AST walker
 │   ├── options.rs                # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
-│   ├── errors.rs                 # RushdownError Python exception type
-│   ├── meta.rs                   # YAML frontmatter parser extension + unit tests (14)
-│   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests (9)
-│   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook (with native/derived theme support)
-│   ├── linter.rs                 # Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API, RuleMetadata + unit tests (28)
-│   ├── highlighter.rs            # Syntax highlighting via syntect-assets: Highlighter, add_custom_theme(), list_themes(), list_syntaxes(), load_builtin_themes(), resolve_theme()
-│   ├── vscode_theme.rs           # VSCode JSON theme parser (JSONC with comments → syntect Theme)
+│   ├── errors.rs                 # MordantError Python exception type
+│   ├── meta.rs                   # Shim: re-exports core mordant::meta
+│   ├── emoji.rs                  # Shim: re-exports core mordant::emoji + PyEmoji option classes
+│   ├── diagram.rs                # Shim: re-exports core mordant::diagram/mermaid_theme + PyDiagram option classes, wires the syntax-theme lookup
+│   ├── linter.rs                 # Shim: Diagnostic/FixResult/LintConfig/LintOptions/RuleMetadata pyclasses + lint_many/fix_many (rayon batch)
+│   ├── chunker.rs                # Shim: ExtractedChunk/MarkdownChunker pyclasses over core engine (GIL released for parsing)
+│   ├── math.rs                   # Shim: render_math() pyfunction + MathRendererOptions pyclass
+│   ├── highlighter.rs            # Shim: Highlighter/HighlightingMode pyclasses, add_custom_theme(), list_themes(), list_syntaxes() pyfunctions
+│   ├── mermaid_theme.rs          # Shim: re-exports core mordant::mermaid_theme
+│   ├── vscode_theme.rs           # Shim: re-exports core mordant::vscode_theme
 │   └── themes.rs                 # Theme loading utilities
 ├── mordant/
 │   ├── __init__.py               # Python re-exports: lint, fix, lint_many, fix_many, lint_rules, RuleMetadata, Diagnostic, FixResult, Highlighter, HighlightingMode, add_custom_theme, list_themes, list_syntaxes, Document, Node, Walker, MarkdownChunker
@@ -85,7 +100,7 @@ pyproject/                        # Python package project (setuptools/pip insta
 
 ---
 
-## 3. Rust Core (rushdown) Architecture
+## 3. Rust Core (mordant) Architecture
 
 ### 3.1. Parsing Pipeline
 
@@ -291,6 +306,10 @@ W: TextWrite (String by default)
 
 ### 4.1. Module Structure
 
+The bindings are a thin shim layer: every engine lives in the core crate behind
+a cargo feature; each binding module re-exports its engine and keeps only the
+PyO3 surface (pyclasses, pyfunctions, GIL handling).
+
 ```
 mordant-py/src/
 ├── lib.rs          # PyO3 module entry, core API, GIL detach logic
@@ -298,10 +317,16 @@ mordant-py/src/
 ├── node.rs         # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 ├── walker.rs       # DFS/BFS AST walker
 ├── options.rs      # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
-├── errors.rs       # RushdownError Python exception
-├── meta.rs         # YAML frontmatter parser extension
-├── emoji.rs        # Emoji shortcode inline parser + HTML renderer + unit tests
-└── diagram.rs      # Mermaid diagram AST transformer + HTML renderer + post-render hook
+├── errors.rs       # MordantError Python exception
+├── meta.rs         # Shim → core mordant::meta
+├── emoji.rs        # Shim → core mordant::emoji + option pyclasses
+├── footnote.rs     # Shim → core mordant::footnote + option pyclasses
+├── diagram.rs      # Shim → core mordant::diagram + option pyclasses, theme-lookup wiring
+├── chunker.rs      # Shim → core mordant::chunker (ExtractedChunk/MarkdownChunker pyclasses)
+├── math.rs         # Shim → core mordant::math (render_math pyfunction, options pyclass)
+├── linter.rs       # Shim → core mordant::linter (Diagnostic/FixResult/LintOptions/RuleMetadata,
+│                   #   LintConfig Deref wrapper, rayon batch helpers)
+└── highlighter.rs  # Shim → core mordant::highlighter (Highlighter pyclass, theme pyfunctions)
 ```
 
 ### 4.2. Module Registration
@@ -370,8 +395,8 @@ This enables true parallelism across threads: mordant scales ~4.0x linearly with
 
 | Function | Description |
 |----------|-------------|
-| `build_parser(gfm, parse_cfg)` | Constructs `rushdown::parser::Parser` with options + meta + emoji + diagram + math + GFM extensions |
-| `build_renderer(render_cfg)` | Constructs `rushdown::renderer::html::Renderer` with render options + emoji + diagram + math + footnote extensions |
+| `build_parser(gfm, parse_cfg)` | Constructs `mordant::parser::Parser` with options + meta + emoji + diagram + math + GFM extensions |
+| `build_renderer(render_cfg)` | Constructs `mordant::renderer::html::Renderer` with render options + emoji + diagram + math + footnote extensions |
 | `parse_and_render(source, gfm, parse_cfg, render_cfg)` | Parse + render to HTML string (runs without GIL) |
 | `parse_only(source, gfm, parse_cfg)` | Parse only, returns `(Arena, NodeRef)` (runs without GIL) |
 | `parse_config_from(parse_opts, emoji_opts, diagram_opts)` | Build `ParseConfig` from Python option objects |
@@ -747,7 +772,7 @@ opts = mordant.FootnoteHtmlRendererOptions(id_prefix="note-")
 # id="note-fnref:1", href="#note-fn:1"
 ```
 
-### 5.13. RushdownError
+### 5.13. MordantError
 
 | Attribute/Method | Return Type | Description |
 |------------------|-------------|-------------|
@@ -755,7 +780,7 @@ opts = mordant.FootnoteHtmlRendererOptions(id_prefix="note-")
 | `__str__()` | str | Same as message |
 ### 5.14. MarkdownChunker
 
-Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
+Lazy, low-copy chunking iterator over the mordant AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
 
 | Constructor / Method | Return Type | Description |
 |----------------------|-------------|-------------|
@@ -894,7 +919,7 @@ assert chunker.current_header == "# Outer"
 
 ### 6.1. Parser Design
 
-The meta parser is a rushdown `BlockParser` extension with priority `PRIORITY_SETTEXT_HEADING - 100`:
+The meta parser is a mordant `BlockParser` extension with priority `PRIORITY_SETTEXT_HEADING - 100`:
 
 ```
 Trigger: first byte `-`
@@ -963,7 +988,7 @@ MetaAstTransformer (AstTransformer)
 - Five dashes not consumed, nested mapping, sequence
 - All scalar types, empty frontmatter, dash in string
 - Thematic break with blank line, multiple keys
-- Original rushdown-meta test cases, table option
+- Original mordant-meta test cases, table option
 
 ---
 
@@ -1070,7 +1095,7 @@ pub fn paragraph_renderer(opts: ParagraphRendererOptions) -> impl RendererExtens
 
 ---
 
-## 7.10. Emoji Extension (rushdown-emoji)
+## 7.10. Emoji Extension (mordant-emoji)
 
 The emoji extension provides shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.) via an inline parser and HTML renderer.
 
@@ -1088,7 +1113,7 @@ The emoji extension provides shortcode-based emoji rendering (`:joy:`, `:heart:`
 
 ### 7.10.3. EmojiInlineParser
 
-The emoji inline parser is a rushdown `InlineParser` that triggers on `:` and parses emoji shortcodes:
+The emoji inline parser is a mordant `InlineParser` that triggers on `:` and parses emoji shortcodes:
 
 ```rust
 struct EmojiInlineParser {
@@ -1167,7 +1192,7 @@ let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
 
 ---
 
-## 7.11. Diagram Extension (rushdown-diagram)
+## 7.11. Diagram Extension (mordant-diagram)
 
 The diagram extension provides Mermaid diagram rendering from fenced code blocks via an AST transformer and HTML renderer.
 
@@ -1249,7 +1274,7 @@ let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext);
 
 // In lib.rs — build_renderer()
 let diagram_ext = diagram_html_renderer_extension(render_cfg.diagram_options.clone());
-rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
+mordant_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
 ```
 
 ### 7.11.8. Diagram Extension Tests (17 tests in `test_diagram.py`)
@@ -1263,7 +1288,7 @@ rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diag
 
 ---
 
-### 7.14. Footnote Extension (rushdown-footnote)
+### 7.14. Footnote Extension (mordant-footnote)
 
 The footnote extension provides PHP Markdown Extra style footnotes via an inline parser, block parser, and HTML renderer with post-render hook. **Footnotes are always enabled** — there are no parser options to disable them.
 
@@ -1375,7 +1400,7 @@ Source String
     │
     ▼
 ┌──────────────┐
-│  Rushdown     │  ──►  (Arena, NodeRef)
+│  Mordant     │  ──►  (Arena, NodeRef)
 │  Parser       │       Parse-only (no render)
 └──────────────┘
     │
@@ -1677,16 +1702,16 @@ format for ALL math in the document (fenced ` ```math `, inline `$...$`, block `
 
 | Rust Error | Python Exception |
 |------------|------------------|
-| `rushdown::Error::InvalidNodeRef` | `ValueError` |
-| `rushdown::Error::InvalidNodeOperation` | `ValueError` |
-| `rushdown::Error::Io` | `ValueError` |
+| `mordant::Error::InvalidNodeRef` | `ValueError` |
+| `mordant::Error::InvalidNodeOperation` | `ValueError` |
+| `mordant::Error::Io` | `ValueError` |
 | YAML parse error (in AST) | `ValueError` on `doc.metadata` access |
 
-### 8.3. RushdownError Class
+### 8.3. MordantError Class
 
 ```python
-class RushdownError(Exception):
-    """Base exception for all rushdown errors."""
+class MordantError(Exception):
+    """Base exception for all mordant errors."""
     def __init__(self, message: str)
     @property
     def message(self) -> str
@@ -1696,7 +1721,7 @@ class RushdownError(Exception):
 ### 8.4. Error Conversion Helper
 
 ```rust
-pub fn rushdown_err_to_pyerr(err: rushdown_lib::Error) -> PyErr
+pub fn mordant_err_to_pyerr(err: mordant_lib::Error) -> PyErr
 ```
 
 ---
@@ -1817,20 +1842,29 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 
 ### 11.1. Dependencies
 
+**Core crate (`mordant` on crates.io)** — engines and their optional dependencies are wired
+together by cargo features; see the feature table in the [README](../README.md#rust-crate).
+
+| Dependency | Version | Purpose | Feature |
+|------------|---------|---------|---------|
+| `yaml-peg` | 1.0.9 | YAML frontmatter parsing | `meta` |
+| `emojis` | 0.8.0 | Emoji shortcode database (1,500+ emojis) | *(always compiled)* |
+| `katex-rs` | 0.2.4 | LaTeX math rendering | `math` |
+| `mermaid-rs-renderer` | 0.3 | Server-side Mermaid SVG rendering | `diagram` |
+| `syntect` | 5.3.0 | Syntax highlighting / theme model | `highlighter`, `diagram` |
+| `syntect-assets` | 0.23.6 | bat's updated syntaxes/themes | `highlighter` |
+| `jsonc-parser` | 0.32 | VSCode JSON theme parsing (JSONC) | `highlighter` |
+| `serde` | 1.0 | Serialization (VSCode theme structs) | `highlighter` |
+| `memmap2` | 0.9 | Zero-copy file mmap | `chunker` |
+| `phf`/`memchr`/`bitflags`/`hashbrown` | — | Parser core | default/no-std |
+
+**Python bindings (`mordant-py`)**
+
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| `rushdown` | 0.18.0 (path dep) | Core parser/renderer |
+| `mordant` | 0.9.0 (path dep, all features) | Core crate |
 | `pyo3` | 0.29 | Python bindings |
-| `yaml-peg` | 1.0.9 | YAML frontmatter parsing |
-| `emojis` | 0.8.0 | Emoji shortcode database (1,500+ emojis) |
-| `katex-rs` | 0.2.4 | LaTeX math rendering |
-| `rayon` | 1.10 | Parallel batch processing |
-| `serde` | 1.0 | Serialization |
-| `serde_json` | 1.0 | JSON support |
-| `memmap2` | 0.9 | Zero-copy file mmap |
-| `syntect` | 5.3.0 | Syntax highlighting |
-| `syntect-assets` | 0.23.6 | Syntax/theme assets |
-| `jsonc-parser` | 0.32 | JSONC parsing (VSCode themes) |
+| `rayon` | 1.10 | Parallel batch lint/fix |
 
 ### 11.2. Build Commands
 
@@ -1839,7 +1873,10 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 cd mordant-py
 cargo build --release
 
-# Run tests
+# Run core Rust tests (all engines)
+cargo test --features meta,emoji,footnotes,linter,diagram,chunker,math,highlighter
+
+# Run Python tests
 python -m pytest tests/ -v
 
 # Run benchmarks
@@ -1917,24 +1954,34 @@ python benchmarks.py -o results.json  # Save JSON
 | `src/scanner/scanner_gen.rs` | 8,996 | re2c-generated scanner code |
 | `src/util.rs` | 2,205 | StringMap, TinyVec, escape functions, AsciiWordSet, Prioritized |
 | `src/error.rs` | 200 | Error types, CallbackError |
-| `build.rs` | 217 | Build-time code generation (entities, attributes, tags) |
-| **Python Bindings** | | |
+| **Core Engine Modules** (cargo features) | | |
+| `src/meta.rs` | 655 | `[meta]` YAML frontmatter parser + unit tests |
+| `src/emoji.rs` | 509 | `[emoji]` Emoji shortcode inline parser + renderer |
+| `src/footnote.rs` | 749 | `[footnotes]` Footnote parsers, HTML renderer, post-render hook |
+| `src/linter.rs` | 1,804 | `[linter]` 25 rules, diagnostics, fix engine, config, suppression |
+| `src/diagram.rs` | 554 | `[diagram]` Mermaid parser/renderer (server/client/hybrid) + themes |
+| `src/mermaid_theme.rs` | 461 | `[diagram]` syntect → Mermaid theme derivation + tests |
+| `src/chunker.rs` | 673 | `[chunker]` MarkdownChunker engine, owned/mmap sources + tests |
+| `src/math.rs` | 653 | `[math]` KaTeX rendering, fenced + inline math extensions + tests |
+| `src/highlighter.rs` | 813 | `[highlighter]` syntect highlighting, theme registry, detection + tests |
+| `src/vscode_theme.rs` | 302 | `[highlighter]` VSCode JSON/JSONC theme converter |
+| **Python Bindings** (thin shim layer) | | |
 | `mordant-py/src/lib.rs` | ~500 | PyO3 module, core API, lint/fix/batch API, GIL detach |
 | `mordant-py/src/document.rs` | 183 | Document wrapper, metadata, walk |
 | `mordant-py/src/node.rs` | 437 | Node wrapper, kind-specific properties (emoji/diagram/footnote/heading/code) |
 | `mordant-py/src/walker.rs` | 105 | AST walker (DFS/BFS) |
 | `mordant-py/src/options.rs` | 143 | ParseOptions, RenderOptions, GfmOptions, ArenaOptions |
 | `mordant-py/src/errors.rs` | 33 | Python exception types |
-| `mordant-py/src/meta.rs` | 655 | YAML frontmatter parser + unit tests |
-| `mordant-py/src/emoji.rs` | 572 | Emoji shortcode inline parser + HTML renderer + unit tests |
-| `mordant-py/src/diagram.rs` | ~350 | Mermaid diagram AST transformer + HTML renderer + post-render hook |
-| `mordant-py/src/footnote.rs` | 829 | Footnote inline/block parser, HTML renderer, post-render hook, FootnoteHtmlRendererOptions |
-| `mordant-py/src/linter.rs` | ~1,800 | Lint engine: 25 rules, diagnostics, fix engine, config, suppression, batch API |
-| `mordant-py/src/chunker.rs` | ~260 | Markdown chunking engine: MarkdownChunker, lazy AST-based chunk iterator, heading context, from_file(), from_file_mmap() |
-| `mordant-py/src/document.rs` | 250 | Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix() |
+| `mordant-py/src/meta.rs` | 6 | Shim: re-exports core mordant::meta |
+| `mordant-py/src/emoji.rs` | 73 | Shim: option pyclasses over core mordant::emoji |
+| `mordant-py/src/diagram.rs` | 94 | Shim: option pyclasses over core mordant::diagram, theme-lookup wiring |
+| `mordant-py/src/footnote.rs` | 86 | Shim: option pyclasses over core mordant::footnote |
+| `mordant-py/src/linter.rs` | 468 | Shim: Diagnostic/FixResult/LintConfig/LintOptions/RuleMetadata pyclasses, rayon batch helpers |
+| `mordant-py/src/chunker.rs` | 238 | Shim: ExtractedChunk/MarkdownChunker pyclasses over core engine |
+| `mordant-py/src/math.rs` | 53 | Shim: render_math() pyfunction + MathRendererOptions pyclass |
+| `mordant-py/src/highlighter.rs` | 87 | Shim: Highlighter pyclass + theme pyfunctions |
 | `mordant-py/mordant/__init__.py` | ~100 | Python re-exports: lint, fix, lint_many, fix_many, Diagnostic, FixResult, etc. |
-| `mordant-py/mordant/__main__.py` | ~300 | CLI: argparse, formatters (human/json/github), config loading, glob expansion |
-| **Tests** | | |
+| `mordant-py/mordant/__main__.py` | ~300 | CLI: argparse, formatters (human/json/github), config loading, glob expansion || **Tests** | | |
 | `mordant-py/tests/test_core.py` | 14 | Basic CommonMark rendering |
 | `mordant-py/tests/test_ast.py` | 61 | Document, Node, Walker, metadata |
 | `mordant-py/tests/test_gfm.py` | 9 | GFM extensions |
@@ -1960,7 +2007,7 @@ Source String
     │
     ▼
 ┌──────────────┐
-│  Rushdown     │  ──►  (Arena, NodeRef)
+│  Mordant     │  ──►  (Arena, NodeRef)
 │  Parser       │       Parse-only (no render)
 └──────────────┘
     │

@@ -1,4 +1,4 @@
-//! Custom error types for the rushdown library.
+//! Custom error types for the mordant library.
 
 extern crate alloc;
 
@@ -21,7 +21,7 @@ pub type Result<T> = CoreResult<T, Error>;
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum CallbackError<E: CoreError + 'static> {
-    /// Internal error from the rushdown library.
+    /// Internal error from the mordant library.
     Internal(Error),
 
     /// User-defined callback error.
@@ -48,7 +48,7 @@ impl<E: CoreError + 'static> CoreError for CallbackError<E> {
     }
 }
 
-/// Custom error type for the rushdown library.
+/// Custom error type for the mordant library.
 #[non_exhaustive]
 pub enum Error {
     /// Invalid node reference error.

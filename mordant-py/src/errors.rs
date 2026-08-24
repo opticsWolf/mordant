@@ -1,19 +1,19 @@
-//! Python exception types for rushdown errors.
+//! Python exception types for mordant errors.
 
 use pyo3::prelude::*;
 
-/// Base exception for all rushdown errors.
+/// Base exception for all mordant errors.
 #[pyclass(module = "mordant", skip_from_py_object)]
 #[derive(Clone)]
-pub struct RushdownError {
+pub struct MordantError {
     message: String,
 }
 
 #[pymethods]
-impl RushdownError {
+impl MordantError {
     #[new]
     fn new(message: String) -> Self {
-        RushdownError { message }
+        MordantError { message }
     }
 
     #[getter]
@@ -26,8 +26,8 @@ impl RushdownError {
     }
 }
 
-/// Convert a rushdown library error to a Python exception.
+/// Convert a mordant library error to a Python exception.
 #[allow(dead_code)]
-pub fn rushdown_err_to_pyerr(err: rushdown_lib::Error) -> PyErr {
+pub fn mordant_err_to_pyerr(err: mordant_lib::Error) -> PyErr {
     pyo3::exceptions::PyValueError::new_err(err.to_string())
 }

@@ -469,16 +469,36 @@ dependencies = [
 
 [[package]]
 name = "mordant"
-version = "0.8.11"
+version = "0.9.0"
+dependencies = [
+ "bitflags",
+ "emojis",
+ "jsonc-parser",
+ "katex-rs",
+ "memchr",
+ "memmap2",
+ "mermaid-rs-renderer",
+ "phf",
+ "phf_codegen",
+ "serde",
+ "serde_json",
+ "syntect",
+ "syntect-assets",
+ "yaml-peg",
+]
+
+[[package]]
+name = "mordant-py"
+version = "0.9.0"
 dependencies = [
  "emojis",
  "jsonc-parser",
  "katex-rs",
  "memmap2",
  "mermaid-rs-renderer",
+ "mordant",
  "pyo3",
  "rayon",
- "rushdown",
  "serde",
  "serde_json",
  "syntect",
@@ -772,17 +792,6 @@ name = "roxmltree"
 version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c20b6793b5c2fa6553b250154b78d6d0db37e72700ae35fad9387a46f487c97"
-
-[[package]]
-name = "rushdown"
-version = "0.18.0"
-dependencies = [
- "bitflags",
- "emojis",
- "memchr",
- "phf",
- "phf_codegen",
-]
 
 [[package]]
 name = "rustversion"

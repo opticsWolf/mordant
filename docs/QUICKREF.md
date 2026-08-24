@@ -1,6 +1,7 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.11  
+> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.9.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
 > **Import:** `import mordant`
 
 ---
@@ -12,6 +13,8 @@ pip install mordant
 # or from source:
 cd mordant-py && cargo build --release
 ```
+
+> **Rust users:** the same engine is on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library — `cargo add mordant` (features: `meta`, `emoji`, `footnotes`, `linter`, `diagram`, `chunker`, `math`, `highlighter`). See the [README](../README.md#rust-crate) for the feature table.
 
 ---
 
@@ -475,7 +478,7 @@ for node in doc.walk("breadth"):
 
 ## MarkdownChunker
 
-Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
+Lazy, low-copy chunking iterator over the mordant AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
 
 ```python
 import mordant
@@ -1266,10 +1269,10 @@ try:
 except ValueError as e:
     print(e)  # YAML parsing error message
 
-# Using RushdownError directly
-from mordant import RushdownError
+# Using MordantError directly
+from mordant import MordantError
 try:
-    err = RushdownError("custom error")
+    err = MordantError("custom error")
     print(err.message)  # "custom error"
     print(str(err))     # "custom error"
 except Exception as e:

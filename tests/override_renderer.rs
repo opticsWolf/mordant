@@ -4,8 +4,8 @@ use alloc::string::String;
 use core::any::TypeId;
 
 #[cfg(all(not(feature = "std"), feature = "no-std-unix-debug"))]
-use rushdown::println;
-use rushdown::{
+use mordant::println;
+use mordant::{
     ast::*,
     new_markdown_to_html, parser, renderer,
     renderer::{
@@ -39,7 +39,7 @@ impl<W: TextWrite> RenderNode<W> for CustomParagraphRenderer<W> {
         _node_ref: NodeRef,
         entering: bool,
         _context: &mut renderer::Context,
-    ) -> Result<WalkStatus, rushdown::Error> {
+    ) -> Result<WalkStatus, mordant::Error> {
         if entering {
             self.writer.write_safe_str(w, "<pp>")?;
         } else {

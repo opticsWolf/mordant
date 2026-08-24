@@ -1,10 +1,10 @@
-//! Node wrapper for the rushdown AST.
+//! Node wrapper for the mordant AST.
 //!
 //! Provides Python-accessible properties for all node kinds.
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use rushdown_lib::ast::{Arena, KindData, NodeRef, Task, TableCellAlignment};
+use mordant_lib::ast::{Arena, KindData, NodeRef, Task, TableCellAlignment};
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -12,7 +12,7 @@ use crate::emoji::EmojiData;
 use crate::diagram::{Diagram, DiagramType};
 use crate::footnote::{FootnoteReference, FootnoteDefinition};
 
-/// A Python-accessible wrapper around a rushdown AST node.
+/// A Python-accessible wrapper around a mordant AST node.
 ///
 /// Holds a shared reference to the Arena (via Rc<RefCell>) and the source string.
 #[pyclass(module = "mordant", unsendable)]
@@ -39,8 +39,8 @@ impl Node {
         let arena_borrow = self.arena.borrow();
         let td = arena_borrow[self.node_ref].type_data();
         match td {
-            rushdown_lib::ast::TypeData::Block(_) => Ok("block".to_string()),
-            rushdown_lib::ast::TypeData::Inline(_) => Ok("inline".to_string()),
+            mordant_lib::ast::TypeData::Block(_) => Ok("block".to_string()),
+            mordant_lib::ast::TypeData::Inline(_) => Ok("inline".to_string()),
             _ => Ok("unknown".to_string()),
         }
     }

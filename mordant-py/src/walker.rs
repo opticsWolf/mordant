@@ -4,7 +4,7 @@
 //! as Python iterators via __iter__ and __next__.
 
 use pyo3::prelude::*;
-use rushdown_lib::ast::{Arena, NodeRef};
+use mordant_lib::ast::{Arena, NodeRef};
 use std::rc::Rc;
 use std::cell::RefCell;
 

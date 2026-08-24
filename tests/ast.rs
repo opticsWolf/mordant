@@ -1,4 +1,4 @@
-use rushdown::{node_path, parser, text};
+use mordant::{node_path, parser, text};
 
 fn test_inline_pos_aux(source: &str, node_type: &str) {
     let p = parser::Parser::with_extensions(
@@ -16,7 +16,7 @@ fn test_inline_pos_aux(source: &str, node_type: &str) {
     );
     #[cfg(feature = "pp-ast")]
     {
-        use rushdown::ast::pretty_print;
+        use mordant::ast::pretty_print;
         let mut w = String::new();
         pretty_print(&mut w, &arena, document_ref, source).expect("failed to pretty print");
         println!("{}", w);
@@ -127,7 +127,7 @@ fn test_block_pos_aux(source: &str, node_type: &str, expected: usize, n: usize) 
 
     #[cfg(feature = "pp-ast")]
     {
-        use rushdown::ast::pretty_print;
+        use mordant::ast::pretty_print;
         let mut w = String::new();
         pretty_print(&mut w, &arena, document_ref, source).expect("failed to pretty print");
         println!("{}", w);

@@ -1,7 +1,7 @@
 """CommonMark 0.31.2 spec test suite.
 
 Runs all 652 test cases from the official CommonMark spec against mordant.
-The spec JSON is sourced from rushdown's test fixtures.
+The spec JSON is sourced from mordant's test fixtures.
 
 Usage:
     python -m pytest tests/test_commonmark_spec.py -v
@@ -21,8 +21,8 @@ import mordant
 # Load spec fixtures
 # ---------------------------------------------------------------------------
 
-RUSHDOWN_ROOT = Path(__file__).resolve().parent.parent.parent
-SPEC_PATH = RUSHDOWN_ROOT / "tests" / "fixtures" / "spec.json"
+MORDANT_ROOT = Path(__file__).resolve().parent.parent.parent
+SPEC_PATH = MORDANT_ROOT / "tests" / "fixtures" / "spec.json"
 
 
 def load_spec_cases():

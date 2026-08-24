@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use rushdown::{
+use mordant::{
     new_markdown_to_html, parser,
     renderer::html::{self, Options},
     test::{parse_case_env, MarkdownTestCase, MarkdownTestCaseOptions},

@@ -1,34 +1,47 @@
 [package]
-name = "rushdown"
-version = "0.18.0"
-authors = ["Yusuke Inuzuka <yuin@inforno.net>"]
+name = "mordant"
+version = "0.9.0"
+authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
 description = "A 100% CommonMark-compatible GitHub Flavored Markdown parser and renderer"
-documentation = "https://docs.rs/rushdown"
-homepage = "https://github.com/yuin/rushdown"
-repository = "https://github.com/yuin/rushdown"
+documentation = "https://docs.rs/mordant"
+homepage = "https://github.com/opticsWolf/mordant"
+repository = "https://github.com/opticsWolf/mordant"
 readme = "README.md"
 keywords = ["markdown", "commonmark"]
 license = "MIT"
 categories = ["text-processing"]
 exclude = [
     "/script/*",
+    "/fuzz/*",
+    "/extensions/*",
+    "/mordant-py/*",
+    "/.github/*",
 ]
 resolver = "2"
 build = "build.rs"
 
+# NOTE: no panic="abort" here — this crate is published as a library;
+# forcing abort would leak into downstream binaries.
 [profile.release]
 opt-level = 3
 debug = false
 lto = true
 codegen-units = 1
-panic = 'abort'
 
 [features]
 default = ["std", "html-entities"]
 std = ["dep:memchr", "memchr/std"]
 alloc = ["dep:memchr", "memchr/alloc"]
+meta = ["dep:yaml-peg", "std"]
+emoji = ["std"]
+footnotes = ["std"]
+linter = ["std", "emoji"]
+diagram = ["std", "dep:mermaid-rs-renderer", "dep:syntect", "dep:serde_json"]
+chunker = ["std", "diagram", "dep:memmap2"]
+math = ["std", "dep:katex"]
+highlighter = ["std", "math", "dep:syntect", "dep:syntect-assets", "dep:jsonc-parser", "dep:serde"]
 html-entities = []
 hashbrown = ["dep:hashbrown"]
 no-std = ["alloc", "hashbrown"]
@@ -45,6 +58,15 @@ memchr = { version = "2", default-features = false, optional = true }
 phf = { version = "0.13.1", default-features = false }
 pprof = { version = "0.15", features = ["criterion", "protobuf", "flamegraph", "prost-codec"], optional = true }
 emojis = "0.8.0"
+yaml-peg = { version = "1.0.9", optional = true }
+mermaid-rs-renderer = { version = "0.3", default-features = false, optional = true }
+syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"], optional = true }
+serde_json = { version = "1.0", optional = true }
+memmap2 = { version = "0.9", optional = true }
+katex = { package = "katex-rs", version = "0.2.4", optional = true }
+syntect-assets = { version = "0.23.6", optional = true }
+jsonc-parser = { version = "0.32", features = ["serde"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 [build-dependencies]
 phf = { version = "0.13.1", default-features = false }

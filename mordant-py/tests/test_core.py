@@ -1,4 +1,4 @@
-"""Core tests for rushdown Python bindings."""
+"""Core tests for mordant Python bindings."""
 
 import mordant
 
