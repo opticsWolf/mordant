@@ -14,6 +14,9 @@ pub mod util;
 #[cfg(feature = "meta")]
 pub mod meta;
 
+#[cfg(feature = "emoji")]
+pub mod emoji;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
