@@ -13,7 +13,7 @@
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
 
-A fast CommonMark + GFM Markdown parser and renderer, available as a native **Rust library** ([`mordant` on crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka) and as **Python bindings** (`pip install mordant`).
+A fast CommonMark + GFM Markdown parser and renderer — available as a native Rust library on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka, and as Python bindings via `pip install mordant`.
 
 - [Architecture](docs/ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](docs/QUICKREF.md) — Python bindings quick reference
