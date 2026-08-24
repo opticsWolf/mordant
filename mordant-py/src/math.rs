@@ -61,6 +61,7 @@ impl PyMathRendererOptions {
 mod highlighter_interaction_tests {
     use super::*;
     use mordant_lib::renderer::html;
+    use mordant_lib::renderer::html::RendererExtension;
     use mordant_lib::parser;
 
     use crate::highlighter::{highlighting_html_renderer_extension, HighlightingRendererOptions};
