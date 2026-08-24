@@ -483,7 +483,7 @@ The Python package wraps the [mordant](https://crates.io/crates/mordant) Rust cr
 
 ### mordant-meta
 
-YAML frontmatter support is provided by [mordant-meta](https://crates.io/crates/mordant-meta), which has been directly incorporated into mordant. The original mordant-meta crate is available in `extensions/mordant-meta-main/`.
+YAML frontmatter support originates from the rushdown ecosystem's `meta` extension (upstream sources vendored in `extensions/rushdown-meta-main/`). It has been directly incorporated into the core crate as [`src/meta.rs`](src/meta.rs).
 
 Key features of the integrated meta parser:
 
@@ -492,11 +492,11 @@ Key features of the integrated meta parser:
 - **AST table rendering:** Optional `meta_table` option renders metadata as an HTML table in the AST
 - **Error handling:** YAML parse errors are inserted as HTML comments in the AST; Python raises `ValueError` on `doc.metadata` access
 
-See [ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-yaml-frontmatter-meta-rs) for full details.
+See [ARCHITECTURE.md §6](docs/ARCHITECTURE.md#6-yaml-frontmatter-metars) for full details.
 
 ### mordant-emoji
 
-Emoji shortcode support (`:joy:`, `:heart:`, `:smile:`, etc.) is provided by [mordant-emoji](https://crates.io/crates/mordant-emoji), which has been directly incorporated into mordant. The original mordant-emoji crate is available in `extensions/mordant-emoji-main/`.
+Emoji shortcode support (`:joy:`, `:heart:`, `:smile:`, etc.) originates from the rushdown ecosystem's `emoji` extension (upstream sources vendored in `extensions/rushdown-emoji-main/`). It has been directly incorporated into the core crate as [`src/emoji.rs`](src/emoji.rs).
 
 Key features of the integrated emoji extension:
 
@@ -512,7 +512,7 @@ See [ARCHITECTURE.md §7.10](docs/ARCHITECTURE.md#710-emoji-extension-mordant-em
 
 ### mordant-diagram
 
-Diagram support is provided by [mordant-diagram](https://crates.io/crates/mordant-diagram), which has been directly incorporated into mordant. The original mordant-diagram crate is available in `extensions/mordant-diagram-main/`.
+Diagram support originates from the rushdown ecosystem's `diagram` extension (upstream sources vendored in `extensions/rushdown-diagram-main/`). It has been directly incorporated into the core crate as [`src/diagram.rs`](src/diagram.rs).
 
 mordant-diagram supports two diagram formats:
 
@@ -551,7 +551,7 @@ See [ARCHITECTURE.md §7.12](docs/ARCHITECTURE.md#712-math-extension-katex) for 
 
 ### mordant-footnote
 
-Footnote support is provided by [mordant-footnote](https://github.com/yuin/mordant-footnote), which has been directly incorporated into mordant. Footnotes are **always enabled** — no parser options to disable them.
+Footnote support originates from the rushdown ecosystem's `footnote` extension (upstream sources vendored in `extensions/rushdown-footnote-main/`). It has been directly incorporated into the core crate as [`src/footnote.rs`](src/footnote.rs). Footnotes are **always enabled** — no parser options to disable them.
 
 **Syntax (PHP Markdown Extra):**
 

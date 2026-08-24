@@ -432,7 +432,7 @@ Key features of the integrated meta parser:
 - **AST table rendering:** Optional `meta_table` option renders metadata as an HTML table in the AST
 - **Error handling:** YAML parse errors are inserted as HTML comments in the AST; Python raises `ValueError` on `doc.metadata` access
 
-See [ARCHITECTURE.md §6](../docs/ARCHITECTURE.md#6-yaml-frontmatter-meta-rs) for full details.
+See [ARCHITECTURE.md §6](../docs/ARCHITECTURE.md#6-yaml-frontmatter-metars) for full details.
 
 ### mordant-emoji
 
