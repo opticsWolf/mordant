@@ -3,13 +3,12 @@
 //! Parses :shortcode: style emojis and renders them as Unicode characters
 //! or custom HTML templates.
 
-use pyo3::prelude::*;
-use mordant_lib::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
-use mordant_lib::parser::{self, AnyInlineParser, InlineParser, Parser, ParserExtension, ParserOptions, PRIORITY_EMPHASIS};
-use mordant_lib::renderer::{self, html::{self as html_mod, Renderer, RendererExtension, RendererExtensionFn}, NodeRenderer, RendererOptions, RenderNode, TextWrite};
-use mordant_lib::text::{BlockReader, Reader};
+use crate::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
+use crate::parser::{self, AnyInlineParser, InlineParser, Parser, ParserExtension, ParserOptions, PRIORITY_EMPHASIS};
+use crate::renderer::{self, html::{self as html_mod, Renderer, RendererExtension, RendererExtensionFn}, NodeRenderer, RendererOptions, RenderNode, TextWrite};
+use crate::text::{BlockReader, Reader};
 
-use mordant_lib::{Error as CoreError, Result};
+use crate::{Error as CoreError, Result};
 use std::fmt;
 use std::fmt::Write;
 use std::string::String;
@@ -92,40 +91,6 @@ pub struct EmojiParserOptions {
 
 impl ParserOptions for EmojiParserOptions {}
 
-/// Options for the emoji parser (Python-exposed).
-#[pyclass(module = "mordant", name = "EmojiParserOptions")]
-pub struct PyEmojiParserOptions {
-    /// A comma-separated list of emoji shortcodes to ignore.
-    #[pyo3(get)]
-    pub blacklist: Option<String>,
-}
-
-impl Default for PyEmojiParserOptions {
-    fn default() -> Self {
-        PyEmojiParserOptions { blacklist: None }
-    }
-}
-
-#[pymethods]
-impl PyEmojiParserOptions {
-    #[new]
-    fn new(blacklist: Option<String>) -> Self {
-        PyEmojiParserOptions { blacklist }
-    }
-}
-
-impl PyEmojiParserOptions {
-    pub fn to_mordant(&self) -> EmojiParserOptions {
-        EmojiParserOptions { blacklist: self.to_blacklist() }
-    }
-
-    pub fn to_blacklist(&self) -> Vec<String> {
-        self.blacklist.as_ref()
-            .map(|s| s.split(',').map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).collect())
-            .unwrap_or_default()
-    }
-}
-
 /// Options for the emoji HTML renderer.
 #[derive(Debug, Clone, Default)]
 pub struct EmojiHtmlRendererOptions {
@@ -134,34 +99,6 @@ pub struct EmojiHtmlRendererOptions {
 }
 
 impl RendererOptions for EmojiHtmlRendererOptions {}
-
-/// Options for the emoji HTML renderer (Python-exposed).
-#[pyclass(module = "mordant", name = "EmojiHtmlRendererOptions")]
-pub struct PyEmojiHtmlRendererOptions {
-    /// A template string for rendering emojis. Supports {emoji}, {shortcode}, {name}.
-    #[pyo3(get)]
-    pub template: Option<String>,
-}
-
-impl Default for PyEmojiHtmlRendererOptions {
-    fn default() -> Self {
-        PyEmojiHtmlRendererOptions { template: None }
-    }
-}
-
-#[pymethods]
-impl PyEmojiHtmlRendererOptions {
-    #[new]
-    fn new(template: Option<String>) -> Self {
-        PyEmojiHtmlRendererOptions { template }
-    }
-}
-
-impl PyEmojiHtmlRendererOptions {
-    pub fn to_mordant(&self) -> EmojiHtmlRendererOptions {
-        EmojiHtmlRendererOptions { template: self.template.clone() }
-    }
-}
 
 // ---------------------------------------------------------------------------
 // Parser
@@ -366,7 +303,7 @@ mod tests {
             parser::Options::default(),
             ext,
         );
-        let mut reader = mordant_lib::text::BasicReader::new(source);
+        let mut reader = crate::text::BasicReader::new(source);
         parser.parse(&mut reader)
     }
 
@@ -375,7 +312,7 @@ mod tests {
         let renderer_ext = emoji_html_renderer_extension(options);
         let html_opts = html_mod::Options { allows_unsafe: true, xhtml: false, ..html_mod::Options::default() };
         let mut result = String::new();
-        let markdown_to_html = mordant_lib::new_markdown_to_html(
+        let markdown_to_html = crate::new_markdown_to_html(
             parser::Options::default(),
             html_opts,
             parser_ext,
@@ -389,9 +326,9 @@ mod tests {
     fn test_emoji_basic() {
         let (arena, doc_ref) = parse_with_emoji("I'm :joy:");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(_doc) = kd {
+        if let crate::ast::KindData::Document(_doc) = kd {
             let mut finder = EmojiFinder::new();
-            mordant_lib::ast::walk(&arena, doc_ref, &mut finder).unwrap();
+            crate::ast::walk(&arena, doc_ref, &mut finder).unwrap();
             assert!(finder.found, "Should have found an Emoji node");
         } else {
             panic!("Expected Document node");
@@ -408,10 +345,10 @@ mod tests {
         }
     }
 
-    impl mordant_lib::ast::Walk<CoreError> for EmojiFinder {
+    impl crate::ast::Walk<CoreError> for EmojiFinder {
         fn walk(&mut self, arena: &Arena, node_ref: NodeRef, entering: bool) -> Result<WalkStatus> {
             if entering {
-                if let mordant_lib::ast::KindData::Extension(ref kind) = arena[node_ref].kind_data() {
+                if let crate::ast::KindData::Extension(ref kind) = arena[node_ref].kind_data() {
                     if let Some(_emoji_data) = (kind.as_ref() as &dyn ::core::any::Any).downcast_ref::<EmojiData>() {
                         self.found = true;
                     }
@@ -425,9 +362,9 @@ mod tests {
     fn test_emoji_not_exists() {
         let (arena, doc_ref) = parse_with_emoji("I'm :joyjoy:");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(_doc) = kd {
+        if let crate::ast::KindData::Document(_doc) = kd {
             let mut finder = EmojiFinder::new();
-            mordant_lib::ast::walk(&arena, doc_ref, &mut finder).unwrap();
+            crate::ast::walk(&arena, doc_ref, &mut finder).unwrap();
             assert!(!finder.found, "Unknown shortcode should not create an Emoji node");
         } else {
             panic!("Expected Document node");
@@ -444,12 +381,12 @@ mod tests {
             parser::Options::default(),
             ext,
         );
-        let mut reader = mordant_lib::text::BasicReader::new("I'm :joy:");
+        let mut reader = crate::text::BasicReader::new("I'm :joy:");
         let (arena, doc_ref) = parser.parse(&mut reader);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(_doc) = kd {
+        if let crate::ast::KindData::Document(_doc) = kd {
             let mut finder = EmojiFinder::new();
-            mordant_lib::ast::walk(&arena, doc_ref, &mut finder).unwrap();
+            crate::ast::walk(&arena, doc_ref, &mut finder).unwrap();
             assert!(!finder.found, "Blacklisted shortcode should not create an Emoji node");
         } else {
             panic!("Expected Document node");
@@ -459,7 +396,7 @@ mod tests {
     #[test]
     fn test_emoji_render_unicode() {
         let html = render_with_emoji("I'm :joy:", EmojiHtmlRendererOptions::default());
-        // :joy: maps to U+1F602 (ðŸ˜‚) in the emojis crate
+        // :joy: maps to U+1F602 (😂) in the emojis crate
         assert!(html.contains("\u{1F602}"), "Should contain Unicode emoji: {}", html);
     }
 
@@ -482,9 +419,9 @@ mod tests {
         // Emojis inside code spans should NOT be parsed
         let (arena, doc_ref) = parse_with_emoji("I'm `:joy:`");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(_doc) = kd {
+        if let crate::ast::KindData::Document(_doc) = kd {
             let mut finder = EmojiFinder::new();
-            mordant_lib::ast::walk(&arena, doc_ref, &mut finder).unwrap();
+            crate::ast::walk(&arena, doc_ref, &mut finder).unwrap();
             assert!(!finder.found, "Emoji inside code span should not be parsed");
         } else {
             panic!("Expected Document node");
@@ -501,10 +438,10 @@ mod tests {
         }
     }
 
-    impl mordant_lib::ast::Walk<CoreError> for EmojiCounter {
+    impl crate::ast::Walk<CoreError> for EmojiCounter {
         fn walk(&mut self, arena: &Arena, node_ref: NodeRef, entering: bool) -> Result<WalkStatus> {
             if entering {
-                if let mordant_lib::ast::KindData::Extension(ref kind) = arena[node_ref].kind_data() {
+                if let crate::ast::KindData::Extension(ref kind) = arena[node_ref].kind_data() {
                     if let Some(_emoji_data) = (kind.as_ref() as &dyn ::core::any::Any).downcast_ref::<EmojiData>() {
                         self.count += 1;
                     }
@@ -518,9 +455,9 @@ mod tests {
     fn test_emoji_multiple() {
         let (arena, doc_ref) = parse_with_emoji(":joy: :heart: :+1:");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(_doc) = kd {
+        if let crate::ast::KindData::Document(_doc) = kd {
             let mut counter = EmojiCounter::new();
-            mordant_lib::ast::walk(&arena, doc_ref, &mut counter).unwrap();
+            crate::ast::walk(&arena, doc_ref, &mut counter).unwrap();
             assert_eq!(counter.count, 3, "Should have found 3 Emoji nodes");
         } else {
             panic!("Expected Document node");
@@ -540,9 +477,9 @@ mod tests {
         }
     }
 
-    impl mordant_lib::ast::Walk<CoreError> for EmojiDataChecker {
+    impl crate::ast::Walk<CoreError> for EmojiDataChecker {
         fn walk(&mut self, arena: &Arena, node_ref: NodeRef, _entering: bool) -> Result<WalkStatus> {
-            if let mordant_lib::ast::KindData::Extension(ref kind) = arena[node_ref].kind_data() {
+            if let crate::ast::KindData::Extension(ref kind) = arena[node_ref].kind_data() {
                 if let Some(emoji_data) = (kind.as_ref() as &dyn ::core::any::Any).downcast_ref::<EmojiData>() {
                     self.found = true;
                     self.name = Some(emoji_data.name().to_string());
@@ -558,9 +495,9 @@ mod tests {
     fn test_emoji_emoji_data() {
         let (arena, doc_ref) = parse_with_emoji(":smile:");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(_doc) = kd {
+        if let crate::ast::KindData::Document(_doc) = kd {
             let mut checker = EmojiDataChecker::new();
-            mordant_lib::ast::walk(&arena, doc_ref, &mut checker).unwrap();
+            crate::ast::walk(&arena, doc_ref, &mut checker).unwrap();
             assert!(checker.found, "Should have found an Emoji node");
             assert!(checker.name.as_ref().map(|n| n.contains("smile") || n.contains("smiling")).unwrap_or(false), "Name should contain 'smile' or 'smiling': {:?}", checker.name);
             assert!(checker.has_shortcode, "Should have a shortcode");

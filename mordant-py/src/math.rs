@@ -27,10 +27,10 @@ use pyo3::types::PyString;
 
 use katex::{render_to_string, KatexContext, OutputFormat, Settings, StrictMode, StrictSetting};
 
-use rushdown_lib::ast::{Arena, CodeBlock, NodeRef, WalkStatus};
-use rushdown_lib::{as_kind_data, Result};
-use rushdown_lib::renderer::{self, html, NodeRenderer, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode};
-use rushdown_lib::renderer::html::{RendererExtension, RendererExtensionFn};
+use mordant_lib::ast::{Arena, CodeBlock, NodeRef, WalkStatus};
+use mordant_lib::{as_kind_data, Result};
+use mordant_lib::renderer::{self, html, NodeRenderer, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode};
+use mordant_lib::renderer::html::{RendererExtension, RendererExtensionFn};
 
 /// Built once, lazily. `KatexContext: Send + Sync` and renders take `&ctx`, so a
 /// single global instance serves every thread.
@@ -170,7 +170,7 @@ pub fn render_math(
 }
 
 // -----------------------------------------------------------------------------
-// Rushdown renderer extension — always intercepts ```math / ```latex blocks
+// Mordant renderer extension — always intercepts ```math / ```latex blocks
 // -----------------------------------------------------------------------------
 
 /// Options for the math HTML renderer extension.
@@ -188,7 +188,7 @@ impl Default for MathRendererOptions {
     }
 }
 
-impl rushdown_lib::renderer::RendererOptions for MathRendererOptions {}
+impl mordant_lib::renderer::RendererOptions for MathRendererOptions {}
 
 /// Python-exposed math renderer options.
 #[pyclass(module = "mordant", name = "MathRendererOptions")]
@@ -210,7 +210,7 @@ impl PyMathRendererOptions {
 }
 
 impl PyMathRendererOptions {
-    pub fn to_rushdown(&self) -> MathRendererOptions {
+    pub fn to_mordant(&self) -> MathRendererOptions {
         MathRendererOptions {
             output: output_from_str(&self.output).unwrap_or(OutputFormat::HtmlAndMathml),
         }
@@ -300,12 +300,12 @@ where
 // Level 2: Inline $...$ math parser extension
 // -----------------------------------------------------------------------------
 
-use rushdown_lib::ast::{KindData, NodeKind, NodeType, PrettyPrint, pp_indent};
+use mordant_lib::ast::{KindData, NodeKind, NodeType, PrettyPrint, pp_indent};
 use core::fmt;
 use core::fmt::Write as FmtWrite;
-use rushdown_lib::parser::{self, AnyInlineParser, InlineParser, Parser, ParserExtension, ParserExtensionFn, ParserOptions, PRIORITY_EMPHASIS};
-use rushdown_lib::text::Reader;
-use rushdown_lib::as_extension_data;
+use mordant_lib::parser::{self, AnyInlineParser, InlineParser, Parser, ParserExtension, ParserExtensionFn, ParserOptions, PRIORITY_EMPHASIS};
+use mordant_lib::text::Reader;
+use mordant_lib::as_extension_data;
 
 /// Represents an inline math expression in the AST.
 #[derive(Debug)]
@@ -393,7 +393,7 @@ impl InlineParser for MathParser {
         &self,
         arena: &mut Arena,
         _parent_ref: NodeRef,
-        reader: &mut rushdown_lib::text::BlockReader,
+        reader: &mut mordant_lib::text::BlockReader,
         _ctx: &mut parser::Context,
     ) -> Option<NodeRef> {
         let (line, _) = reader.peek_line_bytes()?;
@@ -478,7 +478,7 @@ impl MathParser {
     /// unbalanced `$$` remains literal text (no content is silently consumed).
     fn parse_multiline_display(
         &self,
-        reader: &mut rushdown_lib::text::BlockReader,
+        reader: &mut mordant_lib::text::BlockReader,
         opening_line: &[u8],
     ) -> Option<String> {
         let (saved_line, saved_pos) = reader.position();
@@ -573,7 +573,7 @@ impl Default for MathInlineRendererOptions {
     }
 }
 
-impl rushdown_lib::renderer::RendererOptions for MathInlineRendererOptions {}
+impl mordant_lib::renderer::RendererOptions for MathInlineRendererOptions {}
 
 struct MathInlineHtmlRenderer<W: TextWrite> {
     _phantom: core::marker::PhantomData<W>,
@@ -641,7 +641,7 @@ mod tests {
             .and(math_inline_html_renderer_extension(MathInlineRendererOptions::default()));
         let html_opts = html::Options::default();
         let mut result = String::new();
-        let f = rushdown_lib::new_markdown_to_html(
+        let f = mordant_lib::new_markdown_to_html(
             parser::Options::default(),
             html_opts,
             parser_ext,
@@ -662,7 +662,7 @@ mod tests {
             ));
         let html_opts = html::Options::default();
         let mut result = String::new();
-        let f = rushdown_lib::new_markdown_to_html(
+        let f = mordant_lib::new_markdown_to_html(
             parser::Options::default(),
             html_opts,
             parser_ext,

@@ -56,7 +56,7 @@ where
 /// # Examples
 /// ```
 /// use core::fmt::Write;
-/// use rushdown::{
+/// use mordant::{
 ///     new_markdown_to_html,
 ///     parser::{self, ParserExtension},
 ///     renderer::html::{self, RendererExtension},
@@ -118,7 +118,7 @@ pub fn new_markdown_to_html_string<'r>(
 ///
 /// # Examples
 /// ```
-/// use rushdown::markdown_to_html_string;
+/// use mordant::markdown_to_html_string;
 /// let mut output = String::new();
 /// let input = "# Hello, World!\n\nThis is a **Markdown** document.";
 /// match markdown_to_html_string(&mut output, input) {
@@ -144,8 +144,8 @@ pub fn markdown_to_html_string(output: &mut String, source: &str) -> Result<()> 
 ///
 /// # Examples
 /// ```
-/// use rushdown::ast::{Arena, NodeRef, KindData, Paragraph};
-/// use rushdown::matches_kind;
+/// use mordant::ast::{Arena, NodeRef, KindData, Paragraph};
+/// use mordant::matches_kind;
 ///
 /// let mut arena = Arena::new();
 /// let para_ref: NodeRef = arena.new_node(Paragraph::new());
@@ -170,8 +170,8 @@ macro_rules! matches_kind {
 /// # Examples
 /// ```
 /// use core::fmt::{self, Write};
-/// use rushdown::ast::{Arena, NodeRef, NodeType, NodeKind, KindData, PrettyPrint, pp_indent};
-/// use rushdown::matches_extension_kind;
+/// use mordant::ast::{Arena, NodeRef, NodeType, NodeKind, KindData, PrettyPrint, pp_indent};
+/// use mordant::matches_extension_kind;
 ///
 /// #[derive(Debug)]
 /// struct Admonition {
@@ -227,8 +227,8 @@ macro_rules! matches_extension_kind {
 /// # Examples
 /// ```
 /// use core::fmt::{self, Write};
-/// use rushdown::ast::{Arena, NodeRef, NodeType, NodeKind, KindData, PrettyPrint, pp_indent};
-/// use rushdown::as_extension_data;
+/// use mordant::ast::{Arena, NodeRef, NodeType, NodeKind, KindData, PrettyPrint, pp_indent};
+/// use mordant::as_extension_data;
 ///
 /// #[derive(Debug)]
 /// struct Admonition {
@@ -310,8 +310,8 @@ macro_rules! as_extension_data_mut {
 ///
 /// # Examples
 /// ```
-/// use rushdown::ast::{Arena, NodeRef, KindData, List};
-/// use rushdown::as_kind_data;
+/// use mordant::ast::{Arena, NodeRef, KindData, List};
+/// use mordant::as_kind_data;
 ///
 /// let mut arena = Arena::new();
 /// let para_ref: NodeRef = arena.new_node(List::new(b'-'));
@@ -379,8 +379,8 @@ macro_rules! as_kind_data_mut {
 ///
 /// # Examples
 /// ```
-/// use rushdown::ast::{Arena, NodeRef, TypeData, Block, Paragraph};
-/// use rushdown::as_type_data;
+/// use mordant::ast::{Arena, NodeRef, TypeData, Block, Paragraph};
+/// use mordant::as_type_data;
 ///
 /// let mut arena = Arena::new();
 /// let para_ref: NodeRef = arena.new_node(Paragraph::new());
@@ -449,9 +449,9 @@ macro_rules! as_type_data_mut {
 ///
 /// # Examples
 /// ```rust
-/// use rushdown::md_ast;
-/// use rushdown::ast::*;
-/// use rushdown::renderer::html;
+/// use mordant::md_ast;
+/// use mordant::ast::*;
+/// use mordant::renderer::html;
 ///
 /// let mut arena = Arena::new();
 /// let doc = md_ast!(&mut arena, Document::new() => {
@@ -517,11 +517,11 @@ macro_rules! md_ast {
 ///
 /// # Examples
 /// ```rust
-/// use rushdown::md_ast;
-/// use rushdown::node_path;
-/// use rushdown::as_kind_data;
-/// use rushdown::ast::*;
-/// use rushdown::renderer::html;
+/// use mordant::md_ast;
+/// use mordant::node_path;
+/// use mordant::as_kind_data;
+/// use mordant::ast::*;
+/// use mordant::renderer::html;
 ///
 /// let mut arena = Arena::new();
 /// let doc = md_ast!(&mut arena, Document::new() => {

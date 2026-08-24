@@ -6,7 +6,7 @@
 //!
 //! # Related macros
 //!
-//! rushdown provides several helper macros for working with AST nodes:
+//! mordant provides several helper macros for working with AST nodes:
 //!
 //! - [`crate::matches_kind!`] - Helper macro to match kind data.
 //! - [`crate::as_type_data!`] - Helper macro to downcast type data.
@@ -20,9 +20,9 @@
 //! # Basic usage
 //! ```rust
 //!
-//! use rushdown::ast::*;
-//! use rushdown::{as_type_data_mut, as_type_data, as_kind_data};
-//! use rushdown::text::Segment;
+//! use mordant::ast::*;
+//! use mordant::{as_type_data_mut, as_type_data, as_kind_data};
+//! use mordant::text::Segment;
 //!
 //! let mut arena = Arena::new();
 //! let source = "Hello, World!";
@@ -55,7 +55,7 @@
 //! You can get and manipulate nodes using the [`Arena`] and its methods.
 //!
 //! ```should_panic
-//! use rushdown::ast::*;
+//! use mordant::ast::*;
 //!
 //! let mut arena = Arena::new();
 //! let source = "Hello, World!";
@@ -67,7 +67,7 @@
 //! ```
 //!
 //! ```rust
-//! use rushdown::ast::*;
+//! use mordant::ast::*;
 //!
 //! let mut arena = Arena::new();
 //! let source = "Hello, World!";
@@ -1441,8 +1441,8 @@ where
 /// use core::result::Result;
 /// use core::error::Error;
 /// use core::fmt::{self, Display, Formatter};
-/// use rushdown::ast::*;
-/// use rushdown::matches_kind;
+/// use mordant::ast::*;
+/// use mordant::matches_kind;
 ///
 /// #[derive(Debug)]
 /// enum UserError { SomeError(&'static str) }

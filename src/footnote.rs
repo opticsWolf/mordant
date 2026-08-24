@@ -13,14 +13,13 @@
 //! [^named]: And that's a named footnote.
 //! ```
 
-use pyo3::prelude::*;
-use mordant_lib::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
-use mordant_lib::parser::{self, AnyBlockParser, AnyInlineParser, BlockParser, InlineParser, NoParserOptions, Parser, ParserExtension, ParserExtensionFn, PRIORITY_LINK, PRIORITY_LIST};
-use mordant_lib::renderer::{self, html, PostRender, Render, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode, NodeRenderer, RendererOptions};
-use mordant_lib::renderer::html::{Renderer, RendererExtension, RendererExtensionFn};
-use mordant_lib::text::{self, Reader};
-use mordant_lib::util::{indent_position, is_blank};
-use mordant_lib::{as_extension_data, as_extension_data_mut, as_kind_data, matches_kind, Result};
+use crate::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
+use crate::parser::{self, AnyBlockParser, AnyInlineParser, BlockParser, InlineParser, NoParserOptions, Parser, ParserExtension, ParserExtensionFn, PRIORITY_LINK, PRIORITY_LIST};
+use crate::renderer::{self, html, PostRender, Render, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode, NodeRenderer, RendererOptions};
+use crate::renderer::html::{Renderer, RendererExtension, RendererExtensionFn};
+use crate::text::{self, Reader};
+use crate::util::{indent_position, is_blank};
+use crate::{as_extension_data, as_extension_data_mut, as_kind_data, matches_kind, Result};
 
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -188,12 +187,12 @@ const FOOTNOTE_RENDER: &str = "mordant-footnote-n";
 
 #[derive(Debug)]
 struct FootnoteDefinitionParser {
-    footnote_list: mordant_lib::context::ContextKey<mordant_lib::context::ObjectValue>,
+    footnote_list: crate::context::ContextKey<crate::context::ObjectValue>,
 }
 
 impl FootnoteDefinitionParser {
-    pub fn new(reg: Rc<RefCell<mordant_lib::context::ContextKeyRegistry>>) -> Self {
-        let footnote_list = reg.borrow_mut().get_or_create::<mordant_lib::context::ObjectValue>(FOOTNOTE_LIST);
+    pub fn new(reg: Rc<RefCell<crate::context::ContextKeyRegistry>>) -> Self {
+        let footnote_list = reg.borrow_mut().get_or_create::<crate::context::ObjectValue>(FOOTNOTE_LIST);
         Self { footnote_list }
     }
 }
@@ -302,16 +301,16 @@ impl From<FootnoteDefinitionParser> for AnyBlockParser {
 
 #[derive(Debug)]
 struct FootnoteReferenceParser {
-    footnote_list: mordant_lib::context::ContextKey<mordant_lib::context::ObjectValue>,
-    reference_list: mordant_lib::context::ContextKey<mordant_lib::context::ObjectValue>,
+    footnote_list: crate::context::ContextKey<crate::context::ObjectValue>,
+    reference_list: crate::context::ContextKey<crate::context::ObjectValue>,
 }
 
 impl FootnoteReferenceParser {
-    pub fn new(reg: Rc<RefCell<mordant_lib::context::ContextKeyRegistry>>) -> Self {
-        let footnote_list = reg.borrow_mut().get_or_create::<mordant_lib::context::ObjectValue>(FOOTNOTE_LIST);
+    pub fn new(reg: Rc<RefCell<crate::context::ContextKeyRegistry>>) -> Self {
+        let footnote_list = reg.borrow_mut().get_or_create::<crate::context::ObjectValue>(FOOTNOTE_LIST);
         let reference_list = reg
             .borrow_mut()
-            .get_or_create::<mordant_lib::context::ObjectValue>(REFERENCE_LIST);
+            .get_or_create::<crate::context::ObjectValue>(REFERENCE_LIST);
         Self {
             footnote_list,
             reference_list,
@@ -486,7 +485,7 @@ struct FootnoteReferenceHtmlRenderer<W: TextWrite> {
 
 impl<W: TextWrite> FootnoteReferenceHtmlRenderer<W> {
     fn new(
-        _reg: Rc<RefCell<mordant_lib::context::ContextKeyRegistry>>,
+        _reg: Rc<RefCell<crate::context::ContextKeyRegistry>>,
         html_opts: html::Options,
         options: FootnoteHtmlRendererOptions,
     ) -> Self {
@@ -539,14 +538,14 @@ where
 
 struct FootnoteDefinitionHtmlRenderer<W: TextWrite> {
     _phantom: PhantomData<W>,
-    footnote_list: mordant_lib::context::ContextKey<mordant_lib::context::ObjectValue>,
-    footnote_render: mordant_lib::context::ContextKey<mordant_lib::context::BoolValue>,
+    footnote_list: crate::context::ContextKey<crate::context::ObjectValue>,
+    footnote_render: crate::context::ContextKey<crate::context::BoolValue>,
 }
 
 impl<W: TextWrite> FootnoteDefinitionHtmlRenderer<W> {
-    pub fn new(reg: Rc<RefCell<mordant_lib::context::ContextKeyRegistry>>) -> Self {
-        let footnote_list = reg.borrow_mut().get_or_create::<mordant_lib::context::ObjectValue>(FOOTNOTE_LIST);
-        let footnote_render = reg.borrow_mut().get_or_create::<mordant_lib::context::BoolValue>(FOOTNOTE_RENDER);
+    pub fn new(reg: Rc<RefCell<crate::context::ContextKeyRegistry>>) -> Self {
+        let footnote_list = reg.borrow_mut().get_or_create::<crate::context::ObjectValue>(FOOTNOTE_LIST);
+        let footnote_render = reg.borrow_mut().get_or_create::<crate::context::BoolValue>(FOOTNOTE_RENDER);
         Self {
             _phantom: PhantomData,
             footnote_list,
@@ -598,20 +597,20 @@ where
 struct FootnotePostRenderHook<W: TextWrite> {
     _phantom: PhantomData<W>,
     writer: html::Writer,
-    footnote_list: mordant_lib::context::ContextKey<mordant_lib::context::ObjectValue>,
-    footnote_render: mordant_lib::context::ContextKey<mordant_lib::context::BoolValue>,
+    footnote_list: crate::context::ContextKey<crate::context::ObjectValue>,
+    footnote_render: crate::context::ContextKey<crate::context::BoolValue>,
     html_opts: html::Options,
     options: FootnoteHtmlRendererOptions,
 }
 
 impl<W: TextWrite> FootnotePostRenderHook<W> {
     pub fn new(
-        reg: Rc<RefCell<mordant_lib::context::ContextKeyRegistry>>,
+        reg: Rc<RefCell<crate::context::ContextKeyRegistry>>,
         html_opts: html::Options,
         options: FootnoteHtmlRendererOptions,
     ) -> Self {
-        let footnote_list = reg.borrow_mut().get_or_create::<mordant_lib::context::ObjectValue>(FOOTNOTE_LIST);
-        let footnote_render = reg.borrow_mut().get_or_create::<mordant_lib::context::BoolValue>(FOOTNOTE_RENDER);
+        let footnote_list = reg.borrow_mut().get_or_create::<crate::context::ObjectValue>(FOOTNOTE_LIST);
+        let footnote_render = reg.borrow_mut().get_or_create::<crate::context::BoolValue>(FOOTNOTE_RENDER);
         Self {
             _phantom: PhantomData,
             writer: html::Writer::with_options(html_opts.clone()),
@@ -747,83 +746,4 @@ where
         r.add_node_renderer(FootnoteDefinitionHtmlRenderer::new, options.clone());
         r.add_node_renderer(FootnoteReferenceHtmlRenderer::new, options);
     })
-}
-
-// ---------------------------------------------------------------------------
-// PyO3 Wrapper
-// ---------------------------------------------------------------------------
-
-/// Python-exposed options for the footnote HTML renderer.
-///
-/// # Example
-/// ```python
-/// import mordant
-///
-/// opts = mordant.PyFootnoteHtmlRendererOptions(
-///     link_class="my-footnote-ref",
-///     backlink_class="my-backlink",
-///     backlink_html="â†©",
-///     id_prefix="note-",
-/// )
-/// html = mordant.markdown_to_html(
-///     "Text with footnote.[^1]\n\n[^1]: The footnote.",
-///     footnote_render_opts=opts,
-/// )
-/// ```
-#[pyclass(module = "mordant", name = "FootnoteHtmlRendererOptions")]
-pub struct PyFootnoteHtmlRendererOptions {
-    /// CSS class for footnote reference links.
-    #[pyo3(get, set)]
-    pub link_class: String,
-
-    /// CSS class for footnote backlinks.
-    #[pyo3(get, set)]
-    pub backlink_class: String,
-
-    /// HTML content for the backlink character.
-    #[pyo3(get, set)]
-    pub backlink_html: String,
-
-    /// Optional prefix for footnote IDs.
-    #[pyo3(get, set)]
-    pub id_prefix: Option<String>,
-}
-
-#[pymethods]
-impl PyFootnoteHtmlRendererOptions {
-    #[new]
-    #[pyo3(signature = (
-        link_class = "footnote-ref".to_string(),
-        backlink_class = "footnote-backref".to_string(),
-        backlink_html = "&#x21a9;&#xfe0e;".to_string(),
-        id_prefix = None,
-    ))]
-    fn new(
-        link_class: String,
-        backlink_class: String,
-        backlink_html: String,
-        id_prefix: Option<String>,
-    ) -> Self {
-        PyFootnoteHtmlRendererOptions {
-            link_class,
-            backlink_class,
-            backlink_html,
-            id_prefix,
-        }
-    }
-}
-
-impl PyFootnoteHtmlRendererOptions {
-    pub fn to_mordant(&self) -> FootnoteHtmlRendererOptions {
-        let id_prefix = match &self.id_prefix {
-            None => FootnoteIdPrefix::None,
-            Some(prefix) => FootnoteIdPrefix::Value(prefix.clone()),
-        };
-        FootnoteHtmlRendererOptions {
-            link_class: self.link_class.clone(),
-            backlink_class: self.backlink_class.clone(),
-            backlink_html: self.backlink_html.clone(),
-            id_prefix,
-        }
-    }
 }

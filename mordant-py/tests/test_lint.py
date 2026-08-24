@@ -1,6 +1,6 @@
 """Tests for the Markdown linter in mordant.
 
-The linter walks the rushdown AST and reports markdownlint-style diagnostics
+The linter walks the mordant AST and reports markdownlint-style diagnostics
 (MD0xx). Rules implemented:
 
   AST-based:

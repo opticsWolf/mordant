@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use rushdown::{new_markdown_to_html, parser, renderer::html, test::MarkdownTestSuite};
+use mordant::{new_markdown_to_html, parser, renderer::html, test::MarkdownTestSuite};
 
 fn data_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

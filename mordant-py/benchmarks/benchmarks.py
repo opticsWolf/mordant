@@ -211,7 +211,7 @@ FIXTURE_FILES = {
     "small": FIXTURES_DIR / "small.md",
     "medium": FIXTURES_DIR / "medium.md",
     "large": FIXTURES_DIR / "large.md",
-    "data": FIXTURES_DIR / "data.md",  # from rushdown repo
+    "data": FIXTURES_DIR / "data.md",  # from mordant repo
 }
 
 

@@ -5,7 +5,7 @@ use std::{
 };
 
 use pprof::protos::Message;
-use rushdown::{new_markdown_to_html, parser, renderer::html};
+use mordant::{new_markdown_to_html, parser, renderer::html};
 
 fn data_path(name: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

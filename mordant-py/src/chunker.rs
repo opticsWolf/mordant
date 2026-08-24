@@ -1,9 +1,9 @@
 //! Markdown chunking engine for Mordant.
 //!
-//! A lazy, low-copy chunking iterator over rushdown's AST, exposed to Python as
+//! A lazy, low-copy chunking iterator over mordant's AST, exposed to Python as
 //! `MarkdownChunker`.
 //!
-//! DESIGN (corrected against the real rushdown API):
+//! DESIGN (corrected against the real mordant API):
 //! - `Node::pos()` returns an **absolute byte offset** into the source for every
 //!   node kind — for `Text` it is `text::Index::start()`, and for block nodes the
 //!   parser stores `Segment::start() + block_offset` (an absolute offset). It is
@@ -30,9 +30,9 @@ use std::fs::File;
 
 use memmap2::Mmap;
 
-use rushdown_lib::ast::KindData;
-use rushdown_lib::parser::{NoParserOptions, Parser, ParserExtension, ParserExtensionFn, TableAstTransformer, TableParagraphTransformer};
-use rushdown_lib::text::BasicReader;
+use mordant_lib::ast::KindData;
+use mordant_lib::parser::{NoParserOptions, Parser, ParserExtension, ParserExtensionFn, TableAstTransformer, TableParagraphTransformer};
+use mordant_lib::text::BasicReader;
 
 // -----------------------------------------------------------------------------
 // 1. Internal representation
@@ -107,7 +107,7 @@ fn extract_nodes(source: &str) -> Vec<NodeInfo> {
     );
 
     let parser = Parser::with_extensions(
-        rushdown_lib::parser::Options::default(),
+        mordant_lib::parser::Options::default(),
         gfm_ext.and(diagram_ext),
     );
     let mut reader = BasicReader::new(source);

@@ -475,7 +475,7 @@ for node in doc.walk("breadth"):
 
 ## MarkdownChunker
 
-Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
+Lazy, low-copy chunking iterator over the mordant AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
 
 ```python
 import mordant
@@ -1266,10 +1266,10 @@ try:
 except ValueError as e:
     print(e)  # YAML parsing error message
 
-# Using RushdownError directly
-from mordant import RushdownError
+# Using MordantError directly
+from mordant import MordantError
 try:
-    err = RushdownError("custom error")
+    err = MordantError("custom error")
     print(err.message)  # "custom error"
     print(str(err))     # "custom error"
 except Exception as e:

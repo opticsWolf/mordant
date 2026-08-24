@@ -138,7 +138,7 @@ int main() {
 
 ### Task list
 
-- [x] Parse markdown with Rushdown
+- [x] Parse markdown with Mordant
 - [x] Highlight code with syntect themes
 - [ ] Conquer the universe :rocket:
 - [ ] Write more docs
@@ -293,7 +293,7 @@ gitGraph
 mindmap
   root((Mordant))
     Parsing
-      Rushdown
+      Mordant
       AST
     Rendering
       Highlight
@@ -309,7 +309,7 @@ mindmap
 ```mermaid
 timeline
     title Project history
-    2024 : First release : Rushdown core
+    2024 : First release : Mordant core
     2025 : syntect themes : Mermaid server-side
     2026 : Themed diagrams : Single theme kwarg
 ```

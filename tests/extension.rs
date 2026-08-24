@@ -5,7 +5,7 @@ use core::{
     fmt::{self, Write},
 };
 
-use rushdown::{
+use mordant::{
     as_extension_data, as_type_data, ast,
     ast::*,
     matches_kind, new_markdown_to_html, parser,

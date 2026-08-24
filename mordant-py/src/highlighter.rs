@@ -7,9 +7,9 @@
 //! Embedded themes are loaded from the package's themes/ directory by Python.
 
 use pyo3::prelude::*;
-use rushdown_lib::ast::{Arena, CodeBlock, NodeRef, WalkStatus};
-use rushdown_lib::renderer::{self, html, NodeRenderer, RendererOptions, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode};
-use rushdown_lib::{as_kind_data, Result};
+use mordant_lib::ast::{Arena, CodeBlock, NodeRef, WalkStatus};
+use mordant_lib::renderer::{self, html, NodeRenderer, RendererOptions, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode};
+use mordant_lib::{as_kind_data, Result};
 use std::any::TypeId;
 use std::io::Cursor;
 use std::path::PathBuf;

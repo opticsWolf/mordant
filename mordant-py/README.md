@@ -1,11 +1,11 @@
 # Mordant
 
 > **Version:** 0.8.11  
-> **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
+> **Rust:** mordant v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
 
-A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library.
+A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [mordant](https://github.com/yuin/mordant) Rust library.
 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
@@ -414,16 +414,16 @@ except ValueError as e:
 
 ## Architecture
 
-Mordant wraps the [rushdown](https://github.com/yuin/rushdown) Rust library (CommonMark 0.31.2 + GFM) via PyO3 bindings:
+Mordant wraps the [mordant](https://github.com/yuin/mordant) Rust library (CommonMark 0.31.2 + GFM) via PyO3 bindings:
 
-- **Rust core:** rushdown v0.18.0 — arena-allocated AST, priority-based parser dispatch, HTML renderer
+- **Rust core:** mordant v0.18.0 — arena-allocated AST, priority-based parser dispatch, HTML renderer
 - **Python bindings:** PyO3 0.29 — `Document`, `Node`, `Walker` classes with shared `Rc<RefCell<Arena>>` and `Rc<str>` source memory model (refcount bump on node creation instead of deep source copy)
 - **GIL release:** Parse and render release the GIL via `Python::detach()` for multi-threaded parallelism
 - **Frontmatter:** YAML parsing via `yaml-peg` with thematic break conflict resolution
 
-### rushdown-meta
+### mordant-meta
 
-YAML frontmatter support is provided by [rushdown-meta](https://crates.io/crates/rushdown-meta), which has been directly incorporated into mordant. The original rushdown-meta crate is available in `extensions/rushdown-meta-main/`.
+YAML frontmatter support is provided by [mordant-meta](https://crates.io/crates/mordant-meta), which has been directly incorporated into mordant. The original mordant-meta crate is available in `extensions/mordant-meta-main/`.
 
 Key features of the integrated meta parser:
 
@@ -434,9 +434,9 @@ Key features of the integrated meta parser:
 
 See [ARCHITECTURE.md §6](ARCHITECTURE.md#6-yaml-frontmatter-meta-rs) for full details.
 
-### rushdown-emoji
+### mordant-emoji
 
-Emoji shortcode support (`:joy:`, `:heart:`, `:smile:`, etc.) is provided by [rushdown-emoji](https://crates.io/crates/rushdown-emoji), which has been directly incorporated into mordant. The original rushdown-emoji crate is available in `extensions/rushdown-emoji-main/`.
+Emoji shortcode support (`:joy:`, `:heart:`, `:smile:`, etc.) is provided by [mordant-emoji](https://crates.io/crates/mordant-emoji), which has been directly incorporated into mordant. The original mordant-emoji crate is available in `extensions/mordant-emoji-main/`.
 
 Key features of the integrated emoji extension:
 
@@ -448,13 +448,13 @@ Key features of the integrated emoji extension:
 - **AST node access:** Emoji nodes expose `emoji`, `shortcode`, and `name` properties via the `Extension` node kind
 - **Error handling:** Unknown shortcodes pass through as-is (`:invalid:` → `:invalid:`)
 
-See [ARCHITECTURE.md §7.10](ARCHITECTURE.md#710-emoji-extension-rushdown-emoji) for full details.
+See [ARCHITECTURE.md §7.10](ARCHITECTURE.md#710-emoji-extension-mordant-emoji) for full details.
 
-### rushdown-diagram
+### mordant-diagram
 
-Diagram support is provided by [rushdown-diagram](https://crates.io/crates/rushdown-diagram), which has been directly incorporated into mordant. The original rushdown-diagram crate is available in `extensions/rushdown-diagram-main/`.
+Diagram support is provided by [mordant-diagram](https://crates.io/crates/mordant-diagram), which has been directly incorporated into mordant. The original mordant-diagram crate is available in `extensions/mordant-diagram-main/`.
 
-rushdown-diagram supports two diagram formats:
+mordant-diagram supports two diagram formats:
 
 - **MermaidJS** — client-side rendering via the Mermaid.js ESM module
 - **PlantUML** — server-side rendering (requires a `plantuml` command)
@@ -473,7 +473,7 @@ Mordant currently implements Mermaid support only. Key features:
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for full details.
 
-### rushdown-math
+### mordant-math
 
 Math support is provided by the pure-Rust `katex-rs` crate, incorporated directly into mordant.
 
@@ -489,9 +489,9 @@ Key features:
 
 See [ARCHITECTURE.md §7.12](ARCHITECTURE.md#712-math-extension-katex) for full details.
 
-### rushdown-footnote
+### mordant-footnote
 
-Footnote support is provided by [rushdown-footnote](https://github.com/yuin/rushdown-footnote), which has been directly incorporated into mordant. Footnotes are **always enabled** — no parser options to disable them.
+Footnote support is provided by [mordant-footnote](https://github.com/yuin/mordant-footnote), which has been directly incorporated into mordant. Footnotes are **always enabled** — no parser options to disable them.
 
 **Syntax (PHP Markdown Extra):**
 
@@ -528,7 +528,7 @@ Key features:
 - **AST node access:** `node.footnote_label`, `node.footnote_index`, `node.footnote_references` properties
 - **No parser options:** Footnotes are always enabled (matches math extension pattern)
 
-See [ARCHITECTURE.md §7.14](ARCHITECTURE.md#714-footnote-extension-rushdown-footnote) for full details.
+See [ARCHITECTURE.md §7.14](ARCHITECTURE.md#714-footnote-extension-mordant-footnote) for full details.
 
 ## Benchmarks
 
@@ -570,4 +570,4 @@ MIT
 ## Author
 
 Mordant: Python bindings by [opticsWolf](https://github.com/opticsWolf)
-Rushdown: Rust core by [Yusuke Inuzuka](https://github.com/yuin)
+Mordant: Rust core by [Yusuke Inuzuka](https://github.com/yuin)

@@ -1,6 +1,6 @@
-//! Markdown linter built on top of the rushdown AST.
+//! Markdown linter built on top of the mordant AST.
 //!
-//! The linter parses Markdown into the rushdown arena (the same AST exposed
+//! The linter parses Markdown into the mordant arena (the same AST exposed
 //! through `Document` / `Node` / `Walker`) and evaluates a set of lint rules
 //! against it. Most rules are AST-driven (heading structure, links, images,
 //! fenced code blocks); a few line-based rules (trailing whitespace, blank
@@ -13,7 +13,7 @@
 //! Conversion into the `Diagnostic` pyclass happens on the GIL thread.
 
 use pyo3::prelude::*;
-use rushdown_lib::ast::{Arena, KindData, Meta, NodeRef};
+use mordant_lib::ast::{Arena, KindData, Meta, NodeRef};
 use std::collections::HashSet;
 use pyo3::types::PyDict;
 
@@ -43,7 +43,7 @@ impl Severity {
 /// A description of how to auto-correct a violation, as a minimal edit to the
 /// source text. All variants are line-oriented (0-indexed lines), which is all
 /// the currently auto-fixable rules need. Fixes are applied to the raw source
-/// rather than by re-rendering the AST: rushdown renders to HTML and has no
+/// rather than by re-rendering the AST: mordant renders to HTML and has no
 /// Markdown serializer, and source edits keep the resulting diff minimal.
 pub enum FixOp {
     /// Replace the whole content of a line (used to strip trailing whitespace).
@@ -534,7 +534,7 @@ struct CodeRegion {
     fenced: bool, // future: differentiate fenced vs indented in mask logic
 }
 
-/// Convert a byte offset (as returned by rushdown's Node.pos()) into a
+/// Convert a byte offset (as returned by mordant's Node.pos()) into a
 /// 0-indexed source line number.
 fn byte_offset_to_line(source: &Source, offset: usize) -> Option<usize> {
     let mut pos = 0usize;
@@ -602,7 +602,7 @@ fn collect_text(arena: &Arena, node_ref: NodeRef, source: &str) -> String {
 }
 
 /// Generate a canonical heading anchor (slug) from heading text.
-/// Mirrors GitHub Flavored Markdown / rushdown's auto_heading_ids behavior:
+/// Mirrors GitHub Flavored Markdown / mordant's auto_heading_ids behavior:
 /// lowercase, replace spaces with hyphens, remove non-alphanumeric chars
 /// (except hyphens).
 fn heading_anchor(text: &str) -> String {
@@ -679,7 +679,7 @@ fn build(arena: &Arena, node_ref: NodeRef, src: &Source, out: &mut Collected) {
             });
 
             // Compute the code region span from AST node positions.
-            // The rushdown parser sets pos() inconsistently:
+            // The mordant parser sets pos() inconsistently:
             //   - Top-level fenced blocks: pos = opening fence line
             //   - Nested fenced blocks (e.g. inside blockquotes): pos = closing fence line
             //   - Indented blocks: pos = last content line

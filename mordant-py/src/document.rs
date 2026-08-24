@@ -1,4 +1,4 @@
-//! Document wrapper for the rushdown AST.
+//! Document wrapper for the mordant AST.
 //!
 //! The Document owns the Arena (which holds all AST nodes) and the source string.
 //! Node and Walker objects share the Arena via Rc<RefCell>.
@@ -6,8 +6,8 @@
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyAny};
 use pyo3::IntoPyObjectExt;
-use rushdown_lib::ast::{Arena, Meta, NodeRef};
-use rushdown_lib::util::StringMap;
+use mordant_lib::ast::{Arena, Meta, NodeRef};
+use mordant_lib::util::StringMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -15,7 +15,7 @@ use crate::linter::{run_fix, run_lint, Diagnostic, FixResult, LintConfig, LintOp
 use crate::node::{self, Node};
 use crate::walker::Walker;
 
-/// A Python-accessible wrapper around the rushdown AST Document.
+/// A Python-accessible wrapper around the mordant AST Document.
 #[pyclass(module = "mordant", unsendable)]
 pub struct Document {
     arena: Rc<RefCell<Arena>>,
@@ -54,7 +54,7 @@ impl Document {
 
     #[getter]
     fn metadata(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
-        use rushdown_lib::ast::KindData;
+        use mordant_lib::ast::KindData;
 
         // Check for YAML parse error comments inserted by the meta parser
         {
@@ -210,16 +210,16 @@ fn meta_to_py(py: Python<'_>, meta: &StringMap<Meta>) -> PyResult<Py<PyAny>> {
     Ok(py_dict.into())
 }
 
-/// Convert a rushdown Lines enum to a String.
-fn lines_to_string(lines: &rushdown_lib::text::Lines) -> String {
+/// Convert a mordant Lines enum to a String.
+fn lines_to_string(lines: &mordant_lib::text::Lines) -> String {
     match lines {
-        rushdown_lib::text::Lines::Empty => String::new(),
-        rushdown_lib::text::Lines::Segments(segments) => {
+        mordant_lib::text::Lines::Empty => String::new(),
+        mordant_lib::text::Lines::Segments(segments) => {
             segments.iter()
                 .map(|seg| seg.str(""))
                 .collect()
         }
-        rushdown_lib::text::Lines::String(s) => s.clone(),
+        mordant_lib::text::Lines::String(s) => s.clone(),
         _ => String::new(),
     }
 }

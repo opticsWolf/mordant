@@ -14,3 +14,9 @@ mordant-py/mordant/__pycache__/
 mordant-py/tests/__pycache__/
 
 mordant-py/example/__pycache__/
+
+.pytest_cache/
+
+# Python extension build artifacts
+mordant-py/mordant/*.pyd
+mordant-py/mordant/*.pdb

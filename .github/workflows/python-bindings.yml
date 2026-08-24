@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, master]
     paths:
-      - "rushdown-py/**"
+      - "mordant-py/**"
       - "src/**"
       - "Cargo.toml"
   pull_request:
     branches: [main, master]
     paths:
-      - "rushdown-py/**"
+      - "mordant-py/**"
       - "src/**"
       - "Cargo.toml"
 
@@ -30,12 +30,12 @@ jobs:
       - name: Build wheel
         run: |
           pip install maturin
-          cd rushdown-py
+          cd mordant-py
           maturin build --release
       - name: Install wheel
         run: |
-          pip install rushdown-py/target/wheels/rushdown_py-*.whl
+          pip install mordant-py/target/wheels/mordant_py-*.whl
       - name: Test
         run: |
           pip install pytest
-          python -c "import rushdown; print(rushdown.markdown_to_html('# Hello'))"
+          python -c "import mordant; print(mordant.markdown_to_html('# Hello'))"

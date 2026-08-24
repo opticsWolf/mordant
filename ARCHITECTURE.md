@@ -1,7 +1,7 @@
 # Mordant Architecture
 
 > **Version:** 0.8.11  
-> **Rust:** rushdown v0.18.0 (CommonMark 0.31.2 + GFM)  
+> **Rust:** mordant v0.18.0 (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
 > **Tests:** 1233 Python (652 commonmark spec + 133 lint + 61 AST + 60 math + 55 mixed features + 41 frontmatter + 37 chunker + 29 emoji + 29 diagram + 25 footnote + 19 options + 19 highlighting + 19 OKF chunker methods + 18 extracted chunk + 14 core + 13 VSCode theme + 9 GFM) + 64 Rust (28 linter + 14 meta + 9 emoji + 3 mermaid_theme + 10 math)
 
@@ -9,7 +9,7 @@
 
 ## 1. Overview
 
-Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library. It provides:
+Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [mordant](https://github.com/yuin/mordant) Rust library. It provides:
 
 - **Single-call parse + render:** `markdown_to_html("# Hello")`
 - **AST access:** `parse("# Hello")` returns a `Document` with full tree traversal
@@ -33,7 +33,7 @@ Mordant is a fast CommonMark + GFM Markdown parser and renderer for Python, powe
 ## 2. Repository Layout
 
 ```
-mordant/                          # Rushdown Rust crate (unchanged upstream)
+mordant/                          # Mordant Rust crate (unchanged upstream)
 ├── src/                          # Core parser/renderer (27,801 lines)
 │   ├── lib.rs                    # Public API: markdown_to_html_string, new_markdown_to_html
 │   ├── ast.rs                    # Arena, NodeRef, KindData (24 node kinds)
@@ -45,14 +45,14 @@ mordant/                          # Rushdown Rust crate (unchanged upstream)
 │   └── error.rs                  # Error types
 
 mordant-py/                       # PyO3 Python bindings
-├── Cargo.toml                    # pyo3 0.29, rushdown (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json, syntect, syntect-assets, mermaid-rs-renderer 0.3
+├── Cargo.toml                    # pyo3 0.29, mordant (path dep), yaml-peg 1.0.9, emojis 0.8.0, rayon 1.10, serde, serde_json, syntect, syntect-assets, mermaid-rs-renderer 0.3
 ├── src/
 │   ├── lib.rs                    # Module entry, markdown_to_html(), parse(), lint(), fix(), lint_many(), fix_many(), lint_rules(), GIL detach
 │   ├── document.rs               # Document wrapper (Arena + source + root_ref), doc.lint(), doc.fix()
 │   ├── node.rs                   # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 │   ├── walker.rs                 # DFS/BFS AST walker
 │   ├── options.rs                # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
-│   ├── errors.rs                 # RushdownError Python exception type
+│   ├── errors.rs                 # MordantError Python exception type
 │   ├── meta.rs                   # YAML frontmatter parser extension + unit tests (14)
 │   ├── emoji.rs                  # Emoji shortcode inline parser + HTML renderer + unit tests (9)
 │   ├── diagram.rs                # Mermaid diagram AST transformer + HTML renderer + post-render hook (with native/derived theme support)
@@ -85,7 +85,7 @@ pyproject/                        # Python package project (setuptools/pip insta
 
 ---
 
-## 3. Rust Core (rushdown) Architecture
+## 3. Rust Core (mordant) Architecture
 
 ### 3.1. Parsing Pipeline
 
@@ -298,7 +298,7 @@ mordant-py/src/
 ├── node.rs         # Node wrapper, kind-specific properties (incl. emoji/diagram props)
 ├── walker.rs       # DFS/BFS AST walker
 ├── options.rs      # ParseOptions, RenderOptions, GfmOptions, ArenaOptions
-├── errors.rs       # RushdownError Python exception
+├── errors.rs       # MordantError Python exception
 ├── meta.rs         # YAML frontmatter parser extension
 ├── emoji.rs        # Emoji shortcode inline parser + HTML renderer + unit tests
 └── diagram.rs      # Mermaid diagram AST transformer + HTML renderer + post-render hook
@@ -370,8 +370,8 @@ This enables true parallelism across threads: mordant scales ~4.0x linearly with
 
 | Function | Description |
 |----------|-------------|
-| `build_parser(gfm, parse_cfg)` | Constructs `rushdown::parser::Parser` with options + meta + emoji + diagram + math + GFM extensions |
-| `build_renderer(render_cfg)` | Constructs `rushdown::renderer::html::Renderer` with render options + emoji + diagram + math + footnote extensions |
+| `build_parser(gfm, parse_cfg)` | Constructs `mordant::parser::Parser` with options + meta + emoji + diagram + math + GFM extensions |
+| `build_renderer(render_cfg)` | Constructs `mordant::renderer::html::Renderer` with render options + emoji + diagram + math + footnote extensions |
 | `parse_and_render(source, gfm, parse_cfg, render_cfg)` | Parse + render to HTML string (runs without GIL) |
 | `parse_only(source, gfm, parse_cfg)` | Parse only, returns `(Arena, NodeRef)` (runs without GIL) |
 | `parse_config_from(parse_opts, emoji_opts, diagram_opts)` | Build `ParseConfig` from Python option objects |
@@ -747,7 +747,7 @@ opts = mordant.FootnoteHtmlRendererOptions(id_prefix="note-")
 # id="note-fnref:1", href="#note-fn:1"
 ```
 
-### 5.13. RushdownError
+### 5.13. MordantError
 
 | Attribute/Method | Return Type | Description |
 |------------------|-------------|-------------|
@@ -755,7 +755,7 @@ opts = mordant.FootnoteHtmlRendererOptions(id_prefix="note-")
 | `__str__()` | str | Same as message |
 ### 5.14. MarkdownChunker
 
-Lazy, low-copy chunking iterator over the rushdown AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
+Lazy, low-copy chunking iterator over the mordant AST. Yields **bare chunks** (no heading prefix) as `str`. Headings update a "current header" context; body blocks are yielded without any prefix — OKF injects context at embed time.
 
 | Constructor / Method | Return Type | Description |
 |----------------------|-------------|-------------|
@@ -894,7 +894,7 @@ assert chunker.current_header == "# Outer"
 
 ### 6.1. Parser Design
 
-The meta parser is a rushdown `BlockParser` extension with priority `PRIORITY_SETTEXT_HEADING - 100`:
+The meta parser is a mordant `BlockParser` extension with priority `PRIORITY_SETTEXT_HEADING - 100`:
 
 ```
 Trigger: first byte `-`
@@ -963,7 +963,7 @@ MetaAstTransformer (AstTransformer)
 - Five dashes not consumed, nested mapping, sequence
 - All scalar types, empty frontmatter, dash in string
 - Thematic break with blank line, multiple keys
-- Original rushdown-meta test cases, table option
+- Original mordant-meta test cases, table option
 
 ---
 
@@ -1070,7 +1070,7 @@ pub fn paragraph_renderer(opts: ParagraphRendererOptions) -> impl RendererExtens
 
 ---
 
-## 7.10. Emoji Extension (rushdown-emoji)
+## 7.10. Emoji Extension (mordant-emoji)
 
 The emoji extension provides shortcode-based emoji rendering (`:joy:`, `:heart:`, etc.) via an inline parser and HTML renderer.
 
@@ -1088,7 +1088,7 @@ The emoji extension provides shortcode-based emoji rendering (`:joy:`, `:heart:`
 
 ### 7.10.3. EmojiInlineParser
 
-The emoji inline parser is a rushdown `InlineParser` that triggers on `:` and parses emoji shortcodes:
+The emoji inline parser is a mordant `InlineParser` that triggers on `:` and parses emoji shortcodes:
 
 ```rust
 struct EmojiInlineParser {
@@ -1167,7 +1167,7 @@ let emoji_ext = emoji_html_renderer_extension(render_cfg.emoji_options.clone());
 
 ---
 
-## 7.11. Diagram Extension (rushdown-diagram)
+## 7.11. Diagram Extension (mordant-diagram)
 
 The diagram extension provides Mermaid diagram rendering from fenced code blocks via an AST transformer and HTML renderer.
 
@@ -1249,7 +1249,7 @@ let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext);
 
 // In lib.rs — build_renderer()
 let diagram_ext = diagram_html_renderer_extension(render_cfg.diagram_options.clone());
-rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
+mordant_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagram_ext))
 ```
 
 ### 7.11.8. Diagram Extension Tests (17 tests in `test_diagram.py`)
@@ -1263,7 +1263,7 @@ rushdown_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diag
 
 ---
 
-### 7.14. Footnote Extension (rushdown-footnote)
+### 7.14. Footnote Extension (mordant-footnote)
 
 The footnote extension provides PHP Markdown Extra style footnotes via an inline parser, block parser, and HTML renderer with post-render hook. **Footnotes are always enabled** — there are no parser options to disable them.
 
@@ -1375,7 +1375,7 @@ Source String
     │
     ▼
 ┌──────────────┐
-│  Rushdown     │  ──►  (Arena, NodeRef)
+│  Mordant     │  ──►  (Arena, NodeRef)
 │  Parser       │       Parse-only (no render)
 └──────────────┘
     │
@@ -1677,16 +1677,16 @@ format for ALL math in the document (fenced ` ```math `, inline `$...$`, block `
 
 | Rust Error | Python Exception |
 |------------|------------------|
-| `rushdown::Error::InvalidNodeRef` | `ValueError` |
-| `rushdown::Error::InvalidNodeOperation` | `ValueError` |
-| `rushdown::Error::Io` | `ValueError` |
+| `mordant::Error::InvalidNodeRef` | `ValueError` |
+| `mordant::Error::InvalidNodeOperation` | `ValueError` |
+| `mordant::Error::Io` | `ValueError` |
 | YAML parse error (in AST) | `ValueError` on `doc.metadata` access |
 
-### 8.3. RushdownError Class
+### 8.3. MordantError Class
 
 ```python
-class RushdownError(Exception):
-    """Base exception for all rushdown errors."""
+class MordantError(Exception):
+    """Base exception for all mordant errors."""
     def __init__(self, message: str)
     @property
     def message(self) -> str
@@ -1696,7 +1696,7 @@ class RushdownError(Exception):
 ### 8.4. Error Conversion Helper
 
 ```rust
-pub fn rushdown_err_to_pyerr(err: rushdown_lib::Error) -> PyErr
+pub fn mordant_err_to_pyerr(err: mordant_lib::Error) -> PyErr
 ```
 
 ---
@@ -1819,7 +1819,7 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| `rushdown` | 0.18.0 (path dep) | Core parser/renderer |
+| `mordant` | 0.18.0 (path dep) | Core parser/renderer |
 | `pyo3` | 0.29 | Python bindings |
 | `yaml-peg` | 1.0.9 | YAML frontmatter parsing |
 | `emojis` | 0.8.0 | Emoji shortcode database (1,500+ emojis) |
@@ -1960,7 +1960,7 @@ Source String
     │
     ▼
 ┌──────────────┐
-│  Rushdown     │  ──►  (Arena, NodeRef)
+│  Mordant     │  ──►  (Arena, NodeRef)
 │  Parser       │       Parse-only (no render)
 └──────────────┘
     │

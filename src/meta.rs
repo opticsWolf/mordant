@@ -14,14 +14,14 @@ use std::vec::Vec;
 use std::cell::RefCell;
 use std::result::Result as CoreResult;
 
-use mordant_lib::ast::{Arena, Meta, NodeRef};
-use mordant_lib::context::{ContextKey, ContextKeyRegistry, NodeRefValue};
-use mordant_lib::parser::{
+use crate::ast::{Arena, Meta, NodeRef};
+use crate::context::{ContextKey, ContextKeyRegistry, NodeRefValue};
+use crate::parser::{
     self, AnyAstTransformer, AnyBlockParser, AstTransformer, BlockParser, NoParserOptions,
     Parser, ParserExtension, ParserExtensionFn, PRIORITY_SETTEXT_HEADING,
 };
-use mordant_lib::text::Reader;
-use mordant_lib::util::StringMap;
+use crate::text::Reader;
+use crate::util::StringMap;
 
 const META_NODE: &str = "mordant-meta-n";
 
@@ -113,7 +113,7 @@ impl BlockParser for MetaParser {
         &self,
         arena: &mut Arena,
         _parent_ref: NodeRef,
-        reader: &mut mordant_lib::text::BasicReader,
+        reader: &mut crate::text::BasicReader,
         ctx: &mut parser::Context,
     ) -> Option<(NodeRef, parser::State)> {
         let (line, _) = reader.position();
@@ -185,8 +185,8 @@ impl BlockParser for MetaParser {
         }
 
         reader.advance_to_eol();
-        let node_ref = arena.new_node(mordant_lib::ast::CodeBlock::new(
-            mordant_lib::ast::CodeBlockKind::Fenced,
+        let node_ref = arena.new_node(crate::ast::CodeBlock::new(
+            crate::ast::CodeBlockKind::Fenced,
             None,
         ));
         ctx.insert(self.meta_node, node_ref);
@@ -197,7 +197,7 @@ impl BlockParser for MetaParser {
         &self,
         arena: &mut Arena,
         node_ref: NodeRef,
-        reader: &mut mordant_lib::text::BasicReader,
+        reader: &mut crate::text::BasicReader,
         _ctx: &mut parser::Context,
     ) -> Option<parser::State> {
         let (line_bytes, seg) = reader.peek_line_bytes()?;
@@ -205,7 +205,7 @@ impl BlockParser for MetaParser {
             reader.advance_to_eol();
             return None;
         }
-        mordant_lib::as_type_data_mut!(arena, node_ref, Block).append_source_line(seg);
+        crate::as_type_data_mut!(arena, node_ref, Block).append_source_line(seg);
         Some(parser::State::NO_CHILDREN)
     }
 
@@ -213,7 +213,7 @@ impl BlockParser for MetaParser {
         &self,
         _arena: &mut Arena,
         _node_ref: NodeRef,
-        _reader: &mut mordant_lib::text::BasicReader,
+        _reader: &mut crate::text::BasicReader,
         _ctx: &mut parser::Context,
     ) {
     }
@@ -249,7 +249,7 @@ impl AstTransformer for MetaAstTransformer {
         &self,
         arena: &mut Arena,
         doc_ref: NodeRef,
-        reader: &mut mordant_lib::text::BasicReader,
+        reader: &mut crate::text::BasicReader,
         ctx: &mut parser::Context,
     ) {
         let Some(meta_ref) = ctx.get(self.meta_node) else {
@@ -259,7 +259,7 @@ impl AstTransformer for MetaAstTransformer {
         let source = reader.source();
 
         for line in
-            mordant_lib::as_type_data!(arena, *meta_ref, Block).source()
+            crate::as_type_data!(arena, *meta_ref, Block).source()
         {
             yaml_data.push_str(&line.str(source));
         }
@@ -275,7 +275,7 @@ impl AstTransformer for MetaAstTransformer {
             Ok(Meta::Mapping(map)) => {
                 let m = map.clone();
                 for (key, value) in map {
-                    mordant_lib::as_kind_data_mut!(arena, doc_ref, Document)
+                    crate::as_kind_data_mut!(arena, doc_ref, Document)
                         .metadata_mut()
                         .insert(key, value);
                 }
@@ -286,7 +286,7 @@ impl AstTransformer for MetaAstTransformer {
             Ok(_other) => {
                 // YAML parsed but wasn't a mapping (e.g., a bare list)
                 let mut error_data =
-                    mordant_lib::ast::HtmlBlock::new(mordant_lib::ast::HtmlBlockKind::Kind2);
+                    crate::ast::HtmlBlock::new(crate::ast::HtmlBlockKind::Kind2);
                 error_data.set_value(
                     "<!-- YAML metadata must be a mapping -->\n".to_string(),
                 );
@@ -299,7 +299,7 @@ impl AstTransformer for MetaAstTransformer {
             }
             Err(e) => {
                 let mut error_data =
-                    mordant_lib::ast::HtmlBlock::new(mordant_lib::ast::HtmlBlockKind::Kind2);
+                    crate::ast::HtmlBlock::new(crate::ast::HtmlBlockKind::Kind2);
                 error_data.set_value(
                     format!("<!-- Error parsing YAML metadata: {} -->\n", e).to_string(),
                 );
@@ -322,7 +322,7 @@ impl From<MetaAstTransformer> for AnyAstTransformer {
 
 /// Render metadata as an HTML table node in the AST.
 fn render_meta_as_table(arena: &mut Arena, doc_ref: NodeRef, map: StringMap<Meta>) {
-    use mordant_lib::ast::{Table, TableBody, TableCell, TableHeader, TableRow};
+    use crate::ast::{Table, TableBody, TableCell, TableHeader, TableRow};
 
     let table_ref = arena.new_node(Table::new());
     let header_ref = arena.new_node(TableHeader::new());
@@ -330,7 +330,7 @@ fn render_meta_as_table(arena: &mut Arena, doc_ref: NodeRef, map: StringMap<Meta
 
     for (key, _) in map.iter() {
         let cell_ref = arena.new_node(TableCell::default());
-        let text_ref = arena.new_node(mordant_lib::ast::Text::new(key.clone()));
+        let text_ref = arena.new_node(crate::ast::Text::new(key.clone()));
         cell_ref.append_child(arena, text_ref);
         header_row_ref.append_child(arena, cell_ref);
     }
@@ -343,7 +343,7 @@ fn render_meta_as_table(arena: &mut Arena, doc_ref: NodeRef, map: StringMap<Meta
 
     for (_, value) in map {
         let cell_ref = arena.new_node(TableCell::default());
-        let text_ref = arena.new_node(mordant_lib::ast::Text::new(format_meta_value(&value)));
+        let text_ref = arena.new_node(crate::ast::Text::new(format_meta_value(&value)));
         cell_ref.append_child(arena, text_ref);
         body_row_ref.append_child(arena, cell_ref);
     }
@@ -386,7 +386,7 @@ mod tests {
             parser::Options::default(),
             ext,
         );
-        let mut reader = mordant_lib::text::BasicReader::new(source);
+        let mut reader = crate::text::BasicReader::new(source);
         parser.parse(&mut reader)
     }
 
@@ -394,7 +394,7 @@ mod tests {
     fn test_simple_frontmatter() {
         let (arena, doc_ref) = parse_with_meta("---\ntitle: Test\n---\n\nBody");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(!meta.is_empty(), "Metadata should not be empty");
             assert!(meta.contains_key("title"), "Should have 'title' key");
@@ -407,7 +407,7 @@ mod tests {
     fn test_no_frontmatter() {
         let (arena, doc_ref) = parse_with_meta("No frontmatter here");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.is_empty(), "Metadata should be empty");
         } else {
@@ -420,7 +420,7 @@ mod tests {
         // A bare `---` should be parsed as a thematic break, not frontmatter
         let (arena, doc_ref) = parse_with_meta("---");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.is_empty(), "Metadata should be empty for thematic break");
         } else {
@@ -430,7 +430,7 @@ mod tests {
         let mut child = arena[doc_ref].first_child();
         let mut found_hr = false;
         while let Some(nref) = child {
-            if matches!(arena[nref].kind_data(), mordant_lib::ast::KindData::ThematicBreak(_)) {
+            if matches!(arena[nref].kind_data(), crate::ast::KindData::ThematicBreak(_)) {
                 found_hr = true;
             }
             child = arena[nref].next_sibling();
@@ -443,7 +443,7 @@ mod tests {
         // Five dashes is a thematic break, not frontmatter
         let (arena, doc_ref) = parse_with_meta("-----");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.is_empty(), "Metadata should be empty for five dashes");
         } else {
@@ -453,7 +453,7 @@ mod tests {
         let mut child = arena[doc_ref].first_child();
         let mut found_hr = false;
         while let Some(nref) = child {
-            if matches!(arena[nref].kind_data(), mordant_lib::ast::KindData::ThematicBreak(_)) {
+            if matches!(arena[nref].kind_data(), crate::ast::KindData::ThematicBreak(_)) {
                 found_hr = true;
             }
             child = arena[nref].next_sibling();
@@ -466,7 +466,7 @@ mod tests {
         let source = "---\nauthor:\n  name: Jane\n  age: 30\n---\n\nBody";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.contains_key("author"), "Should have 'author' key");
             if let Some(Meta::Mapping(inner)) = meta.get("author") {
@@ -485,7 +485,7 @@ mod tests {
         let source = "---\ntags:\n  - rust\n  - markdown\n---\n\nBody";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.contains_key("tags"), "Should have 'tags' key");
             if let Some(Meta::Sequence(items)) = meta.get("tags") {
@@ -505,7 +505,7 @@ mod tests {
         let source = "---\nstr_val: hello\nint_val: 42\nfloat_val: 3.14\nbool_val: true\nnull_val: null\n---\n\nBody";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert_eq!(meta.get("str_val"), Some(&Meta::String("hello".to_string())));
             assert_eq!(meta.get("int_val"), Some(&Meta::Int(42)));
@@ -522,7 +522,7 @@ mod tests {
         // Empty frontmatter should not crash
         let (arena, doc_ref) = parse_with_meta("---\n---\n\nBody");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.is_empty(), "Empty frontmatter should produce empty metadata");
         } else {
@@ -536,7 +536,7 @@ mod tests {
         let source = "---\nbody: |\n  text with --- inside\n---\n\nBody";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.contains_key("body"), "Should have 'body' key");
         } else {
@@ -549,7 +549,7 @@ mod tests {
         // ---\n\nHello should be thematic break, not frontmatter
         let (arena, doc_ref) = parse_with_meta("---\n\nHello");
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.is_empty(), "Should not parse as frontmatter");
         } else {
@@ -559,7 +559,7 @@ mod tests {
         let mut child = arena[doc_ref].first_child();
         let mut found_hr = false;
         while let Some(nref) = child {
-            if matches!(arena[nref].kind_data(), mordant_lib::ast::KindData::ThematicBreak(_)) {
+            if matches!(arena[nref].kind_data(), crate::ast::KindData::ThematicBreak(_)) {
                 found_hr = true;
             }
             child = arena[nref].next_sibling();
@@ -572,7 +572,7 @@ mod tests {
         let source = "---\ntitle: Doc\nauthor: Jane\ndate: 2024-01-15\ntags:\n  - a\n  - b\n---\n\nBody";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert!(meta.contains_key("title"));
             assert!(meta.contains_key("author"));
@@ -589,7 +589,7 @@ mod tests {
         let source = "---\ntitle: YAML Frontmatter\ndate: 2026-03-11\ntags: [Rust, Markdown<>]\nauthor:\n  name: yuin\n---\naaa\n";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert_eq!(meta.get("title"), Some(&Meta::String("YAML Frontmatter".to_string())));
             assert_eq!(meta.get("date"), Some(&Meta::String("2026-03-11".to_string())));
@@ -616,7 +616,7 @@ mod tests {
         let source = "---\ntitle: YAML Frontmatter\n---\naaa\n";
         let (arena, doc_ref) = parse_with_meta(source);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert_eq!(meta.get("title"), Some(&Meta::String("YAML Frontmatter".to_string())));
         } else {
@@ -633,10 +633,10 @@ mod tests {
             ext,
         );
         let source = "---\ntitle: Test\n---\nBody\n";
-        let mut reader = mordant_lib::text::BasicReader::new(source);
+        let mut reader = crate::text::BasicReader::new(source);
         let (arena, doc_ref) = parser.parse(&mut reader);
         let kd = &arena[doc_ref].kind_data();
-        if let mordant_lib::ast::KindData::Document(doc) = kd {
+        if let crate::ast::KindData::Document(doc) = kd {
             let meta = doc.metadata();
             assert_eq!(meta.get("title"), Some(&Meta::String("Test".to_string())));
             // With table option, a Table node should be inserted as first child
@@ -645,7 +645,7 @@ mod tests {
             if let Some(table_ref) = first_child {
                 assert!(matches!(
                     arena[table_ref].kind_data(),
-                    mordant_lib::ast::KindData::Table(_)
+                    crate::ast::KindData::Table(_)
                 ), "First child should be a Table node");
             }
         } else {

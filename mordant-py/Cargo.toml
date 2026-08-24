@@ -3,7 +3,7 @@ name = "mordant"
 version = "0.8.11"
 edition = "2021"
 rust-version = "1.87"
-description = "Mordant - A fast CommonMark + GFM Markdown parser for Python, powered by the rushdown Rust library"
+description = "Mordant - A fast CommonMark + GFM Markdown parser for Python, powered by the mordant Rust crate"
 license = "MIT"
 
 [lib]
@@ -11,7 +11,7 @@ name = "mordant"
 crate-type = ["cdylib"]
 
 [dependencies]
-rushdown = { path = "..", default-features = false, features = ["std", "html-entities"] }
+mordant = { path = "..", default-features = false, features = ["std", "html-entities"] }
 pyo3 = { version = "0.29", features = ["abi3-py39"] }
 memmap2 = "0.9"
 rayon = "1.10"
@@ -24,3 +24,10 @@ syntect-assets = "0.23.6"
 jsonc-parser = { version = "0.32", features = ["serde"] }
 katex = { package = "katex-rs", version = "0.2.4" }
 mermaid-rs-renderer = { version = "0.3", default-features = false }
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = true
+codegen-units = 1
+panic = 'abort'

@@ -1,29 +1,34 @@
 [package]
-name = "rushdown"
+name = "mordant"
 version = "0.18.0"
-authors = ["Yusuke Inuzuka <yuin@inforno.net>"]
+authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
 description = "A 100% CommonMark-compatible GitHub Flavored Markdown parser and renderer"
-documentation = "https://docs.rs/rushdown"
-homepage = "https://github.com/yuin/rushdown"
-repository = "https://github.com/yuin/rushdown"
+documentation = "https://docs.rs/mordant"
+homepage = "https://github.com/opticsWolf/mordant"
+repository = "https://github.com/opticsWolf/mordant"
 readme = "README.md"
 keywords = ["markdown", "commonmark"]
 license = "MIT"
 categories = ["text-processing"]
 exclude = [
     "/script/*",
+    "/fuzz/*",
+    "/extensions/*",
+    "/mordant-py/*",
+    "/.github/*",
 ]
 resolver = "2"
 build = "build.rs"
 
+# NOTE: no panic="abort" here — this crate is published as a library;
+# forcing abort would leak into downstream binaries.
 [profile.release]
 opt-level = 3
 debug = false
 lto = true
 codegen-units = 1
-panic = 'abort'
 
 [features]
 default = ["std", "html-entities"]
@@ -45,6 +50,7 @@ memchr = { version = "2", default-features = false, optional = true }
 phf = { version = "0.13.1", default-features = false }
 pprof = { version = "0.15", features = ["criterion", "protobuf", "flamegraph", "prost-codec"], optional = true }
 emojis = "0.8.0"
+yaml-peg = { version = "1.0.9", optional = true }
 
 [build-dependencies]
 phf = { version = "0.13.1", default-features = false }

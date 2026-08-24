@@ -9,7 +9,7 @@
 //!
 //! # Examples
 //! ```
-//! use rushdown::context::{Context, ContextKeyRegistry, UsizeValue, StringValue,
+//! use mordant::context::{Context, ContextKeyRegistry, UsizeValue, StringValue,
 //! ObjectValue};
 //!
 //! struct Data {

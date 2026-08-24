@@ -355,7 +355,7 @@ def test_node_line():
 def test_heading_line():
     doc = mordant.parse("Line 1\nLine 2\n# Heading")
     heading = doc.children[0]
-    # Line number depends on how rushdown tracks positions
+    # Line number depends on how mordant tracks positions
     assert heading.line is not None
 
 

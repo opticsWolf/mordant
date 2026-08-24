@@ -290,16 +290,16 @@ Some **content** with *emphasis*.
 
 
 class TestOriginalTestCases:
-    """Tests that directly correspond to the original rushdown-meta test cases."""
+    """Tests that directly correspond to the original mordant-meta test cases."""
 
     def test_original_test_ok_simple(self):
-        """Original rushdown-meta test_ok: simple frontmatter."""
+        """Original mordant-meta test_ok: simple frontmatter."""
         md = "---\ntitle: YAML Frontmatter\n---\naaa\n"
         doc = mordant.parse(md)
         assert doc.metadata["title"] == "YAML Frontmatter"
 
     def test_original_test_meta_full_frontmatter(self):
-        """Original rushdown-meta test_meta: full frontmatter with nested structures."""
+        """Original mordant-meta test_meta: full frontmatter with nested structures."""
         md = """---
 title: YAML Frontmatter
 date: 2026-03-11
@@ -316,7 +316,7 @@ aaa
         assert doc.metadata["author"]["name"] == "yuin"
 
     def test_original_test_error_malformed_yaml(self):
-        """Original rushdown-meta test_error: malformed YAML raises ValueError."""
+        """Original mordant-meta test_error: malformed YAML raises ValueError."""
         md = "---\ntitle: YAML Frontmatter\nhogehoge\n---\naaa\n"
         doc = mordant.parse(md)
         with pytest.raises(ValueError):

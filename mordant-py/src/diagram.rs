@@ -10,14 +10,14 @@
 //!   (Mermaid.js ESM) if server rendering fails.
 
 use pyo3::prelude::*;
-use rushdown_lib::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
-use rushdown_lib::parser::{self, AnyAstTransformer, AstTransformer, ParserOptions};
-use rushdown_lib::renderer::{self, html, PostRender, Render, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode, NodeRenderer, RendererOptions};
-use rushdown_lib::renderer::html::{RendererExtension, RendererExtensionFn};
+use mordant_lib::ast::{Arena, KindData, NodeKind, NodeRef, NodeType, PrettyPrint, WalkStatus, pp_indent};
+use mordant_lib::parser::{self, AnyAstTransformer, AstTransformer, ParserOptions};
+use mordant_lib::renderer::{self, html, PostRender, Render, RenderNode, TextWrite, NodeRendererRegistry, BoxRenderNode, NodeRenderer, RendererOptions};
+use mordant_lib::renderer::html::{RendererExtension, RendererExtensionFn};
 
-use rushdown_lib::text::{Lines, Reader};
-use rushdown_lib::context::{BoolValue, ContextKey, ContextKeyRegistry};
-use rushdown_lib::{as_extension_data, as_extension_data_mut, as_kind_data, matches_kind, Result};
+use mordant_lib::text::{Lines, Reader};
+use mordant_lib::context::{BoolValue, ContextKey, ContextKeyRegistry};
+use mordant_lib::{as_extension_data, as_extension_data_mut, as_kind_data, matches_kind, Result};
 use std::fmt;
 use std::fmt::Write as FmtWrite;
 use std::rc::Rc;
@@ -141,7 +141,7 @@ impl PyDiagramParserOptions {
 }
 
 impl PyDiagramParserOptions {
-    pub fn to_rushdown(&self) -> DiagramParserOptions {
+    pub fn to_mordant(&self) -> DiagramParserOptions {
         DiagramParserOptions {
             mermaid: MermaidParserOptions {
                 enabled: self.mermaid_enabled,
@@ -231,7 +231,7 @@ impl PyDiagramHtmlRendererOptions {
 }
 
 impl PyDiagramHtmlRendererOptions {
-    pub fn to_rushdown(&self) -> DiagramHtmlRendererOptions {
+    pub fn to_mordant(&self) -> DiagramHtmlRendererOptions {
         let mode = match self.render_mode.as_str() {
             "client" => RenderMode::Client,
             "hybrid" => RenderMode::Hybrid,
@@ -273,7 +273,7 @@ impl AstTransformer for DiagramAstTransformer {
         &self,
         arena: &mut Arena,
         doc_ref: NodeRef,
-        reader: &mut rushdown_lib::text::BasicReader,
+        reader: &mut mordant_lib::text::BasicReader,
         _ctx: &mut parser::Context,
     ) {
         let source = reader.source();

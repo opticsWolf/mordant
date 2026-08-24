@@ -28,7 +28,7 @@ python benchmarks/benchmarks_gil.py --threads 4 --iterations 20
 | `small` | 400 chars, 34 lines | Frontmatter, lists, code blocks, tables, quotes |
 | `medium` | 5.4 KB, 187 lines | Nested lists, multiple code blocks, tables, blockquotes |
 | `large` | 26.7 KB, 797 lines | 10 sections with lists, tables, code, quotes, paragraphs |
-| `data` | 202 KB, 9702 lines | Rushdown's original benchmark document |
+| `data` | 202 KB, 9702 lines | Mordant's original benchmark document |
 
 ## Measured Metrics
 
@@ -100,7 +100,7 @@ benchmarks/
     small.md                 # Small test document
     medium.md                # Medium test document
     large.md                 # Large stress-test document
-    data.md                  # Original rushdown benchmark
+    data.md                  # Original mordant benchmark
   results.json               # Saved results (generated)
   results_gil.json           # GIL benchmark results (generated)
   results_final.json         # Final benchmark results (generated)

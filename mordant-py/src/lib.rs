@@ -1,16 +1,16 @@
 //! Mordant Python Bindings
 //!
-//! A fast CommonMark + GFM Markdown parser for Python, powered by the rushdown Rust library.
+//! A fast CommonMark + GFM Markdown parser for Python, powered by the mordant Rust library.
 //!
 //! GIL management: parse() and markdown_to_html() release the GIL during CPU-heavy
 //! parsing and rendering via Python::detach(). The plain-Rust config structs
 //! (ParseConfig, RenderConfig) are used to pass options into the GIL-free closure.
 
-extern crate rushdown as rushdown_lib;
+extern crate mordant as mordant_lib;
 
 use pyo3::prelude::*;
-use rushdown_lib::parser::ParserExtension;
-use rushdown_lib::renderer::html::RendererExtension;
+use mordant_lib::parser::ParserExtension;
+use mordant_lib::renderer::html::RendererExtension;
 
 mod document;
 mod chunker;
@@ -106,7 +106,7 @@ impl Default for RenderConfig {
 fn build_parser(
     gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
-) -> rushdown_lib::parser::Parser {
+) -> mordant_lib::parser::Parser {
     let meta_opts = meta::MetaParserOptions { table: parse_cfg.meta_table };
     let meta_ext = meta::meta_parser_extension(meta_opts);
 
@@ -114,15 +114,15 @@ fn build_parser(
     let diagram_ext = diagram_parser_extension(parse_cfg.diagram_options.clone());
     let math_ext = math_parser_extension(parse_cfg.math_options.clone());
 
-    let mut parser_opts = rushdown_lib::parser::Options::default();
+    let mut parser_opts = mordant_lib::parser::Options::default();
     parser_opts.attributes = parse_cfg.attributes;
     parser_opts.auto_heading_ids = parse_cfg.auto_heading_ids;
     parser_opts.escaped_space = parse_cfg.escaped_space;
 
     let gfm_features = gfm_opts.map(|o| o.features.clone());
 
-    let gfm_ext = rushdown_lib::parser::ParserExtensionFn::new(move |p: &mut rushdown_lib::parser::Parser| {
-        use rushdown_lib::parser::{
+    let gfm_ext = mordant_lib::parser::ParserExtensionFn::new(move |p: &mut mordant_lib::parser::Parser| {
+        use mordant_lib::parser::{
             LinkifyParser, NoParserOptions, StrikethroughParser, TableAstTransformer,
             TableParagraphTransformer, TaskListItemParagraphTransformer,
         };
@@ -140,7 +140,7 @@ fn build_parser(
         if features.contains(&GfmFeature::Linkify) {
             p.add_inline_parser(
                 LinkifyParser::with_options,
-                rushdown_lib::parser::LinkifyOptions::default(),
+                mordant_lib::parser::LinkifyOptions::default(),
                 999,
             );
         }
@@ -149,11 +149,11 @@ fn build_parser(
     let footnote_ext = footnote_parser_extension();
     let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext).and(gfm_ext).and(footnote_ext);
 
-    rushdown_lib::parser::Parser::with_extensions(parser_opts, parser_ext)
+    mordant_lib::parser::Parser::with_extensions(parser_opts, parser_ext)
 }
 
-fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Renderer<'_> {
-    let mut opts = rushdown_lib::renderer::html::Options::default();
+fn build_renderer(render_cfg: &RenderConfig) -> mordant_lib::renderer::html::Renderer<'_> {
+    let mut opts = mordant_lib::renderer::html::Options::default();
     opts.hard_wraps = render_cfg.hard_wraps;
     opts.xhtml = render_cfg.xhtml;
     opts.allows_unsafe = render_cfg.allows_unsafe;
@@ -170,12 +170,12 @@ fn build_renderer(render_cfg: &RenderConfig) -> rushdown_lib::renderer::html::Re
     // Add highlighting extension if enabled
     if let Some(ref highlighting_opts) = render_cfg.highlighting_options {
         let highlighting_ext = highlighting_html_renderer_extension(highlighting_opts.clone());
-        rushdown_lib::renderer::html::Renderer::with_extensions(
+        mordant_lib::renderer::html::Renderer::with_extensions(
             opts,
             base_ext.and(highlighting_ext),
         )
     } else {
-        rushdown_lib::renderer::html::Renderer::with_extensions(opts, base_ext)
+        mordant_lib::renderer::html::Renderer::with_extensions(opts, base_ext)
     }
 }
 
@@ -191,7 +191,7 @@ fn parse_and_render(
     let parser = build_parser(gfm_opts, parse_cfg);
     let renderer = build_renderer(render_cfg);
 
-    let mut reader = rushdown_lib::text::BasicReader::new(source);
+    let mut reader = mordant_lib::text::BasicReader::new(source);
     let (arena, document_ref) = parser.parse(&mut reader);
     renderer
         .render(&mut output, source, &arena, document_ref)
@@ -205,9 +205,9 @@ fn parse_only(
     source: &str,
     gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
-) -> (rushdown_lib::ast::Arena, rushdown_lib::ast::NodeRef) {
+) -> (mordant_lib::ast::Arena, mordant_lib::ast::NodeRef) {
     let parser = build_parser(gfm_opts, parse_cfg);
-    let mut reader = rushdown_lib::text::BasicReader::new(source);
+    let mut reader = mordant_lib::text::BasicReader::new(source);
     parser.parse(&mut reader)
 }
 
@@ -218,8 +218,8 @@ fn parse_config_from(
     emoji_opts: Option<&PyEmojiParserOptions>,
     diagram_opts: Option<&PyDiagramParserOptions>,
 ) -> ParseConfig {
-    let emoji_options = emoji_opts.map(|e| e.to_rushdown()).unwrap_or_default();
-    let diagram_options = diagram_opts.map(|d| d.to_rushdown()).unwrap_or_default();
+    let emoji_options = emoji_opts.map(|e| e.to_mordant()).unwrap_or_default();
+    let diagram_options = diagram_opts.map(|d| d.to_mordant()).unwrap_or_default();
     if let Some(opts) = parse_opts {
         ParseConfig {
             attributes: opts.attributes,
@@ -296,10 +296,10 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
     let hl_theme = highlighting_theme.or(theme);
     let diagram_options = eff_diagram_opts
         .as_ref()
-        .map(|d| d.to_rushdown())
+        .map(|d| d.to_mordant())
         .unwrap_or_default();
     let math_options = math_renderer_opts
-        .map(|m| m.to_rushdown())
+        .map(|m| m.to_mordant())
         .unwrap_or_default();
     // Inline math uses the same output format as fenced math.
     let math_inline_options = MathInlineRendererOptions {
@@ -312,9 +312,9 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             xhtml: opts.xhtml,
             allows_unsafe: opts.allows_unsafe,
             escaped_space: opts.escaped_space,
-            emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            emoji_options: emoji_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
             diagram_options: diagram_options.clone(),
-            footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            footnote_options: footnote_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
             math_options: math_options.clone(),
             math_inline_options: math_inline_options.clone(),
@@ -325,9 +325,9 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             xhtml: false,
             allows_unsafe: false,
             escaped_space: false,
-            emoji_options: emoji_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            emoji_options: emoji_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
             diagram_options: diagram_options.clone(),
-            footnote_options: footnote_render_opts.map(|e| e.to_rushdown()).unwrap_or_default(),
+            footnote_options: footnote_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
             highlighting_options: None, // Will be set below
             math_options: math_options.clone(),
             math_inline_options: math_inline_options.clone(),
@@ -393,7 +393,7 @@ fn parse(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts
 
 /// Lint Markdown source and return a list of Diagnostic objects.
 ///
-/// Parses the source into the rushdown AST and evaluates the lint rules
+/// Parses the source into the mordant AST and evaluates the lint rules
 /// against it. Rule identifiers follow markdownlint (MD0xx).
 ///
 /// # Arguments
