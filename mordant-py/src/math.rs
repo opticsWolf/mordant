@@ -1,9 +1,9 @@
 //! PyO3 bindings for the math engine (moved to core `mordant::math`).
 //!
 //! The pure KaTeX engine, parser/renderer extensions and unit tests live
-//! behind the `math` feature of the core crate; this module re-exports them
-//! and keeps the Python-exposed surface (`render_math`, options classes) plus
-//! the highlighter-dependent regression tests.
+//! behind the `math` feature of the core crate. The highlighter×math
+//! interaction tests now live in core `src/highlighter.rs` (core highlighter
+//! depends on core math, so that is the only possible home).
 
 use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
@@ -49,71 +49,5 @@ impl PyMathRendererOptions {
         MathRendererOptions {
             output: output_from_str(&self.output).unwrap_or(katex::OutputFormat::HtmlAndMathml),
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Regression tests that need the binding-side highlighter. The pure-math
-// tests live in core src/math.rs.
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod highlighter_interaction_tests {
-    use super::*;
-    use mordant_lib::renderer::html;
-    use mordant_lib::renderer::html::RendererExtension;
-    use mordant_lib::parser;
-
-    use crate::highlighter::{highlighting_html_renderer_extension, HighlightingRendererOptions};
-
-    /// Render with the math extensions AND the code highlighter active.
-    /// Mirrors md_viewer, which always passes a highlighting theme.
-    fn render_math_highlighted(source: &str) -> String {
-        let parser_ext = math_parser_extension(MathParserOptions::default());
-        let renderer_ext = math_html_renderer_extension(MathRendererOptions::default())
-            .and(math_inline_html_renderer_extension(MathInlineRendererOptions::default()))
-            .and(highlighting_html_renderer_extension(
-                HighlightingRendererOptions::default(),
-            ));
-        let html_opts = html::Options::default();
-        let mut result = String::new();
-        let f = mordant_lib::new_markdown_to_html(
-            parser::Options::default(),
-            html_opts,
-            parser_ext,
-            renderer_ext,
-        );
-        f(&mut result, source).unwrap();
-        result
-    }
-
-    // Bug A: fenced math/latex must become KaTeX even when a theme is active.
-    #[test]
-    fn fenced_math_with_highlighting_bug_a() {
-        let h = render_math_highlighted("```math\nE = mc^2\n```");
-        assert!(h.contains("katex"), "fenced math under a theme should render KaTeX: {h}");
-        assert!(h.contains("katex-display"), "fenced math is display mode: {h}");
-        assert!(!h.contains("language-math"), "should not fall through to highlighting: {h}");
-    }
-
-    #[test]
-    fn latex_fence_with_highlighting_bug_a() {
-        let h = render_math_highlighted("```latex\nE = mc^2\n```");
-        assert!(h.contains("katex"), "fenced latex under a theme should render KaTeX: {h}");
-        assert!(!h.contains("language-latex"), "should not fall through to highlighting: {h}");
-    }
-
-    #[test]
-    fn other_code_blocks_still_highlighted() {
-        let h = render_math_highlighted("```python\nx = 1\n```");
-        assert!(h.contains("language-python"), "non-math code should still highlight: {h}");
-        assert!(!h.contains("katex"), "python block must not be treated as math: {h}");
-    }
-
-    #[test]
-    fn multiline_display_math_with_highlighting() {
-        let h = render_math_highlighted("$$\nE = mc^2\n$$");
-        assert!(h.contains("katex"), "multi-line $$ under a theme should render: {h}");
-        assert!(h.contains("E = mc"), "formula content preserved: {h}");
     }
 }

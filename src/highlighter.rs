@@ -639,3 +639,175 @@ where
         r.add_node_renderer(HighlightingHtmlRenderer::new, options);
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::math::{
+        math_html_renderer_extension, math_inline_html_renderer_extension,
+        math_parser_extension, MathInlineRendererOptions, MathParserOptions,
+        MathRendererOptions,
+    };
+
+    use crate::parser;
+    use crate::renderer::html::{self, RendererExtension};
+
+    /// Render with the math extensions AND the code highlighter active. Mirrors
+    /// md_viewer, which always passes a highlighting theme.
+    fn render_highlighted(source: &str) -> String {
+        let parser_ext = math_parser_extension(MathParserOptions::default());
+        let renderer_ext = math_html_renderer_extension(MathRendererOptions::default())
+            .and(math_inline_html_renderer_extension(MathInlineRendererOptions::default()))
+            .and(highlighting_html_renderer_extension(
+                HighlightingRendererOptions::default(),
+            ));
+        let html_opts = html::Options::default();
+        let mut result = String::new();
+        let f = crate::new_markdown_to_html(
+            parser::Options::default(),
+            html_opts,
+            parser_ext,
+            renderer_ext,
+        );
+        f(&mut result, source).unwrap();
+        result
+    }
+
+    // -----------------------------------------------------------------------
+    // Highlighter × math interaction
+    //
+    // The highlighter registers a CodeBlock renderer that shadows the math
+    // fence renderer (last-registered wins), so fenced ```math / ```latex
+    // blocks must be intercepted inside the highlighting renderer itself.
+    // -----------------------------------------------------------------------
+
+    // Bug A: fenced math/latex must become KaTeX even when a theme is active.
+    #[test]
+    fn fenced_math_with_highlighting_bug_a() {
+        let h = render_highlighted("```math\nE = mc^2\n```");
+        assert!(h.contains("katex"), "fenced math under a theme should render KaTeX: {h}");
+        assert!(h.contains("katex-display"), "fenced math is display mode: {h}");
+        assert!(!h.contains("language-math"), "should not fall through to highlighting: {h}");
+    }
+
+    #[test]
+    fn latex_fence_with_highlighting_bug_a() {
+        let h = render_highlighted("```latex\nE = mc^2\n```");
+        assert!(h.contains("katex"), "fenced latex under a theme should render KaTeX: {h}");
+        assert!(!h.contains("language-latex"), "should not fall through to highlighting: {h}");
+    }
+
+    #[test]
+    fn other_code_blocks_still_highlighted() {
+        let h = render_highlighted("```python\nx = 1\n```");
+        assert!(h.contains("language-python"), "non-math code should still highlight: {h}");
+        assert!(!h.contains("katex"), "python block must not be treated as math: {h}");
+    }
+
+    // Bug B follow-up: `$$` on its own line with content on following lines,
+    // rendered under an active theme.
+    #[test]
+    fn multiline_display_math_with_highlighting() {
+        let h = render_highlighted("$$\nE = mc^2\n$$");
+        assert!(h.contains("katex"), "multi-line $$ under a theme should render: {h}");
+        assert!(h.contains("E = mc"), "formula content preserved: {h}");
+    }
+
+    // -----------------------------------------------------------------------
+    // Theme registry (register_custom_theme / list_themes / resolve_theme)
+    // -----------------------------------------------------------------------
+
+    const PLIST_THEME: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/dtds/plist-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>name</key>
+    <string>CorePlistTestTheme</string>
+    <key>settings</key>
+    <array>
+        <dict>
+            <key>settings</key>
+            <dict>
+                <key>background</key>
+                <string>#282a36</string>
+                <key>foreground</key>
+                <string>#f8f8f0</string>
+            </dict>
+        </dict>
+    </array>
+</dict>
+</plist>"#;
+
+    const VSCODE_THEME: &str = r##"{
+        "name": "CoreVscodeTestTheme",
+        "type": "dark",
+        "colors": { "editor.background": "#1e1e1e", "editor.foreground": "#d4d4d4" },
+        "tokenColors": [
+            {
+                "scope": ["comment"],
+                "settings": { "foreground": "#6a9955", "fontStyle": "italic" }
+            },
+            {
+                "scope": ["string"],
+                "settings": { "foreground": "#ce9178" }
+            }
+        ]
+    }"##;
+
+    #[test]
+    fn register_and_resolve_plist_theme() {
+        let name = "core-plist-theme-test";
+        register_custom_theme(name, PLIST_THEME).expect("plist registration should succeed");
+        assert!(
+            list_themes().iter().any(|t| t == name),
+            "registered theme should be listed"
+        );
+        let theme = resolve_theme(name).expect("theme should resolve");
+        let bg = theme.settings.background.expect("background color set");
+        assert_eq!((bg.r, bg.g, bg.b), (0x28, 0x2a, 0x36));
+    }
+
+    #[test]
+    fn register_and_resolve_vscode_json_theme() {
+        let name = "core-vscode-theme-test";
+        register_custom_theme(name, VSCODE_THEME).expect("VSCode JSON registration should succeed");
+        assert!(list_themes().iter().any(|t| t == name));
+        let theme = resolve_theme(name).expect("theme should resolve");
+        assert!(
+            !theme.scopes.is_empty(),
+            "token colors should convert to scope rules"
+        );
+    }
+
+    #[test]
+    fn invalid_theme_content_is_an_error() {
+        assert!(register_custom_theme("core-bad-theme-test", "this is not a theme").is_err());
+        assert!(resolve_theme("core-bad-theme-test").is_none());
+    }
+
+    #[test]
+    fn resolve_unknown_theme_is_none() {
+        assert!(resolve_theme("no-such-theme-core-xyz").is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Language auto-detection heuristics
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn detect_common_languages_from_content() {
+        let python_snippet = "def greet(name):\n    print(f\"hi {name}\")\n";
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, python_snippet), "python");
+
+        let rust_snippet = "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n";
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, rust_snippet), "rust");
+
+        let xml_snippet = "<?xml version=\"1.0\"?><root><child/></root>";
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, xml_snippet), "xml");
+    }
+
+    #[test]
+    fn detect_falls_back_to_plaintext() {
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, "just some words here"), "plaintext");
+    }
+}
