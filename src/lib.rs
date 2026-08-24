@@ -32,6 +32,9 @@ pub mod diagram;
 #[cfg(feature = "chunker")]
 pub mod chunker;
 
+#[cfg(feature = "math")]
+pub mod math;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
