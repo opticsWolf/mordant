@@ -35,6 +35,12 @@ pub mod chunker;
 #[cfg(feature = "math")]
 pub mod math;
 
+#[cfg(feature = "highlighter")]
+pub mod vscode_theme;
+
+#[cfg(feature = "highlighter")]
+pub mod highlighter;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 

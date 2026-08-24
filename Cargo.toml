@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
@@ -41,6 +41,7 @@ linter = ["std", "emoji"]
 diagram = ["std", "dep:mermaid-rs-renderer", "dep:syntect", "dep:serde_json"]
 chunker = ["std", "diagram", "dep:memmap2"]
 math = ["std", "dep:katex"]
+highlighter = ["std", "math", "dep:syntect", "dep:syntect-assets", "dep:jsonc-parser", "dep:serde"]
 html-entities = []
 hashbrown = ["dep:hashbrown"]
 no-std = ["alloc", "hashbrown"]
@@ -63,6 +64,9 @@ syntect = { version = "5.3.0", default-features = false, features = ["default-fa
 serde_json = { version = "1.0", optional = true }
 memmap2 = { version = "0.9", optional = true }
 katex = { package = "katex-rs", version = "0.2.4", optional = true }
+syntect-assets = { version = "0.23.6", optional = true }
+jsonc-parser = { version = "0.32", features = ["serde"], optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 [build-dependencies]
 phf = { version = "0.13.1", default-features = false }
