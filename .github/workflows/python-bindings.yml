@@ -7,12 +7,18 @@ on:
       - "mordant-py/**"
       - "src/**"
       - "Cargo.toml"
+      - "Cargo.lock"
+      - "README.md"          # crate docs are include_str!("../README.md") — runs as doctests
+      - ".github/workflows/python-bindings.yml"
   pull_request:
     branches: [main, master]
     paths:
       - "mordant-py/**"
       - "src/**"
       - "Cargo.toml"
+      - "Cargo.lock"
+      - "README.md"          # crate docs are include_str!("../README.md") — runs as doctests
+      - ".github/workflows/python-bindings.yml"
 
 jobs:
   build:
