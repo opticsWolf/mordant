@@ -445,14 +445,11 @@ dependencies = { mordant = "0.9" }
 ```
 
 ```rust
-use mordant::{markdown_to_html_string, ParserOptions, Options};
+use mordant::markdown_to_html_string;
 
 let mut html = String::new();
-mordant::markdown_to_html_string(
-    "# Hello\n\n**World**",
-    &mut html,
-    &Options::default(),
-).unwrap();
+markdown_to_html_string(&mut html, "# Hello\n\n**World**").unwrap();
+assert!(html.contains("<h1>Hello</h1>"));
 ```
 
 Everything beyond the default parser/renderer is behind a cargo feature:

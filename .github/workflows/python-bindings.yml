@@ -34,7 +34,7 @@ jobs:
           maturin build --release
       - name: Install wheel
         run: |
-          pip install mordant-py/target/wheels/mordant_py-*.whl
+          pip install --no-index --find-links mordant-py/target/wheels mordant
       - name: Test
         run: |
           pip install pytest
