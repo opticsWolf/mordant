@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
@@ -39,6 +39,7 @@ emoji = ["std"]
 footnotes = ["std"]
 linter = ["std", "emoji"]
 diagram = ["std", "dep:mermaid-rs-renderer", "dep:syntect", "dep:serde_json"]
+chunker = ["std", "diagram", "dep:memmap2"]
 html-entities = []
 hashbrown = ["dep:hashbrown"]
 no-std = ["alloc", "hashbrown"]
@@ -59,6 +60,7 @@ yaml-peg = { version = "1.0.9", optional = true }
 mermaid-rs-renderer = { version = "0.3", default-features = false, optional = true }
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"], optional = true }
 serde_json = { version = "1.0", optional = true }
+memmap2 = { version = "0.9", optional = true }
 
 [build-dependencies]
 phf = { version = "0.13.1", default-features = false }

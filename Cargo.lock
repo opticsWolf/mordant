@@ -1060,7 +1060,7 @@ dependencies = [
 
 [[package]]
 name = "mordant"
-version = "0.23.0"
+version = "0.24.0"
 dependencies = [
  "bitflags 2.10.0",
  "comrak",
@@ -1070,6 +1070,7 @@ dependencies = [
  "libc",
  "markdown",
  "memchr",
+ "memmap2",
  "mermaid-rs-renderer",
  "phf",
  "phf_codegen",

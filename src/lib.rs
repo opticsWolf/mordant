@@ -29,6 +29,9 @@ pub mod mermaid_theme;
 #[cfg(feature = "diagram")]
 pub mod diagram;
 
+#[cfg(feature = "chunker")]
+pub mod chunker;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
