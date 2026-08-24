@@ -428,7 +428,7 @@ fn lint(
 ) -> PyResult<Vec<Diagnostic>> {
     let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
     let lint_cfg = if let Some(cfg) = lint_config {
-        let mut lc = linter::LintConfig {
+        let mut lc = linter::PlainLintConfig {
             disable: cfg.disable.clone(),
             enable: cfg.enable.clone(),
             suppressions: linter::parse_suppressions(source),
@@ -441,7 +441,7 @@ fn lint(
         }
         lc
     } else {
-        let mut lc = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+        let mut lc = lint_opts.map(|o| o.to_config().into_inner()).unwrap_or_default();
         lc.suppressions = linter::parse_suppressions(source);
         lc
     };
@@ -499,14 +499,14 @@ fn fix(
 ) -> PyResult<FixResult> {
     let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
     let lint_cfg = if let Some(cfg) = lint_config {
-        let mut lc = cfg.clone();
+        let mut lc = cfg.clone().into_inner();
         lc.suppressions = linter::parse_suppressions(source);
         if let Some(opts) = lint_opts {
             lc.disable.extend(opts.disable.clone());
         }
         lc
     } else {
-        let mut lc = lint_opts.map(|o| o.to_config()).unwrap_or_default();
+        let mut lc = lint_opts.map(|o| o.to_config().into_inner()).unwrap_or_default();
         lc.suppressions = linter::parse_suppressions(source);
         lc
     };

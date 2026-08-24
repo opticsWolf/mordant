@@ -476,7 +476,7 @@ dependencies = [
  "katex-rs",
  "memmap2",
  "mermaid-rs-renderer",
- "mordant 0.21.0",
+ "mordant 0.22.0",
  "pyo3",
  "rayon",
  "serde",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "mordant"
-version = "0.21.0"
+version = "0.22.0"
 dependencies = [
  "bitflags",
  "emojis",

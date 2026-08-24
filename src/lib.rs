@@ -20,6 +20,9 @@ pub mod emoji;
 #[cfg(feature = "footnotes")]
 pub mod footnote;
 
+#[cfg(feature = "linter")]
+pub mod linter;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
