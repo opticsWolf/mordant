@@ -642,6 +642,7 @@ fn fix_many(
 fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Load custom themes from .mordant/themes/ directory
     let _loaded = highlighter::load_builtin_themes();
+    diagram::register_theme_lookup();
     
     m.add_function(wrap_pyfunction!(markdown_to_html, m)?)?;
     m.add_function(wrap_pyfunction!(parse, m)?)?;

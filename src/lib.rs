@@ -23,6 +23,12 @@ pub mod footnote;
 #[cfg(feature = "linter")]
 pub mod linter;
 
+#[cfg(feature = "diagram")]
+pub mod mermaid_theme;
+
+#[cfg(feature = "diagram")]
+pub mod diagram;
+
 #[cfg(feature = "html-entities")]
 mod html_entity;
 
