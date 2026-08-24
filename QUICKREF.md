@@ -1,6 +1,6 @@
 # Mordant Quick Reference
 
-> **Version:** 0.8.11  
+> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
 > **Import:** `import mordant`
 
 ---
@@ -12,6 +12,8 @@ pip install mordant
 # or from source:
 cd mordant-py && cargo build --release
 ```
+
+> **Rust users:** the same engine is on [crates.io](https://crates.io/crates/mordant) — `cargo add mordant` (features: `meta`, `emoji`, `footnotes`, `linter`, `diagram`, `chunker`, `math`, `highlighter`). See the [README](README.md#rust-crate) for the feature table.
 
 ---
 

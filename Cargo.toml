@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.26.0"
+version = "0.9.0"
 authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"

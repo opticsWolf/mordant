@@ -1,11 +1,11 @@
 # Mordant
 
-> **Version:** 0.8.11  
-> **Rust:** mordant v0.18.0 (CommonMark 0.31.2 + GFM)  
+> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** [mordant v0.9.0 on crates.io](https://crates.io/crates/mordant) — CommonMark 0.31.2 + GFM  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
 
-A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [mordant](https://github.com/yuin/mordant) Rust library.
+A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [mordant](https://crates.io/crates/mordant) Rust library.
 
 - [Architecture](ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](QUICKREF.md) — Python bindings quick reference
@@ -416,7 +416,7 @@ except ValueError as e:
 
 Mordant wraps the [mordant](https://github.com/yuin/mordant) Rust library (CommonMark 0.31.2 + GFM) via PyO3 bindings:
 
-- **Rust core:** mordant v0.18.0 — arena-allocated AST, priority-based parser dispatch, HTML renderer
+- **Rust core:** mordant v0.9.0 ([crates.io](https://crates.io/crates/mordant)) — arena-allocated AST, priority-based parser dispatch, HTML renderer; all engines behind cargo features
 - **Python bindings:** PyO3 0.29 — `Document`, `Node`, `Walker` classes with shared `Rc<RefCell<Arena>>` and `Rc<str>` source memory model (refcount bump on node creation instead of deep source copy)
 - **GIL release:** Parse and render release the GIL via `Python::detach()` for multi-threaded parallelism
 - **Frontmatter:** YAML parsing via `yaml-peg` with thematic break conflict resolution
