@@ -1,7 +1,7 @@
 # Mordant Quick Reference
 
-> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.9.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
+> **Version:** 0.10.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.10.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
 > **Import:** `import mordant`
 
 ---
@@ -22,13 +22,50 @@ cd mordant-py && cargo build --release
 
 ### `list_syntaxes() -> list[str]`
 
-List all available syntax highlighting languages (from syntect-assets).
+List all available syntax highlighting languages (from syntect-assets, plus any
+syntaxes registered via `add_custom_syntax`).
 
 ```python
 syntaxes = mordant.list_syntaxes()
 print(len(syntaxes))  # ~198 languages
 assert "Python" in syntaxes
 assert "Rust" in syntaxes
+```
+
+### `add_custom_syntax(content: str, name: str | None = None) -> str`
+
+Register a custom syntax definition from `.sublime-syntax` (YAML) content. The
+syntax becomes available to **all** highlighting — `markdown_to_html`,
+`Highlighter`, and `list_syntaxes()` — and can be selected by its name or its
+file extensions. Returns the registered syntax name (from the YAML `name:` key
+or the `name` fallback).
+
+Note: a custom syntax may reference built-in syntaxes, but built-in syntaxes
+cannot reference a custom one (syntect limitation).
+
+```python
+name = mordant.add_custom_syntax(open("mylang.sublime-syntax").read())
+html = mordant.markdown_to_html("```mylang\ncode\n```", highlighting_theme="Dracula")
+```
+
+### `detect_language(code: str) -> str`
+
+Detect the language of a code snippet without highlighting it: shebang /
+first-line matching, then token/extension matching, then content heuristics.
+Returns e.g. `"python"`, or `"plaintext"` when nothing matches.
+
+```python
+assert mordant.detect_language("#!/bin/bash\necho hi") == "bash"
+```
+
+### `theme_background(name: str) -> str | None`
+
+Background color of a registered theme as `"#rrggbb"` — for building your own
+container around `highlight(..., bare=True)` output. Returns `None` if the
+theme is not registered.
+
+```python
+bg = mordant.theme_background("Dracula")  # '#282a36'
 ```
 
 ---
@@ -444,7 +481,16 @@ html = hl.highlight("python", "def hello():
 
 | Method | Return Type | Description |
 |--------|-------------|-------------|
-| `highlight(language, code)` | `str` | Highlight code snippet and return HTML |
+| `highlight(language, code, bare=False)` | `str` | Highlight code snippet and return HTML. With `bare=True`, returns only the highlighted token spans (no `<pre>/<code>` wrapper) for embedding into your own container |
+
+#### Standalone usage (no Markdown)
+
+```python
+hl = mordant.Highlighter(theme="Dracula")
+bg = mordant.theme_background("Dracula")
+spans = hl.highlight("python", "def hello(): pass", bare=True)
+html = f'<pre style="background: {bg}"><code>{spans}</code></pre>'
+```
 
 ### HighlightingMode
 

@@ -213,3 +213,113 @@ class TestListSyntaxes:
         """Should have a reasonable number of syntaxes (bat provides ~198)."""
         syntaxes = mordant.list_syntaxes()
         assert len(syntaxes) >= 150
+
+
+class TestStandaloneHighlighting:
+    """Standalone (Markdown-free) highlighting API."""
+
+    def test_bare_mode_has_no_wrapper(self):
+        """highlight(bare=True) should return spans only, no <pre>/<code>."""
+        hl = mordant.Highlighter(theme="InspiredGitHub")
+        bare = hl.highlight("python", "def x(): pass", bare=True)
+        assert "<pre" not in bare
+        assert "<code" not in bare
+        assert "<span" in bare
+
+    def test_bare_mode_is_inner_of_wrapped(self):
+        """bare output should be the inner content of the wrapped output."""
+        hl = mordant.Highlighter(theme="InspiredGitHub")
+        code = "def x(): pass"
+        wrapped = hl.highlight("python", code)
+        bare = hl.highlight("python", code, bare=True)
+        assert bare in wrapped
+        assert wrapped.startswith("<pre")
+
+    def test_bare_mode_class_style(self):
+        """bare=True with mode='Class' should return class spans without wrapper."""
+        hl = mordant.Highlighter(theme="GitHub", mode="Class")
+        bare = hl.highlight("python", "x = 1", bare=True)
+        assert "<pre" not in bare
+        assert "<span" in bare
+        assert "class=" in bare
+
+    def test_theme_background(self):
+        """theme_background() should return the theme's background hex color."""
+        bg = mordant.theme_background("Dracula")
+        assert isinstance(bg, str)
+        assert bg.startswith("#") and len(bg) == 7
+
+    def test_theme_background_unknown_is_none(self):
+        """theme_background() should return None for unknown themes."""
+        assert mordant.theme_background("No-Such-Theme-XYZ") is None
+
+    def test_detect_language(self):
+        """detect_language() should identify common languages."""
+        assert mordant.detect_language("def greet(name):\n    print(name)") == "python"
+        assert mordant.detect_language("fn main() {\n    let x = 1;\n}") == "rust"
+
+    def test_detect_language_fallback(self):
+        """detect_language() should return 'plaintext' when nothing matches."""
+        assert mordant.detect_language("just some words here") == "plaintext"
+
+
+class TestAddCustomSyntax:
+    """Test add_custom_syntax function."""
+
+    MINI_SYNTAX = '''
+name: TestCustomLang
+file_extensions:
+  - tcl1
+scope: source.test-custom-lang
+
+contexts:
+  main:
+    - match: \\b(frobnicate)\\b
+      scope: keyword.control.test-custom-lang
+'''
+
+    def test_add_custom_syntax_returns_name(self):
+        """add_custom_syntax() should return the registered syntax name."""
+        name = mordant.add_custom_syntax(self.MINI_SYNTAX)
+        assert name == "TestCustomLang"
+
+    def test_custom_syntax_in_list_syntaxes(self):
+        """Registered custom syntaxes should appear in list_syntaxes()."""
+        mordant.add_custom_syntax(self.MINI_SYNTAX)
+        assert "TestCustomLang" in mordant.list_syntaxes()
+
+    def test_highlight_with_custom_syntax_by_name(self):
+        """Highlighter should highlight code using the custom syntax name."""
+        mordant.add_custom_syntax(self.MINI_SYNTAX)
+        hl = mordant.Highlighter(theme="InspiredGitHub")
+        spans = hl.highlight("TestCustomLang", "frobnicate x", bare=True)
+        plain = hl.highlight("plaintext", "frobnicate x", bare=True)
+        assert spans != plain, "custom syntax should produce scoped styling"
+
+    def test_highlight_with_custom_syntax_by_extension(self):
+        """Highlighter should resolve custom syntaxes by file extension."""
+        mordant.add_custom_syntax(self.MINI_SYNTAX)
+        hl = mordant.Highlighter(theme="InspiredGitHub")
+        spans = hl.highlight("tcl1", "frobnicate x", bare=True)
+        plain = hl.highlight("plaintext", "frobnicate x", bare=True)
+        assert spans != plain, "extension lookup should find the custom syntax"
+
+    def test_custom_syntax_in_markdown(self):
+        """markdown_to_html should use the registered custom syntax."""
+        mordant.add_custom_syntax(self.MINI_SYNTAX)
+        html = mordant.markdown_to_html(
+            "```tcl1\nfrobnicate x\n```", highlighting_theme="InspiredGitHub"
+        )
+        assert "language-tcl1" in html
+
+    def test_add_custom_syntax_fallback_name(self):
+        """add_custom_syntax(name=...) should name syntaxes lacking a name key."""
+        no_name = self.MINI_SYNTAX.replace("name: TestCustomLang\n", "")
+        name = mordant.add_custom_syntax(no_name, name="FallbackTestLang")
+        assert name == "FallbackTestLang"
+        assert "FallbackTestLang" in mordant.list_syntaxes()
+
+    def test_add_custom_syntax_invalid_raises(self):
+        """add_custom_syntax() should raise ValueError on invalid content."""
+        with pytest.raises(ValueError):
+            mordant.add_custom_syntax("\t:not: valid: yaml: [")

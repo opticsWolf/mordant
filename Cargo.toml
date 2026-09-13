@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
@@ -41,7 +41,7 @@ linter = ["std", "emoji"]
 diagram = ["std", "dep:mermaid-rs-renderer", "dep:syntect", "dep:serde_json"]
 chunker = ["std", "diagram", "dep:memmap2"]
 math = ["std", "dep:katex"]
-highlighter = ["std", "math", "dep:syntect", "dep:syntect-assets", "dep:jsonc-parser", "dep:serde"]
+highlighter = ["std", "dep:syntect", "dep:syntect-assets", "dep:jsonc-parser", "dep:serde", "dep:serde_json"]
 html-entities = []
 hashbrown = ["dep:hashbrown"]
 no-std = ["alloc", "hashbrown"]

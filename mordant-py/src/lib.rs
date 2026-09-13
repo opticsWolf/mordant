@@ -32,7 +32,7 @@ use document::Document;
 use diagram::{diagram_html_renderer_extension, diagram_parser_extension, DiagramHtmlRendererOptions, DiagramParserOptions, PyDiagramHtmlRendererOptions, PyDiagramParserOptions};
 use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRendererOptions, EmojiParserOptions, PyEmojiHtmlRendererOptions, PyEmojiParserOptions};
 use footnote::{footnote_html_renderer_extension, footnote_parser_extension, FootnoteHtmlRendererOptions, PyFootnoteHtmlRendererOptions};
-use highlighter::{add_custom_theme, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
+use highlighter::{add_custom_syntax, add_custom_theme, detect_language, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, theme_background, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
 use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
 use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions, MathInlineRendererOptions, MathRendererOptions, PyMathRendererOptions, KATEX_CSS};
 use node::Node;
@@ -655,6 +655,9 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(add_custom_theme, m)?)?;
     m.add_function(wrap_pyfunction!(list_themes, m)?)?;
     m.add_function(wrap_pyfunction!(list_syntaxes, m)?)?;
+    m.add_function(wrap_pyfunction!(add_custom_syntax, m)?)?;
+    m.add_function(wrap_pyfunction!(detect_language, m)?)?;
+    m.add_function(wrap_pyfunction!(theme_background, m)?)?;
     m.add_class::<linter::LintConfig>()?;
     m.add_class::<linter::RuleMetadata>()?;
     m.add_class::<ParseOptions>()?;

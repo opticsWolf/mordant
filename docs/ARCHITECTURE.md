@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.9.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
+> **Version:** 0.10.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.10.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1233 Python + 134 core Rust unit tests (all engines: linter, meta, emoji, mermaid_theme, math, highlighter, chunker)
+> **Tests:** 1247 Python + 141 core Rust unit tests (all engines: linter, meta, emoji, mermaid_theme, math, highlighter, chunker)
 
 ---
 
@@ -51,7 +51,7 @@ mordant/                          # Monorepo: core Rust crate + Python bindings
 │   ├── mermaid_theme.rs          # [diagram] syntect → Mermaid theme derivation + tests
 │   ├── chunker.rs                # [chunker] MarkdownChunker engine, TextSource (owned/mmap) + tests
 │   ├── math.rs                   # [math] KaTeX rendering, fenced + inline math extensions + tests
-│   ├── highlighter.rs            # [highlighter] syntect highlighting, theme registry, detection + tests
+│   ├── highlighter.rs            # [highlighter] syntect highlighting, theme/syntax registries, custom syntax registration, detection + tests
 │   └── vscode_theme.rs           # [highlighter] VSCode JSON/JSONC theme converter
 ├── Cargo.toml                    # Core crate: optional deps per feature (yaml-peg, katex-rs,
 │                                 #   mermaid-rs-renderer, syntect, memmap2, ...)
@@ -71,7 +71,7 @@ mordant-py/                       # PyO3 Python bindings (thin shim layer over t
 │   ├── linter.rs                 # Shim: Diagnostic/FixResult/LintConfig/LintOptions/RuleMetadata pyclasses + lint_many/fix_many (rayon batch)
 │   ├── chunker.rs                # Shim: ExtractedChunk/MarkdownChunker pyclasses over core engine (GIL released for parsing)
 │   ├── math.rs                   # Shim: render_math() pyfunction + MathRendererOptions pyclass
-│   ├── highlighter.rs            # Shim: Highlighter/HighlightingMode pyclasses, add_custom_theme(), list_themes(), list_syntaxes() pyfunctions
+│   ├── highlighter.rs            # Shim: Highlighter/HighlightingMode pyclasses, add_custom_theme(), add_custom_syntax(), list_themes(), list_syntaxes(), detect_language(), theme_background() pyfunctions
 │   ├── mermaid_theme.rs          # Shim: re-exports core mordant::mermaid_theme
 │   ├── vscode_theme.rs           # Shim: re-exports core mordant::vscode_theme
 │   └── themes.rs                 # Theme loading utilities
@@ -369,8 +369,11 @@ The `mordant` module (via `#[pymodule]`) registers:
 | `lint_many(files, lint_config)` | `lib.rs` |
 | `fix_many(files, lint_config, default_language)` | `lib.rs` |
 | `add_custom_theme(name, content)` | `highlighter.rs` |
+| `add_custom_syntax(content, name)` | `highlighter.rs` |
 | `list_themes()` | `highlighter.rs` |
 | `list_syntaxes()` | `highlighter.rs` |
+| `detect_language(code)` | `highlighter.rs` |
+| `theme_background(name)` | `highlighter.rs` |
 | `render_math(latex, display, output)` | `math.rs` |
 
 ### 4.3. GIL Management
@@ -1862,7 +1865,7 @@ together by cargo features; see the feature table in the [README](../README.md#r
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| `mordant` | 0.9.0 (path dep, all features) | Core crate |
+| `mordant` | 0.10.0 (path dep, all features) | Core crate |
 | `pyo3` | 0.29 | Python bindings |
 | `rayon` | 1.10 | Parallel batch lint/fix |
 

@@ -15,12 +15,13 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::{LazyLock, RwLock};
 use syntect::easy::HighlightLines;
-use syntect::highlighting::ThemeSet;
+use syntect::highlighting::{Theme, ThemeSet};
 use syntect::html::{ClassedHTMLGenerator, ClassStyle, IncludeBackground, styled_line_to_highlighted_html};
-use syntect::parsing::SyntaxSet;
+use syntect::parsing::{SyntaxDefinition, SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 use syntect_assets::assets::HighlightingAssets;
 
+#[cfg(feature = "math")]
 use crate::math::{render_math_cached, MathRendererOptions};
 use crate::vscode_theme::{parse_vscode_theme_jsonc, is_vscode_json_theme, is_plist_xml_theme};
 
@@ -37,14 +38,17 @@ static ASSETS: LazyLock<std::sync::Arc<std::sync::Mutex<HighlightingAssets>>> = 
     std::sync::Arc::new(std::sync::Mutex::new(assets))
 });
 
-// Syntax set from syntect-assets (bat's updated syntaxes)
-static SYNTAX_SET: LazyLock<std::sync::Arc<SyntaxSet>> = LazyLock::new(|| {
+// Syntax set from syntect-assets (bat's updated syntaxes).
+// Wrapped in RwLock<Arc<..>> so custom `.sublime-syntax` definitions can be
+// registered at runtime: readers highlight against an immutable set (the lock
+// is not held while highlighting), registration swaps the Arc atomically.
+static SYNTAX_SET: LazyLock<RwLock<std::sync::Arc<SyntaxSet>>> = LazyLock::new(|| {
     let assets = ASSETS.lock().unwrap();
     let ss = match assets.get_syntax_set() {
         Ok(s) => s.clone(),
         Err(_) => SyntaxSet::load_defaults_newlines(),
     };
-    std::sync::Arc::new(ss)
+    RwLock::new(std::sync::Arc::new(ss))
 });
 
 // Theme set - start with default themes and load custom themes
@@ -68,6 +72,9 @@ pub enum HighlightingMode {
 pub struct HighlightingRendererOptions {
     pub theme: String,
     pub mode: HighlightingMode,
+    /// Only present when the `math` feature is enabled: lets the highlighting
+    /// CodeBlock renderer hand ```` ```math ```` fences to KaTeX instead.
+    #[cfg(feature = "math")]
     pub math_options: Option<MathRendererOptions>,
 }
 
@@ -76,6 +83,7 @@ impl Default for HighlightingRendererOptions {
         Self {
             theme: "InspiredGitHub".to_string(),
             mode: HighlightingMode::Attribute,
+            #[cfg(feature = "math")]
             math_options: None,
         }
     }
@@ -226,115 +234,127 @@ pub fn detect_syntax_from_content(ps: &SyntaxSet, code: &str) -> String {
     "plaintext".to_string()
 }
 
-/// Highlight code using syntect.
+/// Resolve the language identifier and syntax reference for a code snippet.
+///
+/// The returned `(lang, syntax)` pair uses `lang` (the detected or given
+/// identifier) for the `language-*` CSS class and `syntax` for highlighting.
+fn resolve_syntax_pair<'a>(
+    ps: &'a SyntaxSet,
+    language: &str,
+    code: &str,
+) -> (String, &'a SyntaxReference) {
+    let lang: String = if language.is_empty() || language == "plaintext" {
+        detect_syntax_from_content(ps, code)
+    } else {
+        language.to_string()
+    };
+    let syntax = ps
+        .find_syntax_by_token(&lang)
+        .or_else(|| ps.find_syntax_by_extension(&lang))
+        .unwrap_or_else(|| ps.find_syntax_plain_text());
+    (lang, syntax)
+}
+
+/// Highlighted token spans (inline styles) with no wrapper element.
+fn attribute_spans(
+    theme: &Theme,
+    syntax: &SyntaxReference,
+    ps: &SyntaxSet,
+    code: &str,
+) -> String {
+    let mut h = HighlightLines::new(syntax, theme);
+    let mut out = String::new();
+    for line in LinesWithEndings::from(code) {
+        if let Ok(regions) = h.highlight_line(line, ps) {
+            if let Ok(html_line) =
+                styled_line_to_highlighted_html(&regions[..], IncludeBackground::No)
+            {
+                out.push_str(&html_line);
+            }
+        }
+    }
+    out
+}
+
+/// Highlighted token spans (CSS classes) with no wrapper element.
+fn class_spans(syntax: &SyntaxReference, ps: &SyntaxSet, code: &str) -> String {
+    let mut html_gen =
+        ClassedHTMLGenerator::new_with_class_style(syntax, ps, ClassStyle::Spaced);
+    for line in LinesWithEndings::from(code) {
+        let _ = html_gen.parse_html_for_line_which_includes_newline(line);
+    }
+    html_gen.finalize()
+}
+
+/// Theme background as "#rrggbb", for callers building their own container.
+fn theme_background_hex(theme: &Theme) -> String {
+    theme
+        .settings
+        .background
+        .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
+        .unwrap_or_else(|| "#ffffff".to_string())
+}
+
+/// Highlight code using syntect. Returns a full `<pre><code>` block.
 pub fn highlight_code(
     language: &str,
     code: &str,
     theme_name: &str,
     mode: &HighlightingMode,
 ) -> String {
-    let ps = &*SYNTAX_SET;
-    let lang: String = if language.is_empty() || language == "plaintext" {
-        detect_syntax_from_content(ps, code)
-    } else {
-        language.to_string()
-    };
-    let _syntax = ps
-        .find_syntax_by_token(&lang)
-        .or_else(|| ps.find_syntax_by_extension(&lang))
-        .unwrap_or_else(|| ps.find_syntax_plain_text());
-
-    let ts = THEME_SET.read().unwrap();
-    let theme = ts.themes
-        .get(theme_name)
-        .unwrap_or_else(|| &ts.themes["InspiredGitHub"]);
+    let ps_guard = SYNTAX_SET.read().unwrap();
+    let ps: &SyntaxSet = &ps_guard;
+    let (lang, syntax) = resolve_syntax_pair(ps, language, code);
 
     match mode {
         HighlightingMode::Attribute => {
-            render_attribute_mode(theme, code, &lang)
+            let ts = THEME_SET.read().unwrap();
+            let theme = ts.themes
+                .get(theme_name)
+                .unwrap_or_else(|| &ts.themes["InspiredGitHub"]);
+            let bg = theme_background_hex(theme);
+            let mut out = format!(
+                r#"<pre style="background-color: {bg}; padding: 12px; overflow: auto;"><code class="language-{lang}">"#
+            );
+            out.push_str(&attribute_spans(theme, syntax, ps, code));
+            out.push_str("</code></pre>\n");
+            out
         }
         HighlightingMode::Class => {
-            render_class_mode(code, &lang)
+            let mut html = format!(r#"<pre class="code"><code class="language-{lang}">"#);
+            html.push_str(&class_spans(syntax, ps, code));
+            html.push_str("</code></pre>\n");
+            html
         }
     }
 }
 
-fn render_attribute_mode(
-    theme: &syntect::highlighting::Theme,
-    code: &str,
+/// Highlight code using syntect, returning only the highlighted token spans —
+/// no `<pre>`/`<code>` wrapper, so callers can embed the result in their own
+/// container. Pair with [`theme_background`] for container styling.
+pub fn highlight_spans(
     language: &str,
+    code: &str,
+    theme_name: &str,
+    mode: &HighlightingMode,
 ) -> String {
-    let ps = &*SYNTAX_SET;
-    let lang: String = if language.is_empty() || language == "plaintext" {
-        detect_syntax_from_content(ps, code)
-    } else {
-        language.to_string()
-    };
-    let syntax = ps
-        .find_syntax_by_token(&lang)
-        .or_else(|| ps.find_syntax_by_extension(&lang))
-        .unwrap_or_else(|| ps.find_syntax_plain_text());
+    let ps_guard = SYNTAX_SET.read().unwrap();
+    let ps: &SyntaxSet = &ps_guard;
+    let (_, syntax) = resolve_syntax_pair(ps, language, code);
 
-    let bg = theme
-        .settings
-        .background
-        .map(|c| format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b))
-        .unwrap_or_else(|| "#ffffff".to_string());
-
-    let mut out = String::new();
-    out.push_str(&format!(
-        r#"<pre style="background-color: {}; padding: 12px; overflow: auto;"><code class="language-{}">"#,
-        bg, lang
-    ));
-
-    let mut h = HighlightLines::new(syntax, theme);
-
-    for line in LinesWithEndings::from(code) {
-        let regions = h.highlight_line(line, &*SYNTAX_SET).ok();
-        if let Some(regions) = regions {
-            let html_line = styled_line_to_highlighted_html(
-                &regions[..],
-                IncludeBackground::No,
-            ).ok();
-            if let Some(html_line) = html_line {
-                out.push_str(&html_line);
-            }
+    match mode {
+        HighlightingMode::Attribute => {
+            let ts = THEME_SET.read().unwrap();
+            let theme = ts.themes
+                .get(theme_name)
+                .unwrap_or_else(|| &ts.themes["InspiredGitHub"]);
+            attribute_spans(theme, syntax, ps, code)
         }
+        HighlightingMode::Class => class_spans(syntax, ps, code),
     }
-
-    out.push_str("</code></pre>\n");
-    out
 }
 
-fn render_class_mode(
-    code: &str,
-    language: &str,
-) -> String {
-    let ps = &*SYNTAX_SET;
-    let lang: String = if language.is_empty() || language == "plaintext" {
-        detect_syntax_from_content(ps, code)
-    } else {
-        language.to_string()
-    };
-    let syntax = ps
-        .find_syntax_by_token(&lang)
-        .or_else(|| ps.find_syntax_by_extension(&lang))
-        .unwrap_or_else(|| ps.find_syntax_plain_text());
 
-    let mut html_gen =
-        ClassedHTMLGenerator::new_with_class_style(syntax, &*SYNTAX_SET, ClassStyle::Spaced);
-
-    let mut html = String::new();
-    html.push_str(&format!(r#"<pre class="code"><code class="language-{}">"#, lang));
-    for line in LinesWithEndings::from(code) {
-        html_gen
-            .parse_html_for_line_which_includes_newline(line)
-            .ok();
-    }
-    html.push_str(&html_gen.finalize());
-    html.push_str("</code></pre>\n");
-    html
-}
 
 // ---------------------------------------------------------------------------
 // Custom theme loading
@@ -374,43 +394,41 @@ pub fn load_builtin_themes() -> Vec<String> {
         
         if theme_dir.exists() && theme_dir.is_dir() {
             if let Ok(entries) = std::fs::read_dir(&theme_dir) {
-                for entry in entries {
-                    if let Ok(dir_entry) = entry {
-                        let file = dir_entry.file_name();
-                        let file_str = file.to_string_lossy();
-                        let file_path = theme_dir.join(&file);
+                for dir_entry in entries.flatten() {
+                    let file = dir_entry.file_name();
+                    let file_str = file.to_string_lossy();
+                    let file_path = theme_dir.join(&file);
 
-                        if file_str.ends_with(".tmTheme") {
-                            let theme_name = file_str.trim_end_matches(".tmTheme");
+                    if file_str.ends_with(".tmTheme") {
+                        let theme_name = file_str.trim_end_matches(".tmTheme");
 
-                            if let Ok(content) = std::fs::read_to_string(&file_path) {
-                                if let Ok(theme) = ThemeSet::load_from_reader(&mut Cursor::new(content)) {
-                                    let mut ts = THEME_SET.write().unwrap();
-                                    ts.themes.insert(theme_name.to_string(), theme);
-                                    loaded.push(theme_name.to_string());
-                                }
+                        if let Ok(content) = std::fs::read_to_string(&file_path) {
+                            if let Ok(theme) = ThemeSet::load_from_reader(&mut Cursor::new(content)) {
+                                let mut ts = THEME_SET.write().unwrap();
+                                ts.themes.insert(theme_name.to_string(), theme);
+                                loaded.push(theme_name.to_string());
                             }
-                        } else if file_str.ends_with(".json") {
-                            let theme_name = file_str.trim_end_matches(".json");
+                        }
+                    } else if file_str.ends_with(".json") {
+                        let theme_name = file_str.trim_end_matches(".json");
 
-                            if let Ok(content) = std::fs::read_to_string(&file_path) {
-                                if is_vscode_json_theme(&content) {
-                                    match parse_vscode_theme_jsonc(&content) {
-                                        Ok(vscode_theme) => {
-                                            match crate::vscode_theme::vscode_theme_to_syntect(&vscode_theme) {
-                                                Ok(theme) => {
-                                                    let mut ts = THEME_SET.write().unwrap();
-                                                    ts.themes.insert(theme_name.to_string(), theme);
-                                                    loaded.push(theme_name.to_string());
-                                                }
-                                                Err(e) => {
-                                                    eprintln!("Warning: Could not convert VSCode theme {}: {}", file_str, e);
-                                                }
+                        if let Ok(content) = std::fs::read_to_string(&file_path) {
+                            if is_vscode_json_theme(&content) {
+                                match parse_vscode_theme_jsonc(&content) {
+                                    Ok(vscode_theme) => {
+                                        match crate::vscode_theme::vscode_theme_to_syntect(&vscode_theme) {
+                                            Ok(theme) => {
+                                                let mut ts = THEME_SET.write().unwrap();
+                                                ts.themes.insert(theme_name.to_string(), theme);
+                                                loaded.push(theme_name.to_string());
+                                            }
+                                            Err(e) => {
+                                                eprintln!("Warning: Could not convert VSCode theme {}: {}", file_str, e);
                                             }
                                         }
-                                        Err(e) => {
-                                            eprintln!("Warning: Could not parse VSCode JSON theme {}: {}", file_str, e);
-                                        }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Warning: Could not parse VSCode JSON theme {}: {}", file_str, e);
                                     }
                                 }
                             }
@@ -495,6 +513,51 @@ pub fn register_custom_theme(name: &str, content: &str) -> std::result::Result<(
     }
 }
 
+/// Register a custom syntax definition from `.sublime-syntax` (YAML) content.
+///
+/// The syntax becomes available to **all** highlighting — both the Markdown
+/// pipeline and the standalone [`highlight_code`] / [`highlight_spans`] — and
+/// can be selected by its name (token match) or its `file_extensions`.
+/// Already-listed syntaxes via [`list_syntaxes`].
+///
+/// `fallback_name` is used when the YAML has no top-level `name:` key. Returns
+/// the registered syntax name.
+///
+/// Note (syntect limitation): a custom syntax may reference built-in syntaxes,
+/// but built-in syntaxes cannot reference a custom one.
+///
+/// # Example
+/// ```python
+/// name = mordant.add_custom_syntax(open("mylang.sublime-syntax").read())
+/// mordant.Highlighter().highlight(name, "some mylang code")
+/// ```
+pub fn register_custom_syntax(content: &str, fallback_name: Option<&str>) -> std::result::Result<String, String> {
+    let def = SyntaxDefinition::load_from_str(content, true, fallback_name)
+        .map_err(|e| format!("Failed to parse .sublime-syntax: {}", e))?;
+    let syntax_name = def.name.clone();
+
+    // Rebuild the syntax set with the new definition. Registration is rare, so
+    // the one-time rebuild cost (a full-set clone + build, ~ms) is acceptable.
+    let current = SYNTAX_SET.read().unwrap().clone(); // Arc clone
+    let mut builder = SyntaxSet::clone(&current).into_builder();
+    builder.add(def);
+    let new_set = builder.build();
+    *SYNTAX_SET.write().unwrap() = std::sync::Arc::new(new_set);
+
+    Ok(syntax_name)
+}
+
+/// Detect the language of a code snippet without highlighting it.
+///
+/// Tries shebang/first-line matching, then token/extension matching, then
+/// content heuristics. Returns the detected language identifier (e.g.
+/// "python"), or "plaintext" when nothing matches.
+pub fn detect_language(code: &str) -> String {
+    let ps_guard = SYNTAX_SET.read().unwrap();
+    let ps: &SyntaxSet = &ps_guard;
+    detect_syntax_from_content(ps, code)
+}
+
 /// List all available syntax highlighting themes.
 ///
 /// # Returns
@@ -509,6 +572,17 @@ pub fn register_custom_theme(name: &str, content: &str) -> std::result::Result<(
 pub fn list_themes() -> Vec<String> {
     let ts = THEME_SET.read().unwrap();
     ts.themes.keys().cloned().collect()
+}
+
+/// Background color of a registered theme as "#rrggbb".
+///
+/// Useful together with [`highlight_spans`]: highlight bare spans, then build
+/// your own `<pre>`/`<div>` container using the theme's background color.
+/// Returns `None` if no theme with that name is registered.
+pub fn theme_background(theme_name: &str) -> Option<String> {
+    let ts = THEME_SET.read().unwrap();
+    let theme = ts.themes.get(theme_name)?;
+    Some(theme_background_hex(theme))
 }
 
 /// Resolve a registered syntect theme by name (clone from the global set).
@@ -532,7 +606,8 @@ pub fn resolve_theme(name: &str) -> Option<syntect::highlighting::Theme> {
 /// # ['Rust', 'Python', 'JavaScript', ...]
 /// ```
 pub fn list_syntaxes() -> Vec<String> {
-    let ps = &*SYNTAX_SET;
+    let ps_guard = SYNTAX_SET.read().unwrap();
+    let ps: &SyntaxSet = &ps_guard;
     ps.syntaxes().iter()
         .map(|s| s.name.clone())
         .collect()
@@ -545,18 +620,16 @@ pub fn list_syntaxes() -> Vec<String> {
 /// HTML renderer that intercepts CodeBlock nodes and applies syntax highlighting.
 struct HighlightingHtmlRenderer<W: TextWrite> {
     _phantom: core::marker::PhantomData<W>,
-    writer: html::Writer,
     options: HighlightingRendererOptions,
 }
 
 impl<W: TextWrite> HighlightingHtmlRenderer<W> {
     fn new(
-        html_opts: html::Options,
+        _html_opts: html::Options,
         options: HighlightingRendererOptions,
     ) -> Self {
         Self {
             _phantom: core::marker::PhantomData,
-            writer: html::Writer::with_options(html_opts),
             options,
         }
     }
@@ -585,6 +658,8 @@ impl<W: TextWrite> RenderNode<W> for HighlightingHtmlRenderer<W> {
             // highlighter whenever a theme is set (the renderer registry keeps a
             // single CodeBlock renderer, last-registered wins), so we intercept
             // the math languages here to keep fenced math working under themes.
+            // Only compiled when the `math` feature is on.
+            #[cfg(feature = "math")]
             if lang == "math" || lang == "latex" {
                 let latex = code.trim_end_matches('\n');
                 let output = self.options.math_options
@@ -643,74 +718,121 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::math::{
-        math_html_renderer_extension, math_inline_html_renderer_extension,
-        math_parser_extension, MathInlineRendererOptions, MathParserOptions,
-        MathRendererOptions,
-    };
 
-    use crate::parser;
-    use crate::renderer::html::{self, RendererExtension};
+    // -----------------------------------------------------------------------
+    // Standalone highlighting (no Markdown context)
+    // -----------------------------------------------------------------------
 
-    /// Render with the math extensions AND the code highlighter active. Mirrors
-    /// md_viewer, which always passes a highlighting theme.
-    fn render_highlighted(source: &str) -> String {
-        let parser_ext = math_parser_extension(MathParserOptions::default());
-        let renderer_ext = math_html_renderer_extension(MathRendererOptions::default())
-            .and(math_inline_html_renderer_extension(MathInlineRendererOptions::default()))
-            .and(highlighting_html_renderer_extension(
-                HighlightingRendererOptions::default(),
-            ));
-        let html_opts = html::Options::default();
-        let mut result = String::new();
-        let f = crate::new_markdown_to_html(
-            parser::Options::default(),
-            html_opts,
-            parser_ext,
-            renderer_ext,
-        );
-        f(&mut result, source).unwrap();
-        result
+    #[test]
+    fn highlight_spans_has_no_wrapper() {
+        let spans = highlight_spans("python", "x = 1\n", "Dracula", &HighlightingMode::Attribute);
+        assert!(spans.contains("font-weight"), "should contain styled spans: {spans}");
+        assert!(!spans.contains("<pre"), "bare spans must not contain <pre>: {spans}");
+        assert!(!spans.contains("<code"), "bare spans must not contain <code>: {spans}");
+
+        let wrapped = highlight_code("python", "x = 1\n", "Dracula", &HighlightingMode::Attribute);
+        assert!(wrapped.contains("<pre"), "wrapped output has a <pre> container");
+        assert!(wrapped.contains(&spans), "wrapped output embeds the bare spans");
+    }
+
+    #[test]
+    fn highlight_spans_class_mode_has_no_wrapper() {
+        let spans = highlight_spans("python", "x = 1\n", "Dracula", &HighlightingMode::Class);
+        assert!(!spans.contains("<pre"), "bare class spans must not contain <pre>: {spans}");
+        assert!(spans.contains("<span"), "should contain class spans: {spans}");
+    }
+
+    #[test]
+    fn theme_background_returns_hex() {
+        // Core built-in syntect theme (embedded project themes are loaded by the
+        // Python package at import time, so they are not available here).
+        let bg = theme_background("InspiredGitHub").expect("InspiredGitHub is a built-in theme");
+        assert!(bg.starts_with('#') && bg.len() == 7, "got: {bg}");
+        assert!(theme_background("no-such-theme-core-xyz").is_none());
+    }
+
+    #[test]
+    fn detect_language_standalone() {
+        assert_eq!(detect_language("def greet():\n    pass\n"), "python");
+        assert_eq!(detect_language("just some words here"), "plaintext");
     }
 
     // -----------------------------------------------------------------------
-    // Highlighter × math interaction
-    //
-    // The highlighter registers a CodeBlock renderer that shadows the math
-    // fence renderer (last-registered wins), so fenced ```math / ```latex
-    // blocks must be intercepted inside the highlighting renderer itself.
+    // Custom syntax registration (register_custom_syntax)
     // -----------------------------------------------------------------------
 
-    // Bug A: fenced math/latex must become KaTeX even when a theme is active.
+    // Minimal .sublime-syntax definition with its own keyword scopes.
+    const MINI_SYNTAX: &str = r##"
+name: CoreMiniLang
+file_extensions:
+  - cml
+scope: source.core-mini-lang
+
+contexts:
+  main:
+    - match: \b(magicword)\b
+      scope: keyword.control.core-mini-lang
+    - match: '"'
+      scope: punctuation.definition.string.begin.core-mini-lang
+      push: string
+
+  string:
+    - meta_scope: string.quoted.double.core-mini-lang
+    - match: '"'
+      scope: punctuation.definition.string.end.core-mini-lang
+      pop: true
+"##;
+
     #[test]
-    fn fenced_math_with_highlighting_bug_a() {
-        let h = render_highlighted("```math\nE = mc^2\n```");
-        assert!(h.contains("katex"), "fenced math under a theme should render KaTeX: {h}");
-        assert!(h.contains("katex-display"), "fenced math is display mode: {h}");
-        assert!(!h.contains("language-math"), "should not fall through to highlighting: {h}");
+    fn register_custom_syntax_and_highlight() {
+        let name = register_custom_syntax(MINI_SYNTAX, None).expect("sublime-syntax should parse");
+        assert_eq!(name, "CoreMiniLang");
+        assert!(list_syntaxes().iter().any(|s| s == "CoreMiniLang"));
+
+        // Highlight by syntax name token
+        let spans = highlight_spans("CoreMiniLang", "magicword \"abc\"\n", "Dracula", &HighlightingMode::Attribute);
+        assert!(!spans.contains("<pre"), "bare spans only: {spans}");
+        assert!(spans.contains("font-weight"), "keyword should be styled: {spans}");
+
+        // Highlight by file extension
+        let spans = highlight_spans("cml", "magicword\n", "Dracula", &HighlightingMode::Attribute);
+        assert!(spans.contains("font-weight"), "extension lookup should find the syntax: {spans}");
     }
 
     #[test]
-    fn latex_fence_with_highlighting_bug_a() {
-        let h = render_highlighted("```latex\nE = mc^2\n```");
-        assert!(h.contains("katex"), "fenced latex under a theme should render KaTeX: {h}");
-        assert!(!h.contains("language-latex"), "should not fall through to highlighting: {h}");
+    fn register_custom_syntax_fallback_name() {
+        let no_name = MINI_SYNTAX.replace("name: CoreMiniLang\n", "");
+        let name = register_custom_syntax(&no_name, Some("CoreFallbackLang")).expect("should parse");
+        assert_eq!(name, "CoreFallbackLang");
+        assert!(list_syntaxes().iter().any(|s| s == "CoreFallbackLang"));
     }
 
     #[test]
-    fn other_code_blocks_still_highlighted() {
-        let h = render_highlighted("```python\nx = 1\n```");
-        assert!(h.contains("language-python"), "non-math code should still highlight: {h}");
-        assert!(!h.contains("katex"), "python block must not be treated as math: {h}");
+    fn register_custom_syntax_invalid_content() {
+        let err = register_custom_syntax("\t:not: valid: yaml: [", None)
+            .expect_err("invalid YAML should error");
+        assert!(err.contains("Failed to parse"), "error mentions cause: {err}");
     }
 
-    // Bug B follow-up: `$$` on its own line with content on following lines,
-    // rendered under an active theme.
+    // -----------------------------------------------------------------------
+    // Language auto-detection heuristics
+    // -----------------------------------------------------------------------
+
     #[test]
-    fn multiline_display_math_with_highlighting() {
-        let h = render_highlighted("$$\nE = mc^2\n$$");
-        assert!(h.contains("katex"), "multi-line $$ under a theme should render: {h}");
-        assert!(h.contains("E = mc"), "formula content preserved: {h}");
+    fn detect_common_languages_from_content() {
+        let python_snippet = "def greet(name):\n    print(f\"hi {name}\")\n";
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET.read().unwrap(), python_snippet), "python");
+
+        let rust_snippet = "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n";
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET.read().unwrap(), rust_snippet), "rust");
+
+        let xml_snippet = "<?xml version=\"1.0\"?><root><child/></root>";
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET.read().unwrap(), xml_snippet), "xml");
+    }
+
+    #[test]
+    fn detect_falls_back_to_plaintext() {
+        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET.read().unwrap(), "just some words here"), "plaintext");
     }
 
     // -----------------------------------------------------------------------
@@ -789,25 +911,81 @@ mod tests {
     fn resolve_unknown_theme_is_none() {
         assert!(resolve_theme("no-such-theme-core-xyz").is_none());
     }
+}
+
+// Math-interaction tests require the `math` feature.
+#[cfg(all(test, feature = "math"))]
+mod math_tests {
+    use super::*;
+    use crate::math::{
+        math_html_renderer_extension, math_inline_html_renderer_extension,
+        math_parser_extension, MathInlineRendererOptions, MathParserOptions,
+        MathRendererOptions,
+    };
+
+    use crate::parser;
+    use crate::renderer::html::{self, RendererExtension};
+
+    /// Render with the math extensions AND the code highlighter active. Mirrors
+    /// md_viewer, which always passes a highlighting theme.
+    fn render_highlighted(source: &str) -> String {
+        let parser_ext = math_parser_extension(MathParserOptions::default());
+        let renderer_ext = math_html_renderer_extension(MathRendererOptions::default())
+            .and(math_inline_html_renderer_extension(MathInlineRendererOptions::default()))
+            .and(highlighting_html_renderer_extension(
+                HighlightingRendererOptions::default(),
+            ));
+        let html_opts = html::Options::default();
+        let mut result = String::new();
+        let f = crate::new_markdown_to_html(
+            parser::Options::default(),
+            html_opts,
+            parser_ext,
+            renderer_ext,
+        );
+        f(&mut result, source).unwrap();
+        result
+    }
 
     // -----------------------------------------------------------------------
-    // Language auto-detection heuristics
+    // Highlighter × math interaction
+    //
+    // The highlighter registers a CodeBlock renderer that shadows the math
+    // fence renderer (last-registered wins), so fenced ```math / ```latex
+    // blocks must be intercepted inside the highlighting renderer itself.
     // -----------------------------------------------------------------------
 
+    // Bug A: fenced math/latex must become KaTeX even when a theme is active.
     #[test]
-    fn detect_common_languages_from_content() {
-        let python_snippet = "def greet(name):\n    print(f\"hi {name}\")\n";
-        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, python_snippet), "python");
-
-        let rust_snippet = "fn main() {\n    let x = 1;\n    println!(\"{}\", x);\n}\n";
-        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, rust_snippet), "rust");
-
-        let xml_snippet = "<?xml version=\"1.0\"?><root><child/></root>";
-        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, xml_snippet), "xml");
+    fn fenced_math_with_highlighting_bug_a() {
+        let h = render_highlighted("```math\nE = mc^2\n```");
+        assert!(h.contains("katex"), "fenced math under a theme should render KaTeX: {h}");
+        assert!(h.contains("katex-display"), "fenced math is display mode: {h}");
+        assert!(!h.contains("language-math"), "should not fall through to highlighting: {h}");
     }
 
     #[test]
-    fn detect_falls_back_to_plaintext() {
-        assert_eq!(detect_syntax_from_content(&*SYNTAX_SET, "just some words here"), "plaintext");
+    fn latex_fence_with_highlighting_bug_a() {
+        let h = render_highlighted("```latex\nE = mc^2\n```");
+        assert!(h.contains("katex"), "fenced latex under a theme should render KaTeX: {h}");
+        assert!(!h.contains("language-latex"), "should not fall through to highlighting: {h}");
+    }
+
+    #[test]
+    fn other_code_blocks_still_highlighted() {
+        let h = render_highlighted("```python\nx = 1\n```");
+        assert!(h.contains("language-python"), "non-math code should still highlight: {h}");
+        assert!(!h.contains("katex"), "python block must not be treated as math: {h}");
+    }
+
+    // Bug B follow-up: `$$` on its own line with content on following lines,
+    // rendered under an active theme.
+    #[test]
+    fn multiline_display_math_with_highlighting() {
+        let h = render_highlighted("$$\nE = mc^2\n$$");
+        assert!(h.contains("katex"), "multi-line $$ under a theme should render: {h}");
+        assert!(h.contains("E = mc"), "formula content preserved: {h}");
     }
 }
+// End of math_tests. Theme-registry tests live in the general `tests` module
+// above; language detection heuristics are covered there as well.

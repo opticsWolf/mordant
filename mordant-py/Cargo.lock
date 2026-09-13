@@ -469,7 +469,7 @@ dependencies = [
 
 [[package]]
 name = "mordant"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "bitflags",
  "emojis",
@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "mordant-py"
-version = "0.9.0"
+version = "0.10.0"
 dependencies = [
  "emojis",
  "jsonc-parser",

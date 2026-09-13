@@ -8,8 +8,8 @@
 [![docs.rs](https://img.shields.io/docsrs/mordant)](https://docs.rs/mordant)
 [![Rust](https://img.shields.io/badge/Rust-1.87+-orange)](https://www.rust-lang.org)
 
-> **Version:** 0.9.0 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.9.0 on [crates.io](https://crates.io/crates/mordant) ([docs.rs](https://docs.rs/mordant)) — CommonMark 0.31.2 + GFM  
+> **Version:** 0.10.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.10.0 on [crates.io](https://crates.io/crates/mordant) ([docs.rs](https://docs.rs/mordant)) — CommonMark 0.31.2 + GFM  
 > **Python:** 3.9+  
 > **Bindings:** PyO3 0.29
 
@@ -17,6 +17,16 @@ A fast CommonMark + GFM Markdown parser and renderer — available as a native R
 
 - [Architecture](docs/ARCHITECTURE.md) — Full architecture documentation
 - [Quick Reference](docs/QUICKREF.md) — Python bindings quick reference
+
+## What's New in 0.10.0
+
+- **Standalone highlighting API** — the bundled syntect engine is now usable directly, without the Markdown pipeline:
+  - `Highlighter.highlight(lang, code, bare=True)` returns only the highlighted token spans (no `<pre>/<code>` wrapper) for embedding into your own HTML; pair with `theme_background(name)` for the theme's background color.
+  - `add_custom_syntax(content, name=None)` registers custom `.sublime-syntax` (YAML) definitions at runtime; they become available to `markdown_to_html`, `Highlighter`, and `list_syntaxes()`.
+  - `detect_language(code)` exposes the content-based language auto-detection (shebang → token → extension → heuristics).
+  - Rust parity: `register_custom_syntax`, `detect_language`, `highlight_spans`, `theme_background` in `mordant::highlighter`.
+- **Feature decoupling** — the `highlighter` cargo feature no longer pulls in `math` (KaTeX); the math-fence interception in the highlighting renderer is now compiled only when both features are enabled.
+- **141 core unit tests** plus the full CommonMark spec suite run against the core crate itself; Python bindings add 1247 integration tests.
 
 ## What's New in 0.9.0
 
@@ -464,7 +474,7 @@ Everything beyond the default parser/renderer is behind a cargo feature:
 | `diagram` | Mermaid diagrams: server SVG / client ESM / hybrid + theme derivation | `mermaid-rs-renderer`, `syntect`, `serde_json` |
 | `chunker` | Lazy AST chunk iterator (`MarkdownChunker`), owned + mmap sources | requires `diagram`, adds `memmap2` |
 | `math` | KaTeX math: fenced ```` ```math ```` / ```` ```latex ```` blocks, inline `$…$` / `$$…$$` | `katex-rs` |
-| `highlighter` | Syntax highlighting via syntect-assets, VSCode theme conversion | requires `math`, adds `syntect`, `syntect-assets`, `jsonc-parser`, `serde` |
+| `highlighter` | Syntax highlighting via syntect-assets, VSCode theme conversion, custom `.sublime-syntax` registration | adds `syntect`, `syntect-assets`, `jsonc-parser`, `serde`, `serde_json` |
 | `no-std`/`alloc` | Embedded use without std (parser core only) | — |
 
 See [docs.rs/mordant](https://docs.rs/mordant) for the full API documentation.
@@ -473,7 +483,7 @@ See [docs.rs/mordant](https://docs.rs/mordant) for the full API documentation.
 
 The Python package wraps the [mordant](https://crates.io/crates/mordant) Rust crate (CommonMark 0.31.2 + GFM, same repo, lockstep versioning) via PyO3 bindings:
 
-- **Rust core:** mordant v0.9.0 ([crates.io](https://crates.io/crates/mordant)) — arena-allocated AST, priority-based parser dispatch, HTML renderer; all engines (lint, diagram, chunker, math, highlighter, meta, emoji, footnotes) are part of the core crate behind cargo features
+- **Rust core:** mordant v0.10.0 ([crates.io](https://crates.io/crates/mordant)) — arena-allocated AST, priority-based parser dispatch, HTML renderer; all engines (lint, diagram, chunker, math, highlighter, meta, emoji, footnotes) are part of the core crate behind cargo features
 - **Python bindings:** PyO3 0.29 — a thin shim layer (pyclasses + pyfunction wrappers) over the core crate; `Document`, `Node`, `Walker` classes with shared `Rc<RefCell<Arena>>` and `Rc<str>` source memory model (refcount bump on node creation instead of deep source copy)
 - **GIL release:** Parse and render release the GIL via `Python::detach()` for multi-threaded parallelism
 - **Frontmatter:** YAML parsing via `yaml-peg` with thematic break conflict resolution
@@ -605,7 +615,7 @@ cd mordant-py
 python -m pytest tests/ -v
 ```
 
-1233 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, OKF chunker methods, Extracted Chunk, Mixed Features) + 64 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
+1247 Python tests passing (Core, AST, GFM, Options, YAML Frontmatter, Emoji, Mermaid Diagrams, Math, Lint engine, CLI, batch API, Phase 8 accuracy, VSCode theme, Chunker, OKF chunker methods, Extracted Chunk, Mixed Features, Standalone Highlighting) + 64 Rust tests (Unit tests, AST, CommonMark spec, Extensions, GFM, Options, Doc-tests).
 
 ## Theme Loading
 
