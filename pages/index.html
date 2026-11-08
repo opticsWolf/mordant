@@ -33,6 +33,7 @@
     <g fill="currentColor"><circle cx="460" cy="74" r="4"/><circle cx="742" cy="34" r="4"/><circle cx="1034" cy="148" r="4"/><circle cx="1080" cy="418" r="4"/><circle cx="836" cy="630" r="4"/><circle cx="568" cy="514" r="4"/></g>
   </svg>
   <div class="hero-copy">
+    <p class="kicker">Built on <a href="https://github.com/yuin/rushdown">rushdown</a> — forked &amp; extended</p>
     <h1>Markdown in.<br><span>HTML out — fast.</span></h1>
     <p class="sub">A fast CommonMark + GFM parser and renderer — a <strong>Rust core</strong> on crates.io with <strong>Python bindings</strong> on PyPI and full AST access.</p>
     <p class="hero-detail">mordant parses CommonMark 0.31.2 + GFM (tables, task lists, strikethrough) into an arena-allocated AST, then renders HTML. One engine in both languages, lockstep versioned. The GIL is released for multi-threaded throughput — ~4.0× across 4 threads, up to 55× faster than python-markdown on large documents. Fenced code highlights through the bundled syntect engine — one <code>theme=</code> for code and Mermaid alike.</p>
@@ -59,7 +60,7 @@ doc.metadata    <span class="syntax-muted"># {} — or frontmatter, when present
     <p class="preview-caption">Illustrative session · GFM tables on by default, linkify off unless asked.</p>
   </figure>
   <ul class="principles" aria-label="At a glance">
-    <li>CommonMark 0.31.2 + GFM</li><li>Rust core · Python wheels</li><li>Full AST + frontmatter</li><li>55× faster path</li>
+    <li>CommonMark 0.31.2 + GFM</li><li>Rust core · Python wheels</li><li>Full AST + frontmatter</li><li>Syntect highlighting + themes</li><li>55× faster path</li>
   </ul>
 </header>
 
@@ -99,7 +100,7 @@ doc.metadata    <span class="syntax-muted"># {} — or frontmatter, when present
 <section id="workflow" aria-labelledby="workflow-title">
   <div class="section-intro">
     <h2 id="workflow-title">From pip install<br>to trusted HTML.</h2>
-    <div class="prose"><p>One install covers papers, docs, and notes. The example below follows the standard path: install the wheel, render in one call, keep GFM on with linkify off by default, read frontmatter and the AST, then reach for math, diagrams, and footnotes.</p><p>Rust users add the same crate with the features they need — no Python involved. Python needs 3.9+, Rust needs 1.87+.</p></div>
+    <div class="prose"><p>One install covers papers, docs, and notes. The example below follows the standard path: install the wheel, render in one call, keep GFM on with linkify off by default, read frontmatter and the AST, then reach for math, diagrams, highlighting, and footnotes.</p><p>Rust users add the same crate with the features they need — no Python involved. Python needs 3.9+, Rust needs 1.87+.</p></div>
   </div>
   <div class="setup">
     <div><h3>Install with one line</h3><p>Wheels for Linux, macOS, and Windows. The Rust crate and the Python package share the version number — 0.10.0 on both indexes.</p><pre tabindex="0" aria-label="Installation commands"><code>pip install mordant
@@ -135,16 +136,18 @@ heading.text   # "Title"
 links = [n for n in doc.walk("depth") if n.kind == "Link"]</code></pre></div>
     </article>
     <article class="step">
-      <div class="step-copy"><span class="step-no">3</span><h3>Extend with math, diagrams, highlighting.</h3><p>KaTeX fenced blocks plus inline <code>$…$</code> / <code>$$…$$</code>, Mermaid blocks rendered server-side as inline SVG by default, PHP-style footnotes, and shortcode emoji — all on the same tree. Fenced code highlights through the bundled syntect engine, themed per-call or once for the whole document.</p></div>
-      <div class="example"><span class="example-label">Math, diagrams, footnotes, themes</span><pre tabindex="0" aria-label="Extension commands"><code>html = mordant.markdown_to_html("```math\n\\int_0^\\infty e^{-x^2} dx\n```")
+      <div class="step-copy"><span class="step-no">3</span><h3>Extend with math, diagrams, extras.</h3><p>KaTeX fenced blocks plus inline <code>$…$</code> / <code>$$…$$</code>, Mermaid blocks rendered server-side as inline SVG by default, PHP-style footnotes, and shortcode emoji — all on the same tree.</p></div>
+      <div class="example"><span class="example-label">Math, diagrams, footnotes</span><pre tabindex="0" aria-label="Extension commands"><code>html = mordant.markdown_to_html("```math\n\\int_0^\\infty e^{-x^2} dx\n```")
 # '&lt;span class="katex katex-display"&gt;…'
 
 html = mordant.markdown_to_html("```mermaid\ngraph LR\n A --- B\n```")
 # server-rendered inline SVG by default
 
-html = mordant.markdown_to_html("Text[^1]\n\n[^1]: The footnote.")
-
-# themed code block (inline styles by default,
+html = mordant.markdown_to_html("Text[^1]\n\n[^1]: The footnote.")</code></pre></div>
+    </article>
+    <article class="step">
+      <div class="step-copy"><span class="step-no">4</span><h3>Highlight code, theme everything.</h3><p>Fenced code highlights through the bundled syntect engine — no opt-in needed. Theme per call with <code>highlighting_theme</code>, pick inline <code>style</code> or CSS <code>class</code> output, or set one <code>theme=</code> for code blocks and Mermaid SVG together. Custom VSCode and <code>.tmTheme</code> themes load from <code>~/.mordant/themes/</code> or register at runtime.</p></div>
+      <div class="example"><span class="example-label">Themed highlighting</span><pre tabindex="0" aria-label="Highlighting commands"><code># themed code block (inline styles by default,
 # or highlighting_mode="Class" for CSS classes)
 html = mordant.markdown_to_html(
   "```python\ndef hi(): return 1\n```",
@@ -161,7 +164,7 @@ spans = mordant.Highlighter(theme="Dracula").highlight(
 bg = mordant.theme_background("Dracula")  # '#282a36'</code></pre></div>
     </article>
     <article class="step">
-      <div class="step-copy"><span class="step-no">4</span><h3>Slice documents for retrieval.</h3><p><code>MarkdownChunker</code> yields bare chunks — raw block content with no heading prefix — while tracking the current header for embed-time injection. GFM tables and Mermaid diagrams classify correctly instead of collapsing to code.</p></div>
+      <div class="step-copy"><span class="step-no">5</span><h3>Slice documents for retrieval.</h3><p><code>MarkdownChunker</code> yields bare chunks — raw block content with no heading prefix — while tracking the current header for embed-time injection. GFM tables and Mermaid diagrams classify correctly instead of collapsing to code.</p></div>
       <div class="example"><span class="example-label">Chunking</span><pre tabindex="0" aria-label="Chunking commands"><code>chunker = mordant.MarkdownChunker("# S\n\nPara one\n\n## Sub\n\nPara two")
 list(chunker)  # ['Para one', 'Para two'] — bare, no prefix
 
@@ -171,7 +174,7 @@ for c in chunker.get_chunks():
 payloads = chunker.compute_overlap_payloads(2)</code></pre></div>
     </article>
     <article class="step">
-      <div class="step-copy"><span class="step-no">5</span><h3>Lint, fix, and scale.</h3><p>25 markdownlint-style rules with diagnostics, a fix engine, batch <code>lint_many()</code> / <code>fix_many()</code> over rayon, and a <code>python -m mordant</code> CLI. Parse and render release the GIL — expect ~4.0× across 4 threads.</p></div>
+      <div class="step-copy"><span class="step-no">6</span><h3>Lint, fix, and scale.</h3><p>25 markdownlint-style rules with diagnostics, a fix engine, batch <code>lint_many()</code> / <code>fix_many()</code> over rayon, and a <code>python -m mordant</code> CLI. Parse and render release the GIL — expect ~4.0× across 4 threads.</p></div>
       <div class="example"><span class="example-label">Lint and threads</span><pre tabindex="0" aria-label="Lint commands"><code>from concurrent.futures import ThreadPoolExecutor
 
 with ThreadPoolExecutor(max_workers=4) as pool:

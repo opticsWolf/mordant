@@ -54,6 +54,8 @@ pre code { font-size: inherit; overflow-wrap: normal; }
 .hero::before { content: ""; position: absolute; inset: 0; z-index: -2; background: radial-gradient(ellipse at 80% 36%, #2c443a4d, transparent 65%); pointer-events: none; }
 .hero-connections { position: absolute; inset: 0; width: 100%; height: calc(100% - 70px); color: var(--accent); opacity: .16; z-index: -1; pointer-events: none; }
 .hero h1 span { color: var(--accent); }
+.kicker { margin: 0 0 18px; font: 600 13px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+.kicker a { color: inherit; }
 .sub strong { color: var(--memory); font-weight: 600; }
 .sub { font-size: 21px; line-height: 1.55; color: var(--ink); max-width: 44ch; }
 .hero-detail { color: var(--muted); max-width: 56ch; font-size: 16px; }
