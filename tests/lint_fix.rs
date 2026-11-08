@@ -1,3 +1,5 @@
+#![cfg(feature = "linter")]
+
 //! Regression tests for the `mordant.fix` native crash (2026-11-08).
 //!
 //! Root cause: `run_fix_with_params` reused the initial `Arena` (byte offsets
