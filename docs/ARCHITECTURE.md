@@ -1,7 +1,7 @@
 # Mordant Architecture
 
-> **Version:** 0.10.0 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.10.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
+> **Version:** 0.10.1 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.10.1, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
 > **Tests:** 1247 Python + 141 core Rust unit tests (all engines: linter, meta, emoji, mermaid_theme, math, highlighter, chunker)
 
@@ -46,7 +46,7 @@ mordant/                          # Monorepo: core Rust crate + Python bindings
 │   ├── meta.rs                   # [meta] YAML frontmatter parser extension + tests
 │   ├── emoji.rs                  # [emoji] Emoji shortcode inline parser + renderer + tests
 │   ├── footnote.rs               # [footnotes] Footnote AST data + parser/renderer extensions
-│   ├── linter.rs                 # [linter] 25 MD rules, fix engine, config, suppressions + tests
+│   ├── linter.rs                 # [linter] 25 MD rules, fix engine (re-parse loop), config, suppressions + tests
 │   ├── diagram.rs                # [diagram] Mermaid parser/renderer (server SVG / client ESM / hybrid)
 │   ├── mermaid_theme.rs          # [diagram] syntect → Mermaid theme derivation + tests
 │   ├── chunker.rs                # [chunker] MarkdownChunker engine, TextSource (owned/mmap) + tests
@@ -1431,9 +1431,10 @@ Source String
     │
     ▼
 ┌──────────────┐
-│  Fix Engine   │  ──►  apply_fixes(source, diagnostics) → FixResult
-│               │       Applies FixOp (Insert, Delete, Replace) on source lines
-│               │       Re-lints to verify fixpoint (no new violations)
+│  Fix Engine   │  ──►  run_fix_with_parser(source, parser) → FixOutcome
+│               │       Iterates (max 10): parse fresh → lint → apply current
+│               │       pass's FixOps (ReplaceLine/DeleteLine/EnsureFinalNewline/
+│               │       SetCodeLanguage) → repeat; re-lints output for `remaining`
 └──────────────┘
 ```
 
@@ -1529,6 +1530,21 @@ Uses `rayon` for thread-parallel processing. GIL is released via `py.detach()` f
 - **R8.3**: Canonical heading anchors (lowercase, hyphenated, no special chars) generated during AST traversal — MD042 validates `#fragment` links against known anchors
 
 ---
+
+### 8.9. Fix-loop soundness (0.10.1)
+
+The AST holds byte offsets into the source it was parsed from, so a
+previously parsed `Arena` must never be reused after `apply_fixes` changes
+the source — stale offsets read out of bounds (`get_unchecked`). The fix
+engine therefore re-parses the current source with the caller-supplied
+parser on every iteration (`run_fix_with_parser` /
+`run_fix_with_parser_and_params`) and applies only that pass's fixes (fix
+line numbers refer to the source they were reported against). The legacy
+`run_fix` / `run_fix_with_params` entry points keep their signature but use
+the passed AST for the first pass only, re-parsing with a default parser
+thereafter. Python `fix()`, `fix_many()`, and `Document.fix()` all go
+through the re-parsing engine (`Document` retains its parse config to
+rebuild the identical parser).
 
 ## 9. Highlighting & Theme System
 
@@ -1865,7 +1881,7 @@ together by cargo features; see the feature table in the [README](../README.md#r
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| `mordant` | 0.10.0 (path dep, all features) | Core crate |
+| `mordant` | 0.10.1 (path dep, all features) | Core crate |
 | `pyo3` | 0.29 | Python bindings |
 | `rayon` | 1.10 | Parallel batch lint/fix |
 
@@ -2044,9 +2060,10 @@ Source String
     │
     ▼
 ┌──────────────┐
-│  Fix Engine   │  ──►  apply_fixes(source, diagnostics) → FixResult
-│               │       Applies FixOp (Insert, Delete, Replace) on source lines
-│               │       Re-lints to verify fixpoint (no new violations)
+│  Fix Engine   │  ──►  run_fix_with_parser(source, parser) → FixOutcome
+│               │       Iterates (max 10): parse fresh → lint → apply current
+│               │       pass's FixOps (ReplaceLine/DeleteLine/EnsureFinalNewline/
+│               │       SetCodeLanguage) → repeat; re-lints output for `remaining`
 └──────────────┘
 ```
 
@@ -2068,18 +2085,24 @@ struct Diagnostic {
 ### 13.3. Fix Model
 
 ```rust
-struct FixOp {
-    line: usize,          // 1-indexed source line
-    column: Option<usize>,// Byte offset within line
-    replacement: String,  // Text to insert/replace
-    kind: FixKind,        // Insert | Delete | Replace
+// Line-oriented edits (0-indexed lines); deletions win over replacements.
+enum FixOp {
+    ReplaceLine { line: usize, text: String },
+    DeleteLine { line: usize },
+    EnsureFinalNewline,
+    SetCodeLanguage { line: usize },  // applied only with default_language
 }
 
-struct FixResult {
-    output: String,       // Fixed source text
-    remaining: Vec<Diagnostic>, // Diagnostics that could not be auto-fixed
+struct FixOutcome {
+    output: String,             // fixed source
+    fixed: Vec<Violation>,      // diagnostics corrected (across passes)
+    unfixable: Vec<Violation>,  // diagnostics needing manual attention
+    remaining: Vec<Violation>,  // re-lint of output
 }
 ```
+
+The fix loop re-parses on every pass (see §8.9) — a previously parsed
+`Arena` is never reused after edits change the source.
 
 ### 13.4. Configuration System
 

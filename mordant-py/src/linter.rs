@@ -8,9 +8,9 @@
 #![allow(dead_code)]
 
 pub use mordant_lib::linter::{
-    lint_rules as core_lint_rules, parse_suppressions, run_fix, run_fix_with_params, run_lint,
-    run_lint_with_params, Edit, FixOp, FixOutcome, RuleParams, RuleSpec, Severity,
-    SuppressionDirective, Violation,
+    lint_rules as core_lint_rules, parse_suppressions, run_fix, run_fix_with_params,
+    run_fix_with_parser, run_fix_with_parser_and_params, run_lint, run_lint_with_params, Edit,
+    FixOp, FixOutcome, RuleParams, RuleSpec, Severity, SuppressionDirective, Violation,
 };
 pub use mordant_lib::linter::LintConfig as PlainLintConfig;
 
@@ -459,8 +459,8 @@ pub fn fix_many(
     files.par_iter()
         .map(|(name, source)| {
             let parse_cfg = super::ParseConfig::default();
-            let (arena, root) = super::parse_only(source, None, &parse_cfg);
-            let outcome = run_fix(source, &arena, root, cfg, default_language);
+            let parser = super::build_parser(None, &parse_cfg);
+            let outcome = run_fix_with_parser(source, &parser, cfg, default_language);
             (name.clone(), outcome)
         })
         .collect()

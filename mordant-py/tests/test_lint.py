@@ -471,6 +471,35 @@ def test_fix_fixpoint():
     assert "MD012" not in remaining_rules
 
 
+def test_fix_reparses_after_shortening():
+    """Regression: fix() must not reuse the pre-fix AST (2026-11-08 crash).
+
+    The old engine linted the shortened source with stale byte offsets from
+    the original parse (`get_unchecked` OOB → SIGSEGV / str.rs panic on
+    converted-PDF markdown with multi-byte content). This 582-char synthetic
+    crashed deterministically before the re-parse fix.
+    """
+    parts = []
+    for i in range(45):
+        parts += [f"para {i}", "", "", ""]
+    parts += [
+        "### Corresponding author.",
+        "",
+        "Some text with unicode: \u03c3 \u03bc \u03b7 \u0107 \u010d \u2014 end.",
+        "",
+        "[link](https://example.com)",
+    ]
+    src = "\n".join(parts) + "\n"
+    result = mordant.fix(src, gfm_opts=mordant.GfmOptions.all())
+    assert "### Corresponding author\n" in result.output
+    assert "\n\n\n" not in result.output
+    assert all(d.fixable is False for d in result.remaining)
+    # Fixpoint: fixing the output is a no-op.
+    again = mordant.fix(result.output, gfm_opts=mordant.GfmOptions.all())
+    assert again.output == result.output
+    assert len(again.fixed) == 0
+
+
 def test_fixresult_remaining_getter():
     """FixResult should expose a remaining property."""
     md = "hello   \n"

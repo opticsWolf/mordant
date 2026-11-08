@@ -44,7 +44,7 @@ use walker::Walker;
 // ---------------------------------------------------------------------------
 
 #[derive(Clone)]
-struct ParseConfig {
+pub(crate) struct ParseConfig {
     attributes: bool,
     auto_heading_ids: bool,
     escaped_space: bool,
@@ -103,7 +103,7 @@ impl Default for RenderConfig {
 // Core parsing/rendering logic (runs without GIL via Python::detach)
 // ---------------------------------------------------------------------------
 
-fn build_parser(
+pub(crate) fn build_parser(
     gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
 ) -> mordant_lib::parser::Parser {
@@ -201,7 +201,7 @@ fn parse_and_render(
 }
 
 // Parse only — returns arena + root ref (both plain Rust values, no Python)
-fn parse_only(
+pub(crate) fn parse_only(
     source: &str,
     gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
@@ -381,14 +381,17 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
 fn parse(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>) -> PyResult<Document> {
     // Extract plain-Rust config (no Python references — safe for detach)
     let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
+    let gfm_owned: Option<GfmOptions> = gfm_opts.cloned();
 
     // Release GIL for CPU-heavy parse.
     // Arena and NodeRef are now Send (via ExtensionData::Send bound),
     // so they can cross the GIL boundary.
-    let (arena, root_ref) = py.detach(move || {
-        parse_only(source, gfm_opts, &parse_cfg)
+    let (arena, root_ref) = py.detach({
+        let parse_cfg = parse_cfg.clone();
+        let gfm_owned = gfm_owned.clone();
+        move || parse_only(source, gfm_owned.as_ref(), &parse_cfg)
     });
-    Ok(Document::new(arena, std::rc::Rc::from(source), root_ref))
+    Ok(Document::new(arena, std::rc::Rc::from(source), root_ref, parse_cfg, gfm_owned))
 }
 
 /// Lint Markdown source and return a list of Diagnostic objects.
@@ -512,9 +515,12 @@ fn fix(
     };
 
     // Release GIL: parse + lint + fix produce plain-Rust values (Send).
+    // The fix engine re-parses after every edit (stale AST offsets must
+    // never be reused), so build the parser once and hand it to the
+    // re-parsing fix loop.
     let outcome = py.detach(move || {
-        let (arena, root_ref) = parse_only(source, gfm_opts, &parse_cfg);
-        linter::run_fix(source, &arena, root_ref, &lint_cfg, default_language.as_deref())
+        let parser = build_parser(gfm_opts, &parse_cfg);
+        linter::run_fix_with_parser(source, &parser, &lint_cfg, default_language.as_deref())
     });
 
     Ok(FixResult::from_outcome(outcome))

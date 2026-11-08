@@ -14,7 +14,7 @@
 <nav class="top" aria-label="Main navigation">
   <a class="brand" href="#top">
     <svg class="mark" viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="M6 7 21 5 23 21 7 23 6 7Zm0 0 17 14M21 5 7 23" stroke="currentColor" stroke-width="1.5"/><g fill="currentColor"><circle cx="6" cy="7" r="3"/><circle cx="21" cy="5" r="3"/><circle cx="23" cy="21" r="3"/><circle cx="7" cy="23" r="3"/></g></svg>
-    mordant <span class="release">0.10.0</span>
+    mordant <span class="release">0.10.1</span>
   </a>
   <div class="links">
     <a href="#positioning">Why mordant</a>
@@ -90,7 +90,7 @@ doc.metadata    <span class="syntax-muted"># {} — or frontmatter, when present
       <ol class="memory-loop" aria-label="Engine layers">
         <li><strong>Core</strong><span>CommonMark 0.31.2 + GFM parse and render.</span></li>
         <li><strong>Engines</strong><span>meta · emoji · footnotes · math · diagram · linter · chunker · highlighter.</span></li>
-        <li><strong>Bindings</strong><span>Same crate on crates.io and PyPI, lockstep 0.10.0.</span></li>
+        <li><strong>Bindings</strong><span>Same crate on crates.io and PyPI, lockstep 0.10.1.</span></li>
       </ol>
       <p class="memory-storage">Rust <code>mordant = "0.10"</code> with <code>features = ["math", "highlighter"]</code> is the same code the Python wheel ships — 141 core unit tests plus the full CommonMark spec suite, with 1247 Python integration tests on top.</p>
     </div>
@@ -103,7 +103,7 @@ doc.metadata    <span class="syntax-muted"># {} — or frontmatter, when present
     <div class="prose"><p>One install covers papers, docs, and notes. The example below follows the standard path: install the wheel, render in one call, keep GFM on with linkify off by default, read frontmatter and the AST, then reach for math, diagrams, highlighting, and footnotes.</p><p>Rust users add the same crate with the features they need — no Python involved. Python needs 3.9+, Rust needs 1.87+.</p></div>
   </div>
   <div class="setup">
-    <div><h3>Install with one line</h3><p>Wheels for Linux, macOS, and Windows. The Rust crate and the Python package share the version number — 0.10.0 on both indexes.</p><pre tabindex="0" aria-label="Installation commands"><code>pip install mordant
+    <div><h3>Install with one line</h3><p>Wheels for Linux, macOS, and Windows. The Rust crate and the Python package share the version number — 0.10.1 on both indexes.</p><pre tabindex="0" aria-label="Installation commands"><code>pip install mordant
 
 # Rust library (no Python involved):
 # cargo add mordant</code></pre></div>
@@ -246,8 +246,8 @@ chunker = mordant.MarkdownChunker(md)</code></pre><a class="text-link" href="htt
     <div class="prose"><p>Depends on mordant (<code>mordant&gt;=0.9</code>) for chunking and lint — <code>MarkdownChunker</code> bare chunks with offsets plus <code>lint</code> / <code>fix</code> before import. The downstream that wants deterministic HTML and graph-ready slices.</p></div>
   </div>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Distribution"><table><caption>Where mordant lives</caption><thead><tr><th scope="col">Surface</th><th scope="col">Package</th><th scope="col">Version</th></tr></thead><tbody>
-    <tr><th scope="row">Python wheels</th><td><a href="https://pypi.org/project/mordant/">mordant</a></td><td>0.10.0 · Python 3.9+</td></tr>
-    <tr><th scope="row">Rust library</th><td><a href="https://crates.io/crates/mordant">mordant</a></td><td>0.10.0 · Rust 1.87+</td></tr>
+    <tr><th scope="row">Python wheels</th><td><a href="https://pypi.org/project/mordant/">mordant</a></td><td>0.10.1 · Python 3.9+</td></tr>
+    <tr><th scope="row">Rust library</th><td><a href="https://crates.io/crates/mordant">mordant</a></td><td>0.10.1 · Rust 1.87+</td></tr>
     <tr><th scope="row">API reference</th><td><a href="https://docs.rs/mordant">docs.rs/mordant</a></td><td>CommonMark 0.31.2 + GFM</td></tr>
     <tr><th scope="row">Bindings</th><td>PyO3</td><td>0.29 · GIL released</td></tr>
   </tbody></table></div>

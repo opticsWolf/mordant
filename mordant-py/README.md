@@ -7,7 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/mordant)](https://crates.io/crates/mordant)
 [![Rust](https://img.shields.io/badge/Rust-1.87+-orange)](https://www.rust-lang.org)
 
-> **Version:** 0.9.0 (Python and Rust crates in lockstep)
+> **Version:** 0.10.1 (Python and Rust crates in lockstep)
 > **Python:** 3.9+ · **Bindings:** PyO3 0.29
 
 A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [`mordant`](https://crates.io/crates/mordant) Rust library — itself built on the [rushdown](https://github.com/yuin/rushdown) engine by Yusuke Inuzuka.

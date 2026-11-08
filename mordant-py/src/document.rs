@@ -11,8 +11,9 @@ use mordant_lib::util::StringMap;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::linter::{run_fix, run_lint, Diagnostic, FixResult, LintConfig, LintOptions};
+use crate::linter::{run_fix_with_parser, run_lint, Diagnostic, FixResult, LintConfig, LintOptions};
 use crate::node::{self, Node};
+use crate::options::GfmOptions;
 use crate::walker::Walker;
 
 /// A Python-accessible wrapper around the mordant AST Document.
@@ -21,6 +22,8 @@ pub struct Document {
     arena: Rc<RefCell<Arena>>,
     source: Rc<str>,
     root_ref: NodeRef,
+    parse_cfg: crate::ParseConfig,
+    gfm_opts: Option<GfmOptions>,
 }
 
 #[pymethods]
@@ -170,11 +173,10 @@ impl Document {
             lc.suppressions = crate::linter::parse_suppressions(&self.source);
             lc
         };
-        let arena_ref = self.arena.borrow();
-        let outcome = run_fix(
+        let parser = crate::build_parser(self.gfm_opts.as_ref(), &self.parse_cfg);
+        let outcome = run_fix_with_parser(
             &self.source,
-            &arena_ref,
-            self.root_ref,
+            &parser,
             &cfg,
             default_language.as_deref(),
         );
@@ -187,11 +189,19 @@ impl Document {
 }
 
 impl Document {
-    pub fn new(arena: Arena, source: Rc<str>, root_ref: NodeRef) -> Self {
+    pub(crate) fn new(
+        arena: Arena,
+        source: Rc<str>,
+        root_ref: NodeRef,
+        parse_cfg: crate::ParseConfig,
+        gfm_opts: Option<GfmOptions>,
+    ) -> Self {
         Document {
             arena: Rc::new(RefCell::new(arena)),
             source,
             root_ref,
+            parse_cfg,
+            gfm_opts,
         }
     }
 

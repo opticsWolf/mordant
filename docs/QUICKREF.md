@@ -1,7 +1,7 @@
 # Mordant Quick Reference
 
-> **Version:** 0.10.0 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.10.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
+> **Version:** 0.10.1 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.10.1, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
 > **Import:** `import mordant`
 
 ---
@@ -176,6 +176,11 @@ for d in diagnostics:
 ### `fix(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, default_language=None, lint_config=None) -> FixResult`
 
 Lint and auto-fix a markdown string. Returns the fixed output and any remaining diagnostics.
+
+The fix engine iterates (max 10) parsing fresh on every pass: after each
+round of edits the source is re-parsed before re-linting, so AST byte
+offsets are never reused across edits. Only the current pass's fixes are
+applied; `remaining` is a re-lint of the final output.
 
 ```python
 result = mordant.fix("# Title  \n\n\nText")

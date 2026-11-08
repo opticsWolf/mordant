@@ -1749,11 +1749,32 @@ pub fn run_fix(
     run_fix_with_params(source, arena, root, cfg, &RuleParams::default(), default_language)
 }
 
-/// Lint and auto-correct with custom per-rule parameters.
-pub fn run_fix_with_params(
+/// Lint and auto-correct with a caller-supplied parser, re-parsing after
+/// every applied edit.
+///
+/// This is the sound fix engine. The AST (`Arena`) holds byte offsets into
+/// the source it was parsed from; after `apply_fixes` changes the source
+/// those offsets are stale and must not be reused (reusing them reads out
+/// of bounds via `get_unchecked` — SIGSEGV in release, UB-check panic in
+/// debug). Every iteration therefore parses `current_source` fresh with
+/// `parser` before linting. Only the current iteration's `fixed` set is
+/// applied (line numbers refer to the source they were reported against).
+/// `remaining` is computed by re-parsing and re-linting the final output.
+pub fn run_fix_with_parser(
     source: &str,
-    arena: &Arena,
-    root: NodeRef,
+    parser: &crate::parser::Parser,
+    cfg: &LintConfig,
+    default_language: Option<&str>,
+) -> FixOutcome {
+    run_fix_with_parser_and_params(source, parser, cfg, &RuleParams::default(), default_language)
+}
+
+/// Lint and auto-correct with custom per-rule parameters and a
+/// caller-supplied parser (re-parsed every iteration). See
+/// [`run_fix_with_parser`].
+pub fn run_fix_with_parser_and_params(
+    source: &str,
+    parser: &crate::parser::Parser,
     cfg: &LintConfig,
     params: &RuleParams,
     default_language: Option<&str>,
@@ -1764,7 +1785,9 @@ pub fn run_fix_with_params(
     let mut all_unfixable: Vec<Violation> = Vec::new();
 
     for _iteration in 0..max_iterations {
-        let violations = run_lint_with_params(&current_source, arena, root, cfg, params);
+        let mut reader = crate::text::BasicReader::new(&current_source);
+        let (arena, root) = parser.parse(&mut reader);
+        let violations = run_lint_with_params(&current_source, &arena, root, cfg, params);
 
         let mut fixed: Vec<Violation> = Vec::new();
         let mut unfixable: Vec<Violation> = Vec::new();
@@ -1781,19 +1804,90 @@ pub fn run_fix_with_params(
             }
         }
 
-        let no_more_fixable = fixed.is_empty();
-
-        all_fixed.extend(fixed);
-        all_unfixable.extend(unfixable);
-
-        if no_more_fixable {
+        if fixed.is_empty() {
+            all_unfixable.extend(unfixable);
             break;
         }
 
-        current_source = apply_fixes(&current_source, &all_fixed, default_language);
+        current_source = apply_fixes(&current_source, &fixed, default_language);
+        all_fixed.extend(fixed);
+        all_unfixable.extend(unfixable);
     }
 
-    let remaining = run_lint_with_params(&current_source, arena, root, cfg, params);
+    let mut reader = crate::text::BasicReader::new(&current_source);
+    let (arena, root) = parser.parse(&mut reader);
+    let remaining = run_lint_with_params(&current_source, &arena, root, cfg, params);
+
+    FixOutcome {
+        output: current_source,
+        fixed: all_fixed,
+        unfixable: all_unfixable,
+        remaining,
+    }
+}
+
+/// Lint and auto-correct with custom per-rule parameters.
+///
+/// Legacy entry point kept for backward compatibility. The passed `arena`
+/// is only valid for the original `source`; after the first applied edit
+/// all further iterations (and the final `remaining` lint) re-parse with a
+/// default CommonMark parser instead of reusing the stale AST. Prefer
+/// [`run_fix_with_parser_and_params`] with the same parser used for the
+/// initial parse.
+pub fn run_fix_with_params(
+    source: &str,
+    arena: &Arena,
+    root: NodeRef,
+    cfg: &LintConfig,
+    params: &RuleParams,
+    default_language: Option<&str>,
+) -> FixOutcome {
+    let max_iterations = 10;
+    let mut current_source = source.to_string();
+    let mut all_fixed: Vec<Violation> = Vec::new();
+    let mut all_unfixable: Vec<Violation> = Vec::new();
+
+    let fallback = crate::parser::Parser::default();
+
+    for iteration in 0..max_iterations {
+        let violations = if iteration == 0 {
+            run_lint_with_params(&current_source, arena, root, cfg, params)
+        } else {
+            let mut reader = crate::text::BasicReader::new(&current_source);
+            let (fresh_arena, fresh_root) = fallback.parse(&mut reader);
+            run_lint_with_params(&current_source, &fresh_arena, fresh_root, cfg, params)
+        };
+
+        let mut fixed: Vec<Violation> = Vec::new();
+        let mut unfixable: Vec<Violation> = Vec::new();
+        for v in violations {
+            let applicable = match &v.fix {
+                Some(FixOp::SetCodeLanguage { .. }) => default_language.is_some(),
+                Some(_) => true,
+                None => false,
+            };
+            if applicable {
+                fixed.push(v);
+            } else {
+                unfixable.push(v);
+            }
+        }
+
+        if fixed.is_empty() {
+            all_unfixable.extend(unfixable);
+            break;
+        }
+
+        current_source = apply_fixes(&current_source, &fixed, default_language);
+        all_fixed.extend(fixed);
+        all_unfixable.extend(unfixable);
+    }
+
+    let remaining = {
+        let mut reader = crate::text::BasicReader::new(&current_source);
+        let (fresh_arena, fresh_root) = fallback.parse(&mut reader);
+        run_lint_with_params(&current_source, &fresh_arena, fresh_root, cfg, params)
+    };
 
     FixOutcome {
         output: current_source,
