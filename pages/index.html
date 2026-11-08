@@ -36,7 +36,7 @@
     <p class="kicker">Built on <a href="https://github.com/yuin/rushdown">rushdown</a> — forked &amp; extended</p>
     <h1>Markdown in.<br><span>HTML out — fast.</span></h1>
     <p class="sub">A fast CommonMark + GFM parser and renderer — a <strong>Rust core</strong> on crates.io with <strong>Python bindings</strong> on PyPI and full AST access.</p>
-    <p class="hero-detail">mordant parses CommonMark 0.31.2 + GFM (tables, task lists, strikethrough) into an arena-allocated AST, then renders HTML. One engine in both languages, lockstep versioned. The GIL is released for multi-threaded throughput — ~4.0× across 4 threads, up to 55× faster than python-markdown on large documents. Fenced code highlights through the bundled syntect engine — one <code>theme=</code> for code and Mermaid alike.</p>
+    <p class="hero-detail">mordant parses CommonMark 0.31.2 + GFM (tables, task lists, strikethrough) into an arena-allocated AST, then renders HTML. One engine in both languages, lockstep versioned. The GIL is released for multi-threaded throughput — ~4.0× across 4 threads, up to 55× faster than python-markdown on large documents. Fenced code highlights through the bundled <a href="https://github.com/trishume/syntect">syntect</a> engine — one <code>theme=</code> for code and Mermaid alike.</p>
     <div class="cta">
       <a class="btn" href="#workflow">Render your first document <span aria-hidden="true">↓</span></a>
       <a class="text-link" href="https://github.com/opticsWolf/mordant#quick-start">Read the documentation <span aria-hidden="true">↗</span></a>
@@ -146,7 +146,7 @@ html = mordant.markdown_to_html("```mermaid\ngraph LR\n A --- B\n```")
 html = mordant.markdown_to_html("Text[^1]\n\n[^1]: The footnote.")</code></pre></div>
     </article>
     <article class="step">
-      <div class="step-copy"><span class="step-no">4</span><h3>Highlight code, theme everything.</h3><p>Fenced code highlights through the bundled syntect engine — no opt-in needed. Theme per call with <code>highlighting_theme</code>, pick inline <code>style</code> or CSS <code>class</code> output, or set one <code>theme=</code> for code blocks and Mermaid SVG together. Custom VSCode and <code>.tmTheme</code> themes load from <code>~/.mordant/themes/</code> or register at runtime.</p></div>
+      <div class="step-copy"><span class="step-no">4</span><h3>Highlight code, theme everything.</h3><p>Fenced code highlights through the bundled <a href="https://github.com/trishume/syntect">syntect</a> engine — no opt-in needed. Theme per call with <code>highlighting_theme</code>, pick inline <code>style</code> or CSS <code>class</code> output, or set one <code>theme=</code> for code blocks and Mermaid SVG together. Custom VSCode and <code>.tmTheme</code> themes load from <code>~/.mordant/themes/</code> or register at runtime.</p></div>
       <div class="example"><span class="example-label">Themed highlighting</span><pre tabindex="0" aria-label="Highlighting commands"><code># themed code block (inline styles by default,
 # or highlighting_mode="Class" for CSS classes)
 html = mordant.markdown_to_html(
@@ -195,7 +195,7 @@ with ThreadPoolExecutor(max_workers=4) as pool:
     <article><h3>Lint engine</h3><p>25 rules (MD001, MD009, MD012, MD013, MD024, MD040, MD045, MD049, …) with diagnostics, auto-fix, inline suppressions, frontmatter awareness, and a CLI with human / JSON / GitHub output.</p></article>
     <article><h3>Document chunking</h3><p>Lazy AST chunk iterator with heading-context propagation, <code>from_file</code> and <code>from_file_mmap</code> constructors, overlap payloads for embeddings, and delimiter-aware reconstruction.</p></article>
     <article><h3>Multi-threaded + tested</h3><p>GIL released across parse, render, math, and batch lint/fix. 141 Rust unit tests, the full CommonMark spec suite, and 1247 Python integration tests.</p></article>
-    <article><h3>Integrated code highlighting</h3><p>Fenced code highlights through the bundled syntect engine — no opt-in needed. <code>highlighting_theme</code> picks the theme, <code>highlighting_mode</code> picks inline <code>style</code> vs CSS <code>class</code>, and one <code>theme=</code> kwarg themes code blocks and Mermaid SVG together.</p></article>
+    <article><h3>Integrated code highlighting</h3><p>Fenced code highlights through the bundled <a href="https://github.com/trishume/syntect">syntect</a> engine (Sublime Text syntax definitions, bat's theme set via syntect-assets) — no opt-in needed. <code>highlighting_theme</code> picks the theme, <code>highlighting_mode</code> picks inline <code>style</code> vs CSS <code>class</code>, and one <code>theme=</code> kwarg themes code blocks and Mermaid SVG together.</p></article>
     <article><h3>Custom themes, your way</h3><p>Bring any VSCode JSON or Sublime <code>.tmTheme</code> — <code>add_custom_theme(name, content)</code> at runtime, or drop files in <code>~/.mordant/themes/</code> for auto-load. Custom <code>.sublime-syntax</code> grammars register via <code>add_custom_syntax()</code>, with <code>list_themes()</code>, <code>list_syntaxes()</code>, <code>detect_language()</code>, and <code>theme_background()</code> to build on.</p></article>
   </div>
 </section>
