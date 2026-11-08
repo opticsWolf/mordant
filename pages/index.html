@@ -237,18 +237,10 @@ chunker = mordant.MarkdownChunker(md)</code></pre><a class="text-link" href="htt
 </section>
 
 <section id="stack" aria-labelledby="stack-title">
-  <div class="section-intro"><h2 id="stack-title">Part of a family,<br>usable alone.</h2><div class="prose"><p>mordant ships independently on PyPI and crates.io with no model weights and no runtime service. It also shares a shelf with the author's ingest and embedding stack — separate packages, separate versions, same care for offline-first Rust cores with Python wheels.</p><p>All engines beyond parse/render live in the mordant core crate behind granular features — enable only what you need.</p></div></div>
+  <div class="section-intro"><h2 id="stack-title">Proven downstream,<br>usable alone.</h2><div class="prose"><p>mordant ships independently on PyPI and crates.io with no model weights and no runtime service. Its main consumer is OKFgraph, the author's local knowledge graph — which depends on mordant for chunking and lint.</p><p>All engines beyond parse/render live in the mordant core crate behind granular features — enable only what you need.</p></div></div>
   <div class="package" id="okfgraph">
     <div class="package-heading"><h3>OKFgraph <span class="ver">graph + memory</span></h3><p>Local knowledge graph + agent memory</p><a class="text-link" href="https://opticswolf.github.io/OKFgraph/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/OKFgraph">Repository <span aria-hidden="true">↗</span></a></div>
     <div class="prose"><p>Depends on mordant (<code>mordant&gt;=0.9</code>) for chunking and lint — <code>MarkdownChunker</code> bare chunks with offsets plus <code>lint</code> / <code>fix</code> before import. The downstream that wants deterministic HTML and graph-ready slices.</p></div>
-  </div>
-  <div class="package" id="bobine">
-    <div class="package-heading"><h3>bobine <span class="ver">ingest</span></h3><p>Documents → Markdown</p><a class="text-link" href="https://opticswolf.github.io/bobine/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/bobine">Repository <span aria-hidden="true">↗</span></a></div>
-    <div class="prose"><p>Sibling ingestion engine by the same author — PDF, Office, and text → Markdown through a pure-Rust core. No dependency between the two; OKFgraph is what stages bobine output for mordant to chunk and lint.</p></div>
-  </div>
-  <div class="package" id="embroider">
-    <div class="package-heading"><h3>embroider <span class="ver">vectors</span></h3><p>Frozen embeddings over ONNX Runtime</p><a class="text-link" href="https://opticswolf.github.io/embroider/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/embroider">Repository <span aria-hidden="true">↗</span></a></div>
-    <div class="prose"><p>Sibling embedding engine — Jina v5 plus EmbeddingGemma 2 over ONNX Runtime, golden-pinned so one index stays directly comparable. No dependency between the two; OKFgraph embeds mordant's chunks with it.</p></div>
   </div>
   <div class="table-wrap" tabindex="0" role="region" aria-label="Distribution"><table><caption>Where mordant lives</caption><thead><tr><th scope="col">Surface</th><th scope="col">Package</th><th scope="col">Version</th></tr></thead><tbody>
     <tr><th scope="row">Python wheels</th><td><a href="https://pypi.org/project/mordant/">mordant</a></td><td>0.10.0 · Python 3.9+</td></tr>
