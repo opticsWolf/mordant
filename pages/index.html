@@ -34,7 +34,7 @@
   </svg>
   <div class="hero-copy">
     <h1>Markdown in.<br><span>HTML out — fast.</span></h1>
-    <p class="sub">A fast CommonMark + GFM parser and renderer — a <strong>Rust core</strong> on crates.io with <strong>Python bindings</strong> on PyPI, built on <strong>rushdown</strong> by Yusuke Inuzuka — forked and extended as mordant — with full AST access.</p>
+    <p class="sub">A fast CommonMark + GFM parser and renderer — a <strong>Rust core</strong> on crates.io with <strong>Python bindings</strong> on PyPI and full AST access.</p>
     <p class="hero-detail">mordant parses CommonMark 0.31.2 + GFM (tables, task lists, strikethrough) into an arena-allocated AST, then renders HTML. One engine in both languages, lockstep versioned. The GIL is released for multi-threaded throughput — ~4.0× across 4 threads, up to 55× faster than python-markdown on large documents. Fenced code highlights through the bundled syntect engine — one <code>theme=</code> for code and Mermaid alike.</p>
     <div class="cta">
       <a class="btn" href="#workflow">Render your first document <span aria-hidden="true">↓</span></a>
@@ -237,7 +237,7 @@ chunker = mordant.MarkdownChunker(md)</code></pre><a class="text-link" href="htt
 </section>
 
 <section id="stack" aria-labelledby="stack-title">
-  <div class="section-intro"><h2 id="stack-title">Part of a family,<br>usable alone.</h2><div class="prose"><p>mordant ships independently on PyPI and crates.io with no model weights and no runtime service. It also shares a shelf with the author's ingest and embedding stack — separate packages, separate versions, same care for offline-first Rust cores with Python wheels.</p><p>The Rust core is <a href="https://github.com/yuin/rushdown">rushdown</a> — originally by Yusuke Inuzuka, forked and extended as mordant by opticsWolf; all engines beyond parse/render now live in the mordant core crate behind granular features.</p></div></div>
+  <div class="section-intro"><h2 id="stack-title">Part of a family,<br>usable alone.</h2><div class="prose"><p>mordant ships independently on PyPI and crates.io with no model weights and no runtime service. It also shares a shelf with the author's ingest and embedding stack — separate packages, separate versions, same care for offline-first Rust cores with Python wheels.</p><p>All engines beyond parse/render live in the mordant core crate behind granular features — enable only what you need.</p></div></div>
   <div class="package" id="okfgraph">
     <div class="package-heading"><h3>OKFgraph <span class="ver">graph + memory</span></h3><p>Local knowledge graph + agent memory</p><a class="text-link" href="https://opticswolf.github.io/OKFgraph/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/OKFgraph">Repository <span aria-hidden="true">↗</span></a></div>
     <div class="prose"><p>Depends on mordant (<code>mordant&gt;=0.9</code>) for chunking and lint — <code>MarkdownChunker</code> bare chunks with offsets plus <code>lint</code> / <code>fix</code> before import. The downstream that wants deterministic HTML and graph-ready slices.</p></div>
