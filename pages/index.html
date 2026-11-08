@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1210">
+  <title>mordant — CommonMark + GFM, rendered fast</title>
+  <meta name="description" content="A fast CommonMark + GFM Markdown parser and renderer — native Rust library on crates.io, Python bindings via pip. Full AST, frontmatter, emoji, math, Mermaid, footnotes, lint, chunking, syntax highlighting.">
+  <link rel="preload" href="fonts/space-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="style.css?v=mordant-1">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<nav class="top" aria-label="Main navigation">
+  <a class="brand" href="#top">
+    <svg class="mark" viewBox="0 0 28 28" fill="none" aria-hidden="true"><path d="M6 7 21 5 23 21 7 23 6 7Zm0 0 17 14M21 5 7 23" stroke="currentColor" stroke-width="1.5"/><g fill="currentColor"><circle cx="6" cy="7" r="3"/><circle cx="21" cy="5" r="3"/><circle cx="23" cy="21" r="3"/><circle cx="7" cy="23" r="3"/></g></svg>
+    mordant <span class="release">0.10.0</span>
+  </a>
+  <div class="links">
+    <a href="#positioning">Why mordant</a>
+    <a href="#pipeline">Pipeline</a>
+    <a href="#workflow">Workflow</a>
+    <a href="#features">Capabilities</a>
+    <a href="#surfaces">Use it</a>
+    <a href="#stack">The stack</a>
+  </div>
+  <a class="source-link" href="https://github.com/opticsWolf/mordant">GitHub <span aria-hidden="true">↗</span></a>
+</nav>
+
+<header class="hero" id="top">
+  <svg class="hero-connections" viewBox="0 0 1120 720" fill="none" aria-hidden="true">
+    <g stroke="currentColor" stroke-width="1"><path d="M460 74 742 34 1034 148 1080 418 836 630 568 514 460 74Z"/><path d="M742 34 836 630M1034 148 568 514M460 74 1080 418"/></g>
+    <g fill="currentColor"><circle cx="460" cy="74" r="4"/><circle cx="742" cy="34" r="4"/><circle cx="1034" cy="148" r="4"/><circle cx="1080" cy="418" r="4"/><circle cx="836" cy="630" r="4"/><circle cx="568" cy="514" r="4"/></g>
+  </svg>
+  <div class="hero-copy">
+    <h1>Markdown in.<br><span>HTML out — fast.</span></h1>
+    <p class="sub">A fast CommonMark + GFM parser and renderer — a <strong>Rust core</strong> on crates.io with <strong>Python bindings</strong> on PyPI, built on <strong>rushdown</strong> by Yusuke Inuzuka — forked and extended as mordant — with full AST access.</p>
+    <p class="hero-detail">mordant parses CommonMark 0.31.2 + GFM (tables, task lists, strikethrough) into an arena-allocated AST, then renders HTML. One engine in both languages, lockstep versioned. The GIL is released for multi-threaded throughput — ~4.0× across 4 threads, up to 55× faster than python-markdown on large documents. Fenced code highlights through the bundled syntect engine — one <code>theme=</code> for code and Mermaid alike.</p>
+    <div class="cta">
+      <a class="btn" href="#workflow">Render your first document <span aria-hidden="true">↓</span></a>
+      <a class="text-link" href="https://github.com/opticsWolf/mordant#quick-start">Read the documentation <span aria-hidden="true">↗</span></a>
+    </div>
+  </div>
+  <figure class="knowledge-preview">
+    <figcaption><span class="status-dot" aria-hidden="true"></span> One call for HTML, full tree when you need it</figcaption>
+    <div class="file-preview">
+      <div class="file-path">render.py <span>Python surface</span></div>
+      <pre tabindex="0" aria-label="Illustrative render session"><code><span class="syntax-key">import</span> mordant
+
+html = mordant.<span class="syntax-link">markdown_to_html</span>(<span class="syntax-muted">"# Hello\n\n**World**"</span>)
+<span class="syntax-muted"># '&lt;h1&gt;Hello&lt;/h1&gt;\n&lt;p&gt;&lt;strong&gt;World&lt;/strong&gt;&lt;/p&gt;\n'</span>
+
+doc = mordant.<span class="syntax-link">parse</span>(<span class="syntax-muted">"# Title\n\nBody"</span>)
+doc.kind        <span class="syntax-muted"># "Document"</span>
+doc.metadata    <span class="syntax-muted"># {} — or frontmatter, when present</span></code></pre>
+    </div>
+    <div class="preview-index"><span>Single call for HTML</span><span>parse → walk → render</span></div>
+    <div class="preview-query"><span class="syntax-muted">The rule the renderer keeps</span><strong>“Never lose the source structure.”</strong><p>Every node keeps its kind, position, and text — headings, tables, diagrams, footnotes included.<br>Extensions hook the same tree.</p></div>
+    <p class="preview-caption">Illustrative session · GFM tables on by default, linkify off unless asked.</p>
+  </figure>
+  <ul class="principles" aria-label="At a glance">
+    <li>CommonMark 0.31.2 + GFM</li><li>Rust core · Python wheels</li><li>Full AST + frontmatter</li><li>55× faster path</li>
+  </ul>
+</header>
+
+<main id="main">
+<section id="positioning" aria-labelledby="positioning-title">
+  <div class="section-intro">
+    <h2 id="positioning-title">Keep the Markdown.<br>Drop the slowdown.</h2>
+    <div class="prose">
+      <p>Markdown tooling splits between fast renderers with no tree and slow parsers with no GFM. mordant keeps both: its core is <a href="https://github.com/yuin/rushdown">rushdown</a> by Yusuke Inuzuka — forked and extended as mordant — with a priority-based parser over an arena-allocated AST, CommonMark 0.31.2 plus tables, task lists, and strikethrough out of the box.</p>
+      <p>The Python package is a thin PyO3 shim over the same <code>mordant</code> Rust crate — <code>Document</code>, <code>Node</code>, and <code>Walker</code> share one source buffer by refcount instead of copying it. Parse and render run detached from the GIL, so threads scale instead of serialising.</p>
+    </div>
+  </div>
+  <ol class="flow" aria-label="Render pipeline">
+    <li><span class="flow-label">Source</span><strong>Markdown + GFM</strong><p>Tables, task lists, strikethrough</p></li>
+    <li><span class="flow-label">Parse</span><strong>Arena AST</strong><p>Full tree, positions kept</p></li>
+    <li><span class="flow-label">Extend</span><strong>Engines per feature</strong><p>Frontmatter, math, diagrams, highlighting</p></li>
+    <li><span class="flow-label">Emit</span><strong>HTML or chunks</strong><p>Render, lint, or slice</p></li>
+  </ol>
+  <aside class="memory-vault" id="pipeline" aria-labelledby="pipeline-title" style="scroll-margin-top:120px">
+    <div class="memory-heading">
+      <svg class="memory-symbol" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="9" y="9" width="46" height="46" rx="8" stroke="currentColor" stroke-width="1.5"/><path d="m20 23 24-3-4 24-20-21Zm0 0 12 22" stroke="currentColor" stroke-width="1.5"/><g fill="currentColor"><circle cx="20" cy="23" r="3"/><circle cx="44" cy="20" r="3"/><circle cx="40" cy="44" r="3"/><circle cx="32" cy="45" r="3"/></g></svg>
+      <h3 id="pipeline-title">One core, <br>every engine.</h3>
+      <p>Beyond parse + render,<br>everything is a feature.</p>
+    </div>
+    <div class="memory-body">
+      <p>The default crate is CommonMark + GFM. Everything else — YAML frontmatter, emoji, footnotes, lint, Mermaid, chunking, KaTeX math, syntect highlighting — lives behind a Cargo feature and composes on the same AST, so you pay only for what you enable.</p>
+      <ol class="memory-loop" aria-label="Engine layers">
+        <li><strong>Core</strong><span>CommonMark 0.31.2 + GFM parse and render.</span></li>
+        <li><strong>Engines</strong><span>meta · emoji · footnotes · math · diagram · linter · chunker · highlighter.</span></li>
+        <li><strong>Bindings</strong><span>Same crate on crates.io and PyPI, lockstep 0.10.0.</span></li>
+      </ol>
+      <p class="memory-storage">Rust <code>mordant = "0.10"</code> with <code>features = ["math", "highlighter"]</code> is the same code the Python wheel ships — 141 core unit tests plus the full CommonMark spec suite, with 1247 Python integration tests on top.</p>
+    </div>
+  </aside>
+</section>
+
+<section id="workflow" aria-labelledby="workflow-title">
+  <div class="section-intro">
+    <h2 id="workflow-title">From pip install<br>to trusted HTML.</h2>
+    <div class="prose"><p>One install covers papers, docs, and notes. The example below follows the standard path: install the wheel, render in one call, keep GFM on with linkify off by default, read frontmatter and the AST, then reach for math, diagrams, and footnotes.</p><p>Rust users add the same crate with the features they need — no Python involved. Python needs 3.9+, Rust needs 1.87+.</p></div>
+  </div>
+  <div class="setup">
+    <div><h3>Install with one line</h3><p>Wheels for Linux, macOS, and Windows. The Rust crate and the Python package share the version number — 0.10.0 on both indexes.</p><pre tabindex="0" aria-label="Installation commands"><code>pip install mordant
+
+# Rust library (no Python involved):
+# cargo add mordant</code></pre></div>
+    <div><h3>Parser defaults</h3><pre tabindex="0" aria-label="Parser defaults"><code># GFM: tables + strikethrough + task lists ON
+# linkify (autolink) OFF — enable with GfmOptions.all()
+gfm = mordant.GfmOptions()          # defaults
+gfm = mordant.GfmOptions.all()      # + linkify
+
+html = mordant.markdown_to_html(
+  "https://example.com", gfm_opts=gfm)</code></pre><p class="small-copy">Frontmatter, emoji, footnotes, math, and diagrams work alongside GFM with no extra wiring.</p></div>
+  </div>
+  <div class="timeline">
+    <article class="step">
+      <div class="step-copy"><span class="step-no">1</span><h3>Render in one call.</h3><p>The common case stays one function. GFM tables, strikethrough, and task lists render by default; raw HTML is escaped unless explicitly allowed.</p></div>
+      <div class="example"><span class="example-label">Single-call render</span><pre tabindex="0" aria-label="Render commands"><code>html = mordant.markdown_to_html("# Hello\n\n**World**")
+# '&lt;h1&gt;Hello&lt;/h1&gt;\n&lt;p&gt;&lt;strong&gt;World&lt;/strong&gt;&lt;/p&gt;\n'
+
+html = mordant.markdown_to_html("~~deleted~~")
+# '&lt;p&gt;&lt;del&gt;deleted&lt;/del&gt;&lt;/p&gt;\n'</code></pre></div>
+    </article>
+    <article class="step">
+      <div class="step-copy"><span class="step-no">2</span><h3>Read frontmatter and the tree.</h3><p><code>parse()</code> returns a <code>Document</code> with full traversal — parent, children, siblings, every node kind. YAML frontmatter arrives typed (null, bool, int, float, str, list, dict); a lone <code>---</code> stays a thematic break.</p></div>
+      <div class="example"><span class="example-label">AST and metadata</span><pre tabindex="0" aria-label="AST commands"><code>doc = mordant.parse("---\ntitle: Doc\n---\n\nBody")
+doc.metadata   # {'title': 'Doc'}
+
+heading = mordant.parse("# Title").children[0]
+heading.level  # 1
+heading.text   # "Title"
+
+links = [n for n in doc.walk("depth") if n.kind == "Link"]</code></pre></div>
+    </article>
+    <article class="step">
+      <div class="step-copy"><span class="step-no">3</span><h3>Extend with math, diagrams, highlighting.</h3><p>KaTeX fenced blocks plus inline <code>$…$</code> / <code>$$…$$</code>, Mermaid blocks rendered server-side as inline SVG by default, PHP-style footnotes, and shortcode emoji — all on the same tree. Fenced code highlights through the bundled syntect engine, themed per-call or once for the whole document.</p></div>
+      <div class="example"><span class="example-label">Math, diagrams, footnotes, themes</span><pre tabindex="0" aria-label="Extension commands"><code>html = mordant.markdown_to_html("```math\n\\int_0^\\infty e^{-x^2} dx\n```")
+# '&lt;span class="katex katex-display"&gt;…'
+
+html = mordant.markdown_to_html("```mermaid\ngraph LR\n A --- B\n```")
+# server-rendered inline SVG by default
+
+html = mordant.markdown_to_html("Text[^1]\n\n[^1]: The footnote.")
+
+# themed code block (inline styles by default,
+# or highlighting_mode="Class" for CSS classes)
+html = mordant.markdown_to_html(
+  "```python\ndef hi(): return 1\n```",
+  highlighting_theme="Dracula")
+
+# single theme= themes BOTH code and Mermaid SVG
+html = mordant.markdown_to_html(
+  "# T\n```mermaid\ngraph LR\n A---B\n```\n```python\nx=1\n```",
+  theme="Dracula")
+
+# standalone spans for your own container
+spans = mordant.Highlighter(theme="Dracula").highlight(
+  "python", "def hi(): pass", bare=True)
+bg = mordant.theme_background("Dracula")  # '#282a36'</code></pre></div>
+    </article>
+    <article class="step">
+      <div class="step-copy"><span class="step-no">4</span><h3>Slice documents for retrieval.</h3><p><code>MarkdownChunker</code> yields bare chunks — raw block content with no heading prefix — while tracking the current header for embed-time injection. GFM tables and Mermaid diagrams classify correctly instead of collapsing to code.</p></div>
+      <div class="example"><span class="example-label">Chunking</span><pre tabindex="0" aria-label="Chunking commands"><code>chunker = mordant.MarkdownChunker("# S\n\nPara one\n\n## Sub\n\nPara two")
+list(chunker)  # ['Para one', 'Para two'] — bare, no prefix
+
+for c in chunker.get_chunks():
+    print(c.block_type, c.text)
+
+payloads = chunker.compute_overlap_payloads(2)</code></pre></div>
+    </article>
+    <article class="step">
+      <div class="step-copy"><span class="step-no">5</span><h3>Lint, fix, and scale.</h3><p>25 markdownlint-style rules with diagnostics, a fix engine, batch <code>lint_many()</code> / <code>fix_many()</code> over rayon, and a <code>python -m mordant</code> CLI. Parse and render release the GIL — expect ~4.0× across 4 threads.</p></div>
+      <div class="example"><span class="example-label">Lint and threads</span><pre tabindex="0" aria-label="Lint commands"><code>from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor(max_workers=4) as pool:
+    out = list(pool.map(mordant.markdown_to_html, docs))
+# ~4.0x linear scaling vs single-threaded</code></pre></div>
+    </article>
+  </div>
+</section>
+
+<section id="features" aria-labelledby="features-title">
+  <div class="section-intro"><h2 id="features-title">Useful at every stage<br>of the Markdown loop.</h2><div class="prose"><p>mordant owns the whole loop — parse, extend, render, check, slice — in one versioned core. The quick reference covers every option; the architecture record explains the arena, the dispatch, and the binding model.</p></div></div>
+  <div class="feat-grid">
+    <article><h3>Blazing fast</h3><p>Up to 55× faster than python-markdown on large documents — 2.763 ms vs 621 ms on a 202 KB fixture. Single-threaded wins hold across mistune and markdown-it-py too.</p></article>
+    <article><h3>Full AST access</h3><p><code>parse()</code> returns a <code>Document</code> with parent, children, siblings, positions, and all node kinds — tables, diagrams, footnotes, and custom extension nodes included.</p></article>
+    <article><h3>CommonMark + GFM</h3><p>CommonMark 0.31.2 plus tables, task lists, and strikethrough. Autolink stays off by default and enables explicitly via <code>GfmOptions.all()</code>.</p></article>
+    <article><h3>YAML frontmatter</h3><p>Typed metadata extraction with thematic-break lookahead — <code>---</code> alone is a rule, <code>---\ntitle: …</code> is frontmatter. Errors surface on access, not on parse.</p></article>
+    <article><h3>Emoji, math, diagrams, footnotes</h3><p>Shortcode emoji with blacklist and templates, KaTeX display + inline math, Mermaid as server-side SVG, PHP-style footnotes with backlinks — composable, not competing.</p></article>
+    <article><h3>Lint engine</h3><p>25 rules (MD001, MD009, MD012, MD013, MD024, MD040, MD045, MD049, …) with diagnostics, auto-fix, inline suppressions, frontmatter awareness, and a CLI with human / JSON / GitHub output.</p></article>
+    <article><h3>Document chunking</h3><p>Lazy AST chunk iterator with heading-context propagation, <code>from_file</code> and <code>from_file_mmap</code> constructors, overlap payloads for embeddings, and delimiter-aware reconstruction.</p></article>
+    <article><h3>Multi-threaded + tested</h3><p>GIL released across parse, render, math, and batch lint/fix. 141 Rust unit tests, the full CommonMark spec suite, and 1247 Python integration tests.</p></article>
+    <article><h3>Integrated code highlighting</h3><p>Fenced code highlights through the bundled syntect engine — no opt-in needed. <code>highlighting_theme</code> picks the theme, <code>highlighting_mode</code> picks inline <code>style</code> vs CSS <code>class</code>, and one <code>theme=</code> kwarg themes code blocks and Mermaid SVG together.</p></article>
+    <article><h3>Custom themes, your way</h3><p>Bring any VSCode JSON or Sublime <code>.tmTheme</code> — <code>add_custom_theme(name, content)</code> at runtime, or drop files in <code>~/.mordant/themes/</code> for auto-load. Custom <code>.sublime-syntax</code> grammars register via <code>add_custom_syntax()</code>, with <code>list_themes()</code>, <code>list_syntaxes()</code>, <code>detect_language()</code>, and <code>theme_background()</code> to build on.</p></article>
+  </div>
+</section>
+
+<section id="retrieval" aria-labelledby="perf-title">
+  <div class="section-intro"><h2 id="perf-title">Measured speed,<br>per fixture.</h2><div class="prose"><p>Single-threaded, 50 iterations per fixture. mordant leads at every size — the gap widens as documents grow. Multi-threaded, parse + render scale ~4.0× across 4 threads.</p><p>Run it yourself: <code>python benchmarks.py</code> in <code>mordant-py</code>, or <code>cargo bench</code> at the repo root.</p></div></div>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Single-threaded benchmark comparison">
+    <table><caption>Single-threaded parse + render (50 iterations)</caption><thead><tr><th scope="col">Fixture</th><th scope="col">mordant</th><th scope="col">mistune</th><th scope="col">markdown-it-py</th><th scope="col">python-markdown</th></tr></thead><tbody>
+      <tr><th scope="row">Small (400B)</th><td>0.039 ms</td><td>0.430 ms</td><td>0.475 ms</td><td>2.301 ms</td></tr>
+      <tr><th scope="row">Medium (5.4KB)</th><td>0.155 ms</td><td>2.448 ms</td><td>3.940 ms</td><td>6.455 ms</td></tr>
+      <tr><th scope="row">Large (26.7KB)</th><td>0.410 ms</td><td>8.611 ms</td><td>16.743 ms</td><td>31.304 ms</td></tr>
+      <tr><th scope="row">Data (202KB)</th><td>2.763 ms</td><td>38.152 ms</td><td>65.736 ms</td><td>621.295 ms</td></tr>
+    </tbody></table>
+  </div>
+  <div class="impl"><div><h3>Rust for pipelines.</h3><p>The same engine ships as a native library with no Python dependency. Everything beyond the default parser/renderer is a Cargo feature — add only the engines you need.</p></div><pre tabindex="0" aria-label="Rust usage example"><code>// Cargo.toml
+// dependencies = { mordant = "0.10" }
+
+use mordant::markdown_to_html_string;
+
+let mut html = String::new();
+markdown_to_html_string(&amp;mut html, "# Hello\n\n**World**").unwrap();</code></pre></div>
+</section>
+
+<section id="surfaces" aria-labelledby="surfaces-title">
+  <div class="section-intro"><h2 id="surfaces-title">One engine.<br>Two languages.</h2><div class="prose"><p>Python covers documents end to end; Rust exposes the same engine plus the feature flags other pipelines build on. The <a href="https://github.com/opticsWolf/mordant/blob/main/docs/ARCHITECTURE.md">architecture record</a> explains the arena, the dispatch, and the binding model.</p></div></div>
+  <div class="doors">
+    <article><h3>Python for documents</h3><p>Single-call render, full AST, frontmatter, GFM options, emoji, math, diagrams, footnotes, chunking, lint, and highlighting — behind a PyO3 shim that never copies the source.</p><pre tabindex="0" aria-label="Python API"><code>import mordant
+
+html = mordant.markdown_to_html(md)
+doc = mordant.parse(md)
+chunker = mordant.MarkdownChunker(md)</code></pre><a class="text-link" href="https://github.com/opticsWolf/mordant/blob/main/docs/QUICKREF.md">Quick reference <span aria-hidden="true">↗</span></a></article>
+    <article><h3>Rust for embedding</h3><p>Add the crate, pick features, render natively. The spec suite runs against the core crate itself — Python adds integration depth, not correctness.</p><pre tabindex="0" aria-label="Rust API"><code>cargo add mordant
+
+# features: meta, emoji, footnotes,
+# linter, diagram, chunker,
+# math, highlighter</code></pre><a class="text-link" href="https://docs.rs/mordant">API docs <span aria-hidden="true">↗</span></a></article>
+    <article><h3>Pipelines for graphs</h3><p>Chunk bare blocks with offsets, lint and fix at scale, highlight standalone spans — the shapes OKFgraph consumes (it depends on <code>mordant&gt;=0.9</code> for chunk + lint).</p><pre tabindex="0" aria-label="Pipeline pins"><code>mordant = "0.10"  # crates.io
+# pip install mordant  # PyPI, Python 3.9+
+# 141 Rust tests + spec suite
+# 1247 Python integration tests</code></pre><a class="text-link" href="https://github.com/opticsWolf/mordant/blob/main/docs/ARCHITECTURE.md">Architecture <span aria-hidden="true">↗</span></a></article>
+  </div>
+</section>
+
+<section id="stack" aria-labelledby="stack-title">
+  <div class="section-intro"><h2 id="stack-title">Part of a family,<br>usable alone.</h2><div class="prose"><p>mordant ships independently on PyPI and crates.io with no model weights and no runtime service. It also shares a shelf with the author's ingest and embedding stack — separate packages, separate versions, same care for offline-first Rust cores with Python wheels.</p><p>The Rust core is <a href="https://github.com/yuin/rushdown">rushdown</a> — originally by Yusuke Inuzuka, forked and extended as mordant by opticsWolf; all engines beyond parse/render now live in the mordant core crate behind granular features.</p></div></div>
+  <div class="package" id="okfgraph">
+    <div class="package-heading"><h3>OKFgraph <span class="ver">graph + memory</span></h3><p>Local knowledge graph + agent memory</p><a class="text-link" href="https://opticswolf.github.io/OKFgraph/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/OKFgraph">Repository <span aria-hidden="true">↗</span></a></div>
+    <div class="prose"><p>Depends on mordant (<code>mordant&gt;=0.9</code>) for chunking and lint — <code>MarkdownChunker</code> bare chunks with offsets plus <code>lint</code> / <code>fix</code> before import. The downstream that wants deterministic HTML and graph-ready slices.</p></div>
+  </div>
+  <div class="package" id="bobine">
+    <div class="package-heading"><h3>bobine <span class="ver">ingest</span></h3><p>Documents → Markdown</p><a class="text-link" href="https://opticswolf.github.io/bobine/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/bobine">Repository <span aria-hidden="true">↗</span></a></div>
+    <div class="prose"><p>Sibling ingestion engine by the same author — PDF, Office, and text → Markdown through a pure-Rust core. No dependency between the two; OKFgraph is what stages bobine output for mordant to chunk and lint.</p></div>
+  </div>
+  <div class="package" id="embroider">
+    <div class="package-heading"><h3>embroider <span class="ver">vectors</span></h3><p>Frozen embeddings over ONNX Runtime</p><a class="text-link" href="https://opticswolf.github.io/embroider/">Website <span aria-hidden="true">↗</span></a> <a class="text-link" href="https://github.com/opticsWolf/embroider">Repository <span aria-hidden="true">↗</span></a></div>
+    <div class="prose"><p>Sibling embedding engine — Jina v5 plus EmbeddingGemma 2 over ONNX Runtime, golden-pinned so one index stays directly comparable. No dependency between the two; OKFgraph embeds mordant's chunks with it.</p></div>
+  </div>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Distribution"><table><caption>Where mordant lives</caption><thead><tr><th scope="col">Surface</th><th scope="col">Package</th><th scope="col">Version</th></tr></thead><tbody>
+    <tr><th scope="row">Python wheels</th><td><a href="https://pypi.org/project/mordant/">mordant</a></td><td>0.10.0 · Python 3.9+</td></tr>
+    <tr><th scope="row">Rust library</th><td><a href="https://crates.io/crates/mordant">mordant</a></td><td>0.10.0 · Rust 1.87+</td></tr>
+    <tr><th scope="row">API reference</th><td><a href="https://docs.rs/mordant">docs.rs/mordant</a></td><td>CommonMark 0.31.2 + GFM</td></tr>
+    <tr><th scope="row">Bindings</th><td>PyO3</td><td>0.29 · GIL released</td></tr>
+  </tbody></table></div>
+  <aside class="note"><h3>Open code. Upstream credit.</h3><p>mordant is MIT. Its core is <a href="https://github.com/yuin/rushdown">rushdown</a> by Yusuke Inuzuka — forked and extended as mordant, with every engine (meta, emoji, footnotes, linter, diagram, chunker, math, highlighter) in the core crate.</p></aside>
+</section>
+
+<section class="closing" aria-labelledby="closing-title"><h2 id="closing-title">Start with the document<br>you already have.</h2><p>Install the wheel, render one string, walk the tree when you need it. Then hand the HTML to a page — or the chunks to a graph.</p><div class="cta"><a class="btn" href="#workflow">Follow the workflow <span aria-hidden="true">↑</span></a><a class="text-link" href="https://github.com/opticsWolf/mordant/blob/main/docs/QUICKREF.md">Explore the quick reference <span aria-hidden="true">↗</span></a></div></section>
+</main>
+<footer><a class="brand" href="#top">mordant</a><p>Markdown in, HTML out — fast.</p><div><a href="https://github.com/opticsWolf/mordant">Source</a><a href="https://github.com/opticsWolf/mordant#quick-start">Documentation</a><a href="https://pypi.org/project/mordant/">PyPI</a><a href="https://crates.io/crates/mordant">crates.io</a><a href="https://opticswolf.github.io/OKFgraph/">OKFgraph</a><a href="https://opticswolf.github.io/bobine/">bobine</a><a href="https://opticswolf.github.io/embroider/">embroider</a></div></footer>
+</body>
+</html>

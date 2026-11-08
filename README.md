@@ -7,6 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/mordant)](https://crates.io/crates/mordant)
 [![docs.rs](https://img.shields.io/docsrs/mordant)](https://docs.rs/mordant)
 [![Rust](https://img.shields.io/badge/Rust-1.87+-orange)](https://www.rust-lang.org)
+[![Website](https://img.shields.io/badge/website-mordant-blue)](https://opticswolf.github.io/mordant/)
 
 > **Version:** 0.10.0 (Python and Rust crates in lockstep)  
 > **Rust crate:** mordant v0.10.0 on [crates.io](https://crates.io/crates/mordant) ([docs.rs](https://docs.rs/mordant)) — CommonMark 0.31.2 + GFM  
