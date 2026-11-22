@@ -2,7 +2,7 @@
 
 > **Version:** 0.11.0 (Python and Rust crates in lockstep)  
 > **Rust crate:** mordant v0.11.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
-> **Bindings:** PyO3 0.29 (Python 3.9+)  
+> **Bindings:** PyO3 0.29 (Python 3.11+)  
 > **Tests:** 1288 Python tests plus the full Rust unit/integration/spec suite (all engines)
 
 ---

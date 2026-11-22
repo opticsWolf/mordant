@@ -3,7 +3,7 @@
 [![CI](https://github.com/opticsWolf/mordant/actions/workflows/test.yml/badge.svg)](https://github.com/opticsWolf/mordant/actions/workflows/test.yml)
 [![License](https://img.shields.io/github/license/opticsWolf/mordant)](https://github.com/opticsWolf/mordant/blob/main/LICENSE)
 [![PyPI - Version](https://img.shields.io/pypi/v/mordant)](https://pypi.org/project/mordant/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/mordant)](https://pypi.org/project/mordant/)
+[![Python](https://img.shields.io/badge/Python-3.11%2B-blue)](https://pypi.org/project/mordant/)
 [![crates.io](https://img.shields.io/crates/v/mordant)](https://crates.io/crates/mordant)
 [![docs.rs](https://img.shields.io/docsrs/mordant)](https://docs.rs/mordant)
 [![Rust](https://img.shields.io/badge/Rust-1.87+-orange)](https://www.rust-lang.org)
@@ -11,7 +11,7 @@
 
 > **Version:** 0.11.0 (Python and Rust crates in lockstep)  
 > **Rust crate:** mordant v0.11.0 on [crates.io](https://crates.io/crates/mordant) ([docs.rs](https://docs.rs/mordant)) — CommonMark 0.31.2 + GFM  
-> **Python:** 3.9+  
+> **Python:** 3.11+  
 > **Bindings:** PyO3 0.29
 
 A fast CommonMark + GFM Markdown parser and renderer — available as a native Rust library on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka, and as Python bindings via `pip install mordant`.

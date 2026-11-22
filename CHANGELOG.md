@@ -36,6 +36,9 @@ the Python package (`mordant` on PyPI) share the same version number
   Math markup may differ slightly from 0.10 (new upstream KaTeX release).
 - The default cargo feature set now includes all engines; use
   `default-features = false` for the old minimal build.
+- Python 3.11+ is now the supported and tested runtime (3.11–3.14). The
+  extension wheel uses the CPython 3.11 stable ABI (`abi3-py311`), and
+  `requires-python` is `>=3.11`.
 - Python wheels and the Rust crate are versioned 0.11.0 in lockstep.
 - `Engines.without(...)` now starts from the **default** engine set, not
   `Engines::all()`. Use `Engines.all().without(...)` in Rust or
