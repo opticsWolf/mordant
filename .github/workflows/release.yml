@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      publish_crates:
+        description: Also publish the Rust crate to crates.io
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -28,9 +33,9 @@ jobs:
       - name: Build wheels (CPython)
         uses: PyO3/maturin-action@v1
         with:
-          container: ${{ matrix.os == 'ubuntu-latest' && 'true' || 'false' }}
+          manylinux: ${{ matrix.os == 'ubuntu-latest' && '2_17' || '' }}
           target: ${{ matrix.os == 'ubuntu-latest' && 'x86_64-unknown-linux-gnu' || '' }}
-          args: --release -m mordant-py/Cargo.toml
+          args: --release --compatibility pypi -m mordant-py/Cargo.toml
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -52,7 +57,6 @@ jobs:
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
-          container: true
           args: --sdist -m mordant-py/Cargo.toml
 
       - name: Upload sdist
@@ -98,7 +102,7 @@ jobs:
   publish-crates-io:
     name: Publish to crates.io
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.publish_crates)
     steps:
       - uses: actions/checkout@v4
 
