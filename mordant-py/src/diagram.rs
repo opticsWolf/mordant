@@ -71,6 +71,27 @@ impl PyDiagramHtmlRendererOptions {
 }
 
 impl PyDiagramHtmlRendererOptions {
+    /// Merges the legacy `diagram_render_opts` and the convenience `theme=`
+    /// argument into these (nested) options. Explicit values win.
+    pub fn merged(&self, legacy: Option<&Self>, theme: Option<&str>) -> Self {
+        let mut result = self.clone();
+        if let Some(legacy) = legacy {
+            if result.mermaid_url.is_none() {
+                result.mermaid_url = legacy.mermaid_url.clone();
+            }
+            if result.theme.is_none() {
+                result.theme = legacy.theme.clone();
+            }
+            if result.render_mode == "server" && legacy.render_mode != "server" {
+                result.render_mode = legacy.render_mode.clone();
+            }
+        }
+        if result.theme.is_none() {
+            result.theme = theme.map(str::to_string);
+        }
+        result
+    }
+
     pub fn to_mordant(&self) -> DiagramHtmlRendererOptions {
         let mode = match self.render_mode.as_str() {
             "client" => RenderMode::Client,

@@ -434,7 +434,7 @@ class TestKatexCss:
         """mordant.KATEX_CSS is accessible and non-empty."""
         assert hasattr(mordant, "KATEX_CSS")
         assert isinstance(mordant.KATEX_CSS, str)
-        assert len(mordant.KATEX_CSS) > 10000  # ~23KB minified
+        assert len(mordant.KATEX_CSS) > 10000  # ~24KB minified
 
     def test_katex_css_contains_font_face(self):
         """CSS contains @font-face declarations."""
@@ -447,8 +447,9 @@ class TestKatexCss:
         assert ".katex-display" in mordant.KATEX_CSS
 
     def test_katex_css_version(self):
-        """CSS declares version 0.16.21."""
-        assert "0.16.21" in mordant.KATEX_CSS
+        """CSS declares the KaTeX version tracked by katex-rs 0.3.0."""
+        assert mordant.KATEX_VERSION == "0.18.5"
+        assert f'content:"{mordant.KATEX_VERSION}"' in mordant.KATEX_CSS
 
 
 # =============================================================================

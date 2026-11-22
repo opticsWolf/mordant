@@ -86,6 +86,7 @@ use crate::{
     context,
     context::{AnyValueSpec, ContextKey, ContextKeyRegistry},
     error::{CallbackError, Result},
+    extensions::Engines,
     matches_kind, text,
     text::Reader,
     util,
@@ -579,6 +580,10 @@ pub struct Options {
 
     /// A custom node ID generator.
     pub id_generator: Option<Rc<dyn GenerateNodeId>>,
+
+    /// Runtime switches for optional engines. Defaults to [`Engines::default()`],
+    /// i.e. all engines except syntax highlighting.
+    pub engines: Engines,
 }
 
 impl Debug for Options {
@@ -589,6 +594,7 @@ impl Debug for Options {
             .field("without_default_parsers", &self.without_default_parsers)
             .field("arena", &self.arena)
             .field("escaped_space", &self.escaped_space)
+            .field("engines", &self.engines)
             .field("id_generator", &"Option<Rc<dyn NodeIdGenerator>>")
             .finish()
     }

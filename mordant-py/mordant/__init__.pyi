@@ -3,17 +3,87 @@
 from typing import Literal, Sequence
 
 KATEX_CSS: str
+KATEX_VERSION: str
 
 # ── Options ────────────────────────────────────────────────────────
 
 class LintOptions:
     def __init__(self, **kwargs) -> None: ...
 
+class Engines:
+    meta: bool
+    emoji: bool
+    footnotes: bool
+    linter: bool
+    diagram: bool
+    chunker: bool
+    math: bool
+    highlighter: bool
+    definition_list: bool
+    fenced_div: bool
+    link_attributes: bool
+
+    def __init__(
+        self,
+        meta: bool = ...,
+        emoji: bool = ...,
+        footnotes: bool = ...,
+        linter: bool = ...,
+        diagram: bool = ...,
+        chunker: bool = ...,
+        math: bool = ...,
+        highlighter: bool = ...,
+        definition_list: bool = ...,
+        fenced_div: bool = ...,
+        link_attributes: bool = ...,
+    ) -> None: ...
+
+    @staticmethod
+    def all() -> "Engines": ...
+    @staticmethod
+    def none() -> "Engines": ...
+    @staticmethod
+    def only(names: Sequence[str]) -> "Engines": ...
+    @staticmethod
+    def without(names: Sequence[str]) -> "Engines": ...
+    @staticmethod
+    def all_without(names: Sequence[str]) -> "Engines": ...
+
+    def has(self, name: str) -> bool: ...
+
 class ParseOptions:
-    def __init__(self, **kwargs) -> None: ...
+    engines: Engines
+    def __init__(
+        self,
+        smart: bool = ...,
+        attributes: bool = ...,
+        auto_heading_ids: bool = ...,
+        escaped_space: bool = ...,
+        meta_table: bool = ...,
+        engines: Engines | None = ...,
+    ) -> None: ...
+
+class HighlighterOptions:
+    theme: str
+    mode: str
+    def __init__(self, theme: str = ..., mode: str = ...) -> None: ...
 
 class RenderOptions:
-    def __init__(self, **kwargs) -> None: ...
+    engines: Engines
+    highlighter: HighlighterOptions | None
+    def __init__(
+        self,
+        hard_wraps: bool = ...,
+        xhtml: bool = ...,
+        allows_unsafe: bool = ...,
+        escaped_space: bool = ...,
+        engines: Engines | None = ...,
+        emoji: EmojiHtmlRendererOptions | None = ...,
+        diagram: DiagramHtmlRendererOptions | None = ...,
+        footnote: FootnoteHtmlRendererOptions | None = ...,
+        math: MathRendererOptions | None = ...,
+        highlighter: HighlighterOptions | None = ...,
+    ) -> None: ...
 
 class GfmOptions:
     def __init__(self, **kwargs) -> None: ...
@@ -71,21 +141,22 @@ def markdown_to_html(
     highlighting_mode: str | None = ...,
     theme: str | None = ...,
     math_renderer_opts: MathRendererOptions | None = ...,
+    engines: Engines | None = ...,
 ) -> str: ...
 
-def parse(source: str, gfm_opts: GfmOptions | None = ..., parse_opts: ParseOptions | None = ..., emoji_opts: EmojiParserOptions | None = ..., diagram_opts: DiagramParserOptions | None = ...) -> Document: ...
+def parse(source: str, gfm_opts: GfmOptions | None = ..., parse_opts: ParseOptions | None = ..., emoji_opts: EmojiParserOptions | None = ..., diagram_opts: DiagramParserOptions | None = ..., engines: Engines | None = ...) -> Document: ...
 
 def render_math(latex: str, display: bool = False, output: str = "both") -> str: ...
 
-def lint(source: str, gfm_opts: GfmOptions | None = ..., parse_opts: ParseOptions | None = ..., emoji_opts: EmojiParserOptions | None = ..., diagram_opts: DiagramParserOptions | None = ..., lint_opts: LintOptions | None = ..., lint_config: LintConfig | None = ...) -> list[Diagnostic]: ...
+def lint(source: str, gfm_opts: GfmOptions | None = ..., parse_opts: ParseOptions | None = ..., emoji_opts: EmojiParserOptions | None = ..., diagram_opts: DiagramParserOptions | None = ..., lint_opts: LintOptions | None = ..., lint_config: LintConfig | None = ..., engines: Engines | None = ...) -> list[Diagnostic]: ...
 
-def fix(source: str, gfm_opts: GfmOptions | None = ..., parse_opts: ParseOptions | None = ..., emoji_opts: EmojiParserOptions | None = ..., diagram_opts: DiagramParserOptions | None = ..., lint_opts: LintOptions | None = ..., default_language: str | None = ..., lint_config: LintConfig | None = ...) -> FixResult: ...
+def fix(source: str, gfm_opts: GfmOptions | None = ..., parse_opts: ParseOptions | None = ..., emoji_opts: EmojiParserOptions | None = ..., diagram_opts: DiagramParserOptions | None = ..., lint_opts: LintOptions | None = ..., default_language: str | None = ..., lint_config: LintConfig | None = ..., engines: Engines | None = ...) -> FixResult: ...
 
 def lint_rules() -> list["RuleMetadata"]: ...
 
-def lint_many(files: Sequence[tuple[str, str]], lint_config: LintConfig | None = ...) -> list[tuple[str, list[Diagnostic]]]: ...
+def lint_many(files: Sequence[tuple[str, str]], lint_config: LintConfig | None = ..., engines: Engines | None = ...) -> list[tuple[str, list[Diagnostic]]]: ...
 
-def fix_many(files: Sequence[tuple[str, str]], lint_config: LintConfig | None = ..., default_language: str | None = ...) -> list[tuple[str, FixResult]]: ...
+def fix_many(files: Sequence[tuple[str, str]], lint_config: LintConfig | None = ..., default_language: str | None = ..., engines: Engines | None = ...) -> list[tuple[str, FixResult]]: ...
 
 # ── Theme / syntax helpers ────────────────────────────────────────
 
@@ -127,11 +198,11 @@ class ExtractedChunk:
     def __init__(self, **kwargs) -> None: ...
 
 class MarkdownChunker:
-    def __init__(self, text: str) -> None: ...
+    def __init__(self, text: str, engines: Engines | None = ...) -> None: ...
     @staticmethod
-    def from_file(path: str) -> "MarkdownChunker": ...
+    def from_file(path: str, engines: Engines | None = ...) -> "MarkdownChunker": ...
     @staticmethod
-    def from_file_mmap(path: str) -> "MarkdownChunker": ...
+    def from_file_mmap(path: str, engines: Engines | None = ...) -> "MarkdownChunker": ...
     def __iter__(self) -> "MarkdownChunker": ...
     def __next__(self) -> str | None: ...
     @property

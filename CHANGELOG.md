@@ -4,6 +4,108 @@ All notable changes to `mordant`. The Rust crate (`mordant` on crates.io) and
 the Python package (`mordant` on PyPI) share the same version number
 (lockstep versioning since 0.9.0).
 
+## [0.11.0]
+
+### Added
+
+- Runtime engine switches shared by Rust and Python: `mordant::Engines`
+  (also `mordant::extensions::Engines`; `Engine` is re-exported at the crate
+  root) with `Engines::all()/none()/only()/without()`, and the Python
+  `mordant.Engines` class. All engines ship in the wheel and are enabled by
+  default, except syntax highlighting which stays opt-in (`Engines.all()`) to
+  preserve 0.10 output. Pass `engines=` to `markdown_to_html()`, `parse()`,
+  `lint()`, `fix()` or set it on `ParseOptions`/`RenderOptions`. Rust gains
+  `markdown_to_html_string_with_options()`; Rust-only `available_engines()`
+  reports the compiled-in engines.
+- Structured `RenderOptions`: nested `emoji=`, `diagram=`, `footnote=`, `math=`
+  and `highlighter=` (`HighlighterOptions`) settings. Legacy top-level kwargs
+  remain accepted as deprecated overrides until 0.12, but an explicit
+  `engines=` set is authoritative for whether an engine is enabled.
+  `GfmOptions` remains the separate GFM switch.
+- Three new core extensions, each behind its own cargo feature and runtime flag:
+  `definition-list` (`<dl>/<dt>/<dd>`), `fenced-div` (Pandoc-style `:::` with
+  classes/attributes and nesting), and `link-attributes` (`{#id .class ...}`
+  after links/images).
+- `KATEX_VERSION` is exposed in Rust and Python alongside `KATEX_CSS`.
+
+### Changed
+
+- Upgraded `katex-rs` 0.2.4 → 0.3.0 in both manifests. The accepted range is
+  now `>=0.3.0, <0.4.0` (floor 0.3.0, ceiling <0.4.0); lockfiles regenerated.
+- Bundled KaTeX CSS updated from 0.16.21 to **0.18.5** to match katex-rs 0.3.0.
+  Math markup may differ slightly from 0.10 (new upstream KaTeX release).
+- The default cargo feature set now includes all engines; use
+  `default-features = false` for the old minimal build.
+- Python wheels and the Rust crate are versioned 0.11.0 in lockstep.
+- `Engines.without(...)` now starts from the **default** engine set, not
+  `Engines::all()`. Use `Engines.all().without(...)` in Rust or
+  `mordant.Engines.all_without([...])` in Python for the "all except" case.
+  An explicit `engines=` argument now takes precedence over legacy
+  `theme=` / `highlighting_theme=` kwargs (which only set values).
+- Parsing and rendering of a document use one effective engine set: an engine
+  set supplied on either side is inherited by the other. Conflicting explicit
+  sets raise `ValueError` in Python instead of silently dropping AST nodes.
+- `Engine` and `Engines` are `#[non_exhaustive]` so future engines can be
+  added additively; use the constructors and `set()`/`without()` rather than
+  struct literals or exhaustive matches. The engine-gated parser-extension
+  factory (`parser_extensions()`) is crate-internal, not a public API.
+- Attribute URL checks now decode character references and ignore ASCII
+  whitespace/control bytes before scheme matching; `allows_unsafe` docs cover
+  `style`, `srcdoc` and dangerous URL values from the new extensions.
+
+### Fixed
+
+- Fenced div bodies are now parsed as children of `<div>` (previously the
+  body became a sibling and the closing fence produced an empty div). Nested
+  divs work without indentation; a closing fence must have at least as many
+  colons as the opener and may carry ignored trailing attributes.
+- Definition lists no longer drop the first definition line or preceding
+  paragraph lines, and no longer swallow the following term. A term must be
+  the first line of its paragraph; a colon only starts a definition when
+  followed by whitespace (`Term` + `:smile:` stays emoji). Multi-paragraph and
+  block-level definitions remain unsupported and are documented as 0.12 work.
+- Link attributes survive inline parser splits (`_`, `:`, `*`, backticks) by
+  parsing the contiguous source span instead of the first text node.
+- Attribute lists can no longer inject a duplicate `href`/`src`, and `style`
+  / dangerous URL values from the new extensions require `allows_unsafe=True`.
+  The older `ParseOptions(attributes=True)` path keeps its 0.10 behavior;
+  unifying the two attribute policies is planned for 0.12.
+- Rust default `html::Options`, `parser::Options` and Python defaults now all
+  disable syntax highlighting. `RenderOptions(highlighter=...)` enables it
+  unless an explicit `engines=` disables it.
+- `Engines.without(...)` no longer silently enables highlighting; option
+  sub-object mutation (`opts.engines.emoji = False`) now works as expected.
+- `lint()`/`fix()` honor the `linter` engine flag; `MarkdownChunker` accepts
+  `engines=` and gates extensions accordingly.
+- Rust `available_engines()` now reports only the compiled-in engines. Raw
+  theme and mode values passed to `HighlighterOptions` are validated.
+- Minimal-feature Rust tests and doctests are feature-gated and pass with
+  `--no-default-features --features std`; CI covers that configuration. The
+  no-std debug writer is now gated to Unix, so enabling
+  `no-std-unix-debug` on Windows compiles again. Unsafe blocks touched by
+  this release now carry `SAFETY:` comments.
+- Python `MarkdownChunker.get_bare_chunks()` propagates list-append errors as
+  Python exceptions instead of panicking; a broken chunker intra-doc link is
+  fixed.
+
+### Migration
+
+- Rust users who relied on the minimal default build should pin
+  `mordant = { version = "0.11", default-features = false, features = ["std"] }`.
+- `no-std` remains the parser-core compatibility configuration. The three new
+  syntax extensions (`definition-list`, `fenced-div`, `link-attributes`)
+  require `std`; a build combining `no-std` with one of them compiles but is a
+  hybrid, not a supported embedded configuration. The feature model is planned
+  to move to a `std` feature in 0.12.
+- Python callers need no changes; no argument means the 0.11 default engine set.
+  Pass `engines=mordant.Engines.all()` to additionally enable syntax
+  highlighting for every code block.
+- Rust code that used `Engines { .. }` literals must switch to
+  `Engines::default()/all()/none()/only()` plus `set()`/`without()`; adding an
+  engine is now non-breaking. Matches on `Engine` need a wildcard arm.
+  `parser_extensions()` is no longer public; custom pipelines should compose
+  parser extensions directly.
+
 ## [0.10.1]
 
 ### Fixed

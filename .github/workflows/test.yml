@@ -37,6 +37,23 @@ jobs:
         env:
           RUST_BACKTRACE: 1 
 
+      - name: Run Tests (minimal std)
+        run: cargo test --no-default-features --features std -- --nocapture --test-threads=1
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run Doctests (minimal std)
+        run: cargo test --no-default-features --features std --doc
+        env:
+          RUST_BACKTRACE: 1
+
+      # `--all-features` would also enable the profiler (pprof) and the
+      # mutually exclusive no-std feature; test every engine explicitly.
+      - name: Run Tests (all engines)
+        run: cargo test --features meta,emoji,footnotes,linter,diagram,chunker,math,highlighter,definition-list,fenced-div,link-attributes -- --nocapture --test-threads=1
+        env:
+          RUST_BACKTRACE: 1
+
       - name: Report Coverage to Summary
         if: matrix.rust == 'nightly'
         id: coverage_step

@@ -5,6 +5,7 @@ extern crate alloc;
 
 pub mod ast;
 pub mod context;
+pub mod extensions;
 pub mod parser;
 pub mod renderer;
 pub mod test;
@@ -19,6 +20,15 @@ pub mod emoji;
 
 #[cfg(feature = "footnotes")]
 pub mod footnote;
+
+#[cfg(feature = "definition-list")]
+pub mod definition_list;
+
+#[cfg(feature = "fenced-div")]
+pub mod fenced_div;
+
+#[cfg(feature = "link-attributes")]
+pub mod link_attributes;
 
 #[cfg(feature = "linter")]
 pub mod linter;
@@ -50,6 +60,22 @@ mod error;
 use alloc::string::String;
 
 pub use error::{Error, Result};
+
+#[doc(inline)]
+pub use extensions::{Engine, Engines};
+
+// Brings `apply` into scope for the renderer extensions below. Needed only
+// when at least one renderer-side engine can be enabled.
+#[cfg(any(
+    feature = "emoji",
+    feature = "diagram",
+    feature = "math",
+    feature = "footnotes",
+    feature = "definition-list",
+    feature = "fenced-div",
+    feature = "highlighter"
+))]
+use renderer::html::RendererExtension;
 
 use crate::{
     parser::{Parser, ParserExtension},
@@ -166,6 +192,219 @@ pub fn markdown_to_html_string(output: &mut String, source: &str) -> Result<()> 
     let mut reader = BasicReader::new(source);
     let (arena, document_ref) = parser.parse(&mut reader);
     renderer.render(output, source, &arena, document_ref)
+}
+
+/// Returns the built-in parser extensions for the given engine set.
+///
+/// This crate-internal factory is shared by the Markdown-to-HTML entry point
+/// and the chunker so their engine gates cannot drift. GFM extensions are
+/// composed separately by callers.
+pub(crate) fn parser_extensions(engines: Engines) -> impl ParserExtension {
+    parser::ParserExtensionFn::new(move |p: &mut Parser| {
+        #[cfg(not(any(
+            feature = "meta",
+            feature = "emoji",
+            feature = "footnotes",
+            feature = "diagram",
+            feature = "math",
+            feature = "definition-list",
+            feature = "fenced-div",
+            feature = "link-attributes"
+        )))]
+        let _ = (p, engines);
+        #[cfg(feature = "meta")]
+        if engines.is_enabled(Engine::Meta) {
+            crate::meta::meta_parser_extension(crate::meta::MetaParserOptions::default()).apply(p);
+        }
+        #[cfg(feature = "emoji")]
+        if engines.is_enabled(Engine::Emoji) {
+            crate::emoji::emoji_parser_extension(crate::emoji::EmojiParserOptions::default())
+                .apply(p);
+        }
+        #[cfg(feature = "footnotes")]
+        if engines.is_enabled(Engine::Footnotes) {
+            crate::footnote::footnote_parser_extension().apply(p);
+        }
+        #[cfg(feature = "diagram")]
+        if engines.is_enabled(Engine::Diagram) {
+            crate::diagram::diagram_parser_extension(
+                crate::diagram::DiagramParserOptions::default(),
+            )
+            .apply(p);
+        }
+        #[cfg(feature = "math")]
+        if engines.is_enabled(Engine::Math) {
+            crate::math::math_parser_extension(crate::math::MathParserOptions::default()).apply(p);
+        }
+        #[cfg(feature = "definition-list")]
+        if engines.is_enabled(Engine::DefinitionList) {
+            crate::definition_list::definition_list_parser_extension().apply(p);
+        }
+        #[cfg(feature = "fenced-div")]
+        if engines.is_enabled(Engine::FencedDiv) {
+            crate::fenced_div::fenced_div_parser_extension().apply(p);
+        }
+        #[cfg(feature = "link-attributes")]
+        if engines.is_enabled(Engine::LinkAttributes) {
+            crate::link_attributes::link_attributes_parser_extension().apply(p);
+        }
+    })
+}
+
+/// Converts Markdown to HTML using the built-in engines selected by the
+/// `engines` field of the supplied options.
+///
+/// All compiled-in engines except syntax highlighting are enabled by default
+/// ([`Engines::default()`]); pass [`Engines::all()`] to enable highlighting.
+/// Disable an engine by setting the corresponding flag on
+/// [`parser::Options::engines`] (parse side) and [`html::Options::engines`]
+/// (render side) to `false`. GFM remains a separate opt-in extension; it is
+/// not part of `Engines`.
+///
+/// # Examples
+/// ```
+/// # #[cfg(feature = "footnotes")] {
+/// use mordant::{
+///     markdown_to_html_string_with_options, parser, renderer::html, Engines, Engine,
+/// };
+///
+/// let mut output = String::new();
+/// let mut parser_opts = parser::Options::default();
+/// parser_opts.engines = Engines::only(&[Engine::Footnotes]);
+/// let mut html_opts = html::Options::default();
+/// html_opts.engines = parser_opts.engines;
+/// markdown_to_html_string_with_options(
+///     &mut output,
+///     "text[^1]\n\n[^1]: note",
+///     parser_opts,
+///     html_opts,
+/// )
+/// .unwrap();
+/// assert!(output.contains("footnote-ref"));
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the underlying writer or a renderer callback returns
+/// an error.
+pub fn markdown_to_html_string_with_options(
+    output: &mut String,
+    source: &str,
+    parser_options: parser::Options,
+    renderer_options: html::Options,
+) -> Result<()> {
+    let parser_engines = parser_options.engines;
+    let renderer_engines = renderer_options.engines;
+
+    let parser = Parser::with_extensions(parser_options, parser_extensions(parser_engines));
+
+    let renderer = html::Renderer::with_extensions(
+        renderer_options,
+        html::renderer_extension(move |r: &mut html::Renderer<'_, String>| {
+            #[cfg(not(any(
+                feature = "emoji",
+                feature = "diagram",
+                feature = "math",
+                feature = "footnotes",
+                feature = "definition-list",
+                feature = "fenced-div",
+                feature = "highlighter"
+            )))]
+            let _ = (r, renderer_engines);
+            #[cfg(feature = "emoji")]
+            if renderer_engines.is_enabled(Engine::Emoji) {
+                crate::emoji::emoji_html_renderer_extension(
+                    crate::emoji::EmojiHtmlRendererOptions::default(),
+                )
+                .apply(r);
+            }
+            #[cfg(feature = "diagram")]
+            if renderer_engines.is_enabled(Engine::Diagram) {
+                crate::diagram::diagram_html_renderer_extension(
+                    crate::diagram::DiagramHtmlRendererOptions::default(),
+                )
+                .apply(r);
+            }
+            #[cfg(feature = "math")]
+            if renderer_engines.is_enabled(Engine::Math) {
+                crate::math::math_html_renderer_extension(
+                    crate::math::MathRendererOptions::default(),
+                )
+                .apply(r);
+                crate::math::math_inline_html_renderer_extension(
+                    crate::math::MathInlineRendererOptions::default(),
+                )
+                .apply(r);
+            }
+            #[cfg(feature = "footnotes")]
+            if renderer_engines.is_enabled(Engine::Footnotes) {
+                crate::footnote::footnote_html_renderer_extension(
+                    crate::footnote::FootnoteHtmlRendererOptions::default(),
+                )
+                .apply(r);
+            }
+            #[cfg(feature = "definition-list")]
+            if renderer_engines.is_enabled(Engine::DefinitionList) {
+                crate::definition_list::definition_list_html_renderer_extension(
+                    crate::definition_list::DefinitionListHtmlRendererOptions::default(),
+                )
+                .apply(r);
+            }
+            #[cfg(feature = "fenced-div")]
+            if renderer_engines.is_enabled(Engine::FencedDiv) {
+                crate::fenced_div::fenced_div_html_renderer_extension(
+                    crate::fenced_div::FencedDivHtmlRendererOptions::default(),
+                )
+                .apply(r);
+            }
+            #[cfg(feature = "highlighter")]
+            if renderer_engines.is_enabled(Engine::Highlighter) {
+                crate::highlighter::highlighting_html_renderer_extension(
+                    crate::highlighter::HighlightingRendererOptions::default(),
+                )
+                .apply(r);
+            }
+        }),
+    );
+
+    let mut reader = BasicReader::new(source);
+    let (arena, document_ref) = parser.parse(&mut reader);
+    renderer.render(output, source, &arena, document_ref)
+}
+
+/// Returns the set of built-in engines that were compiled into this crate.
+pub fn available_engines() -> &'static [Engine] {
+    const AVAILABLE: &[Engine] = &[
+        #[cfg(feature = "meta")]
+        Engine::Meta,
+        #[cfg(feature = "emoji")]
+        Engine::Emoji,
+        #[cfg(feature = "footnotes")]
+        Engine::Footnotes,
+        #[cfg(feature = "linter")]
+        Engine::Linter,
+        #[cfg(feature = "diagram")]
+        Engine::Diagram,
+        #[cfg(feature = "chunker")]
+        Engine::Chunker,
+        #[cfg(feature = "math")]
+        Engine::Math,
+        #[cfg(feature = "highlighter")]
+        Engine::Highlighter,
+        #[cfg(feature = "definition-list")]
+        Engine::DefinitionList,
+        #[cfg(feature = "fenced-div")]
+        Engine::FencedDiv,
+        #[cfg(feature = "link-attributes")]
+        Engine::LinkAttributes,
+    ];
+    AVAILABLE
+}
+
+/// Returns true if the given engine was compiled into this crate.
+pub fn is_engine_available(engine: Engine) -> bool {
+    Engines::all().is_enabled(engine)
 }
 
 // macros {{{
@@ -586,7 +825,7 @@ macro_rules! node_path {
 
 #[cfg(not(feature = "std"))]
 pub mod debug {
-    #[cfg(feature = "no-std-unix-debug")]
+    #[cfg(all(feature = "no-std-unix-debug", unix))]
     extern crate libc;
 
     use core::fmt::{self, Write};
@@ -595,11 +834,16 @@ pub mod debug {
     pub struct Stdout;
 
     impl Write for Stdout {
-        #[allow(unreachable_code, unused)]
-        fn write_str(&mut self, s: &str) -> fmt::Result {
-            #[cfg(feature = "no-std-unix-debug")]
-            unsafe {
-                libc::write(1, s.as_ptr() as *const _, s.len());
+        fn write_str(&mut self, _s: &str) -> fmt::Result {
+            #[cfg(all(feature = "no-std-unix-debug", unix))]
+            {
+                // SAFETY: `_s` is a valid `&str`, so its pointer is valid for
+                // `_s.len()` bytes. `libc::write` only reads that range; fd 1
+                // is stdout. Partial writes are ignored because this is a
+                // debug-only path.
+                unsafe {
+                    libc::write(1, _s.as_ptr().cast(), _s.len());
+                }
             }
             Ok(())
         }

@@ -4,10 +4,12 @@
 extern crate alloc;
 
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 
 use crate::{
     as_kind_data,
     error::Error,
+    extensions::Engines,
     matches_kind,
     renderer::{self, BuiltinNodesRenderer as _, *},
     util::{
@@ -28,7 +30,9 @@ pub struct Options {
     /// Renders as XHTML.
     pub xhtml: bool,
 
-    /// Allows raw HTML and unsafe links.
+    /// Allows raw HTML, unsafe link destinations, and unsafe attributes
+    /// (`style`, `srcdoc`, and dangerous URL values) emitted by syntax
+    /// extensions.
     pub allows_unsafe: bool,
 
     /// Indicates that a '\' escaped half-space(0x20) should not be rendered.
@@ -36,6 +40,10 @@ pub struct Options {
 
     /// Attribute filters for rendering.
     pub attribute_filters: Option<Rc<AttributeFilters>>,
+
+    /// Runtime switches for optional engines. Defaults to [`Engines::default()`],
+    /// i.e. all engines except syntax highlighting.
+    pub engines: Engines,
 }
 
 impl Default for Options {
@@ -47,6 +55,7 @@ impl Default for Options {
             allows_unsafe: false,
             escaped_space: false,
             attribute_filters: Some(Rc::new(AttributeFilters::default())),
+            engines: Engines::default(),
         }
     }
 }
@@ -736,7 +745,16 @@ impl<W: TextWrite> renderer::BuiltinNodesRenderer<W> for BuiltinNodesRenderer<W>
                 self.writer.write(w, &title.str(source))?;
                 self.writer.write_safe_str(w, "\"")?;
             }
-            write_attributes!(arena, node_ref, source, w, self.format_options, link);
+            let link_attrs = arena[node_ref].attributes();
+            if !link_attrs.is_empty() {
+                render_attributes_safe(
+                    w,
+                    source,
+                    link_attrs,
+                    attribute_filter_for!(self.format_options, link),
+                    self.format_options.allows_unsafe,
+                )?;
+            }
             self.writer.write_safe_str(w, ">")?;
             if matches!(kd.link_kind(), LinkKind::Auto(_)) {
                 if let Some(fc) = arena[node_ref].first_child() {
@@ -787,7 +805,16 @@ impl<W: TextWrite> renderer::BuiltinNodesRenderer<W> for BuiltinNodesRenderer<W>
                 self.writer.write(w, &title.str(source))?;
                 self.writer.write_safe_str(w, "\"")?;
             }
-            write_attributes!(arena, node_ref, source, w, self.format_options, image);
+            let image_attrs = arena[node_ref].attributes();
+            if !image_attrs.is_empty() {
+                render_attributes_safe(
+                    w,
+                    source,
+                    image_attrs,
+                    attribute_filter_for!(self.format_options, image),
+                    self.format_options.allows_unsafe,
+                )?;
+            }
             if self.format_options.xhtml {
                 w.write_str(" />")?;
             } else {
@@ -1162,13 +1189,50 @@ impl Writer {
 // Utilities {{{
 
 /// Renders attributes to the given writer.
+///
 /// You can specify a set of valid attribute names to filter the attributes.
+/// This entry point preserves the pre-0.11 behavior and does **not** apply
+/// the extension safety policy; use [`render_attributes_safe`] for attributes
+/// produced by link-attribute lists, fenced divs, or definition lists.
+///
+/// # Errors
+///
+/// Returns an error if the writer fails.
 #[inline]
 pub fn render_attributes<W: TextWrite>(
     w: &mut W,
     source: &str,
     attributes: &Attributes,
     valid: Option<&AsciiWordSet>,
+) -> Result<()> {
+    render_attributes_inner(w, source, attributes, valid, true)
+}
+
+/// Renders extension attributes using the 0.11 safety policy.
+///
+/// `style`, `srcdoc` and dangerous URL values are dropped unless
+/// `allows_unsafe` is true. `data-*` and `aria-*` attributes bypass the name
+/// filter; all other names must be present in `valid`.
+///
+/// # Errors
+///
+/// Returns an error if the writer fails.
+pub fn render_attributes_safe<W: TextWrite>(
+    w: &mut W,
+    source: &str,
+    attributes: &Attributes,
+    valid: Option<&AsciiWordSet>,
+    allows_unsafe: bool,
+) -> Result<()> {
+    render_attributes_inner(w, source, attributes, valid, allows_unsafe)
+}
+
+fn render_attributes_inner<W: TextWrite>(
+    w: &mut W,
+    source: &str,
+    attributes: &Attributes,
+    valid: Option<&AsciiWordSet>,
+    allows_unsafe: bool,
 ) -> Result<()> {
     for (key, value) in attributes.iter() {
         if !key.starts_with("data-") && !key.starts_with("aria-") {
@@ -1178,14 +1242,41 @@ pub fn render_attributes<W: TextWrite>(
                 }
             }
         }
+        let b = value.bytes(source);
+        if !allows_unsafe && unsafe_extension_attribute(key, &b) {
+            continue;
+        }
         w.write_str(" ")?;
         w.write_str(key)?;
         w.write_str("=\"")?;
-        let b = value.bytes(source);
         write_bytes(w, &escape_html(b))?;
         w.write_str("\"")?;
     }
     Ok(())
+}
+
+/// Attributes whose value is interpreted as a URL by HTML.
+const URL_ATTRIBUTES: &[&str] = &[
+    "href",
+    "src",
+    "action",
+    "formaction",
+    "poster",
+    "cite",
+    "data",
+    "xlink:href",
+    "background",
+    "lowsrc",
+];
+
+fn unsafe_extension_attribute(key: &str, value: &[u8]) -> bool {
+    if key.eq_ignore_ascii_case("style") || key.eq_ignore_ascii_case("srcdoc") {
+        return true;
+    }
+    URL_ATTRIBUTES
+        .iter()
+        .any(|name| key.eq_ignore_ascii_case(name))
+        && is_dangerous_url(value)
 }
 
 /// Returns true if the given node is a child of a tight list, otherwise false.
@@ -1224,12 +1315,16 @@ impl private::Sealed for SafeBytes<'_> {}
 impl<'a> SafeStr for SafeBytes<'a> {
     #[inline(always)]
     fn as_str(&self) -> &str {
+        // SAFETY: `SafeBytes` is crate-private and is only constructed from
+        // already-escaped, valid UTF-8 byte slices.
         unsafe { core::str::from_utf8_unchecked(self.0) }
     }
 }
 
 #[inline]
 fn write_bytes<W: TextWrite + ?Sized>(w: &mut W, bytes: &[u8]) -> Result<()> {
+    // SAFETY: `bytes` comes from `escape_html`, which preserves UTF-8 while
+    // escaping characters that need it.
     unsafe {
         w.write_str(core::str::from_utf8_unchecked(bytes))
             .map_err(|e| Error::io("Failed to write bytes", Some(Box::new(e))))
@@ -1257,7 +1352,22 @@ fn has_prefix_ignore_ascii_case(s: &[u8], prefix: &[u8]) -> bool {
 }
 
 /// Returns true if the given URL seems potentially dangerous, otherwise false.
+///
+/// Character references are decoded and ASCII whitespace/control bytes are
+/// removed before the prefix checks, matching how HTML attribute values are
+/// interpreted by browsers.
 pub fn is_dangerous_url(url: &[u8]) -> bool {
+    // Named and numeric references may both be present in an attribute
+    // value. Decode them before inspecting the scheme.
+    let decoded =
+        crate::util::resolve_numeric_references(crate::util::resolve_entity_references(url));
+    let stripped: Option<Vec<u8>> = if decoded.iter().any(|b| *b <= 0x20) {
+        Some(decoded.iter().copied().filter(|b| *b > 0x20).collect())
+    } else {
+        None
+    };
+    let url = stripped.as_deref().unwrap_or(decoded.as_ref());
+
     if has_prefix_ignore_ascii_case(url, B_DATA_IMAGE) && url.len() >= 11 {
         let v = &url[11..];
         if has_prefix_ignore_ascii_case(v, B_PNG)
@@ -1462,3 +1572,23 @@ where
 }
 
 // }}} ParagraphRenderer
+
+#[cfg(test)]
+mod tests {
+    use super::is_dangerous_url;
+
+    #[test]
+    fn url_check_normalizes_whitespace_and_entities() {
+        assert!(is_dangerous_url(b"javascript:alert(1)"));
+        assert!(is_dangerous_url(b" javascript:alert(1)"));
+        assert!(is_dangerous_url(b"java&#x73;cript:alert(1)"));
+        assert!(is_dangerous_url(b"java\0script:alert(1)"));
+        assert!(is_dangerous_url(b"java\tscript:alert(1)"));
+        assert!(is_dangerous_url(b"vbscript:msgbox(1)"));
+        assert!(is_dangerous_url(b"file:///etc/passwd"));
+        assert!(is_dangerous_url(b"data:image/svg+xml;base64,PHN2Zz4="));
+        assert!(!is_dangerous_url(b"data:image/png;base64,iVBOR"));
+        assert!(!is_dangerous_url(b"https://example.com/a b"));
+        assert!(!is_dangerous_url(b""));
+    }
+}
