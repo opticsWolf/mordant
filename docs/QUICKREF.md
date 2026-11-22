@@ -1,7 +1,7 @@
 # Mordant Quick Reference
 
-> **Version:** 0.10.1 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.10.1, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
+> **Version:** 0.11.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.11.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka  
 > **Import:** `import mordant`
 
 ---
@@ -14,7 +14,7 @@ pip install mordant
 cd mordant-py && cargo build --release
 ```
 
-> **Rust users:** the same engine is on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library — `cargo add mordant` (features: `meta`, `emoji`, `footnotes`, `linter`, `diagram`, `chunker`, `math`, `highlighter`). See the [README](../README.md#rust-crate) for the feature table.
+> **Rust users:** the same engine is on [crates.io](https://crates.io/crates/mordant), powered by the [rushdown](https://github.com/yuin/rushdown) Rust library — `cargo add mordant` — all engines are default features, though syntax highlighting is off in the runtime default; use `default-features = false` to opt out. Features: `meta`, `emoji`, `footnotes`, `linter`, `diagram`, `chunker`, `math`, `highlighter`, `definition-list`, `fenced-div`, `link-attributes`. See the [README](../README.md#rust-crate) for the feature table.
 
 ---
 
@@ -70,7 +70,7 @@ bg = mordant.theme_background("Dracula")  # '#282a36'
 
 ---
 
-### `markdown_to_html(source, gfm_opts=None, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, footnote_render_opts=None, highlighting_theme=None, highlighting_mode=None, theme=None) -> str`
+### `markdown_to_html(source, gfm_opts=None, parse_opts=None, render_opts=None, emoji_parse_opts=None, emoji_render_opts=None, diagram_parse_opts=None, diagram_render_opts=None, footnote_render_opts=None, highlighting_theme=None, highlighting_mode=None, theme=None, math_renderer_opts=None, engines=None) -> str`
 
 One-call parse + render. GIL is released during the CPU-heavy parse + render phase.
 
@@ -128,7 +128,7 @@ html = mordant.markdown_to_html(
 )
 ```
 
-### `parse(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None) -> Document`
+### `parse(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, engines=None) -> Document`
 
 Parse only. Returns a `Document` with full AST access. GIL is released during parsing.
 
@@ -146,7 +146,7 @@ print(doc.metadata)    # {}
 
 ## Lint API
 
-### `lint(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, lint_config=None) -> list[Diagnostic]`
+### `lint(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, lint_config=None, engines=None) -> list[Diagnostic]`
 
 Lint a markdown string and return diagnostics. GIL is released during linting.
 
@@ -173,7 +173,7 @@ for d in diagnostics:
 # MD001:1 heading-increment: Heading incremented by more than 1
 ```
 
-### `fix(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, default_language=None, lint_config=None) -> FixResult`
+### `fix(source, gfm_opts=None, parse_opts=None, emoji_opts=None, diagram_opts=None, lint_opts=None, default_language=None, lint_config=None, engines=None) -> FixResult`
 
 Lint and auto-fix a markdown string. Returns the fixed output and any remaining diagnostics.
 
@@ -424,7 +424,7 @@ Multiple rules:
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `node.kind` | `str` | Node kind: `"Heading"`, `"Paragraph"`, `"Link"`, `"Diagram"`, etc. |
+| `node.kind` | `str` | Node kind: `"Heading"`, `"Paragraph"`, `"Link"`, `"Diagram"`, `"DefinitionList"`, `"DefinitionTerm"`, `"DefinitionDescription"`, `"FencedDiv"`, etc. |
 | `node.type` | `str` | `"block"` or `"inline"` |
 | `node.text` | `str` | Resolved text content (recursive from all descendants) |
 | `node.parent` | `Node \| None` | Parent node |
@@ -824,7 +824,7 @@ for node in diagram_nodes:
 
 ### `[^1]`, `[^hello]` PHP Markdown Extra footnotes
 
-Footnotes are **always enabled** — no parser options needed.
+Footnotes are enabled by default — no parser options are needed. Disable them with `engines=mordant.Engines.without(["footnotes"])`.
 
 ```python
 import mordant
@@ -983,13 +983,14 @@ html = mordant.markdown_to_html(
 
 ### `KATEX_CSS` constant
 
-Embedded KaTeX 0.16.21 minified CSS (~23KB). Inject into your page's `<head>` for correct rendering of `"both"` / `"html"` output.
+Embedded KaTeX 0.18.5 minified CSS (~24KB, matching `katex-rs 0.3.0`). `mordant.KATEX_VERSION` reports the version. Inject into your page's `<head>` for correct rendering of `"both"` / `"html"` output.
 
 ```python
 import mordant
 
 # Access the CSS
-css = mordant.KATEX_CSS  # ~23KB minified string
+css = mordant.KATEX_CSS  # ~24KB minified string
+version = mordant.KATEX_VERSION  # '0.18.5'
 
 # Typical usage — wrap KaTeX HTML output in a page with the stylesheet:
 full_html = f"""
@@ -1038,6 +1039,38 @@ for node in math_nodes:
 
 ## Options
 
+### Engines (runtime switches)
+
+Every engine is compiled into the wheel. Engines are on by default except
+syntax highlighting, which remains opt-in to preserve 0.10 output.
+
+```python
+engines = mordant.Engines()                 # current defaults
+engines = mordant.Engines.all()             # everything, incl. highlighting
+engines = mordant.Engines.none()            # no engines
+engines = mordant.Engines.only(["math", "footnotes"])
+engines = mordant.Engines.without(["emoji"])   # default minus emoji
+engines = mordant.Engines.all_without(["emoji"])  # all minus emoji
+engines.has("fenced_div")                   # True
+
+html = mordant.markdown_to_html(":smile:", engines=engines)
+```
+
+Engine names: `meta`, `emoji`, `footnotes`, `linter`, `diagram`, `chunker`,
+`math`, `highlighter`, `definition_list`, `fenced_div`, `link_attributes`.
+GFM is configured separately with `GfmOptions`. In Rust use
+`mordant::Engines` (also `mordant::extensions::Engines`) and set
+`Options::engines`, or call `markdown_to_html_string_with_options()`. The
+Rust-only `available_engines()` reports which engines were compiled in.
+`Engine` and `Engines` are `#[non_exhaustive]`: use `default()`/`all()`/
+`none()`/`only()` and `set()`/`without()` instead of struct literals, and add a
+wildcard arm to `match` expressions.
+
+`ParseOptions.engines` and `RenderOptions.engines` are shared objects: mutating
+them in place is reflected in later calls. An engine set supplied on either
+options object is used for both parsing and rendering; supply `engines=` (or
+identical sets on both objects) to avoid a mismatch error.
+
 ### ParseOptions
 
 ```python
@@ -1047,6 +1080,7 @@ opts = mordant.ParseOptions(
     auto_heading_ids=False,   # Auto-generate heading IDs
     escaped_space=False,      # Treat \ as space escape
     meta_table=False,         # Render metadata as HTML table in AST
+    engines=None,             # mordant.Engines (default: engine defaults)
 )
 ```
 
@@ -1056,10 +1090,71 @@ opts = mordant.ParseOptions(
 opts = mordant.RenderOptions(
     hard_wraps=False,         # Soft line breaks → <br>
     xhtml=False,              # XHTML style (<br />)
-    allows_unsafe=False,      # Allow raw HTML / dangerous URLs
+    allows_unsafe=False,      # Raw HTML, unsafe URLs and unsafe extension attrs
     escaped_space=False,      # Don't render backslash-escaped space
+    engines=None,             # mordant.Engines
+    emoji=None,               # EmojiHtmlRendererOptions
+    diagram=None,             # DiagramHtmlRendererOptions
+    footnote=None,            # FootnoteHtmlRendererOptions
+    math=None,                # MathRendererOptions
+    highlighter=None,         # HighlighterOptions (implies highlighting)
 )
 ```
+
+Legacy kwargs (`emoji_render_opts=`, `diagram_render_opts=`,
+`footnote_render_opts=`, `math_renderer_opts=`, `highlighting_theme=`,
+`highlighting_mode=`, `theme=`) still work; they are deprecated and will be
+removed in 0.12. An explicit `engines=` (here or on `ParseOptions`) is
+authoritative: legacy theme kwargs only set values and never re-enable a
+disabled engine. In-place changes to `opts.engines` or `opts.highlighter` are
+reflected in subsequent calls.
+
+### HighlighterOptions
+
+```python
+mordant.RenderOptions(
+    highlighter=mordant.HighlighterOptions(theme="Dracula", mode="Class"),
+)
+# Nested highlighter options alone now enable the engine; pass
+# engines=mordant.Engines.none() to keep highlighting disabled.
+```
+
+Themes and modes are validated: unknown themes or modes raise `ValueError`.
+
+### Definition lists, fenced divs, link attributes
+
+```python
+mordant.markdown_to_html("Apple\n: A fruit.\n")
+# <dl><dt>Apple</dt><dd>A fruit.</dd></dl>
+
+mordant.markdown_to_html("::: note\nText.\n:::\n")
+# <div class="note">...</div>
+
+mordant.markdown_to_html("[link](https://example.com){#id .class}")
+# <a href="..." id="id" class="class">link</a>
+```
+
+All three can be disabled with `engines=mordant.Engines.without([...])`.
+
+**Limits / syntax rules:**
+
+- A definition term must be the first line of its paragraph. Definitions are
+  single-paragraph and inline only (multi-paragraph and block-level `<dd>`
+  content are planned for 0.12). A colon starts a definition only when it is
+  followed by whitespace, so `:smile:` remains an emoji shortcode.
+- A fenced div closes on a line of at least as many colons as the opener
+  (optional trailing attributes are ignored). Body lines with 0–3 leading
+  spaces are parsed as child blocks; 4+ spaces form an indented code block.
+- `href` and `src` in `{...}` attribute lists are ignored (the link/image
+  destination syntax is the only supported way to set them). `style`,
+  `srcdoc`, and dangerous URL values supplied through the new link-attribute,
+  fenced-div, and definition-list extensions require
+  `RenderOptions(allows_unsafe=True)`. The older
+  `ParseOptions(attributes=True)` extension keeps its 0.10 behavior;
+  unifying both attribute paths is 0.12 work. URL checks decode character
+  references and ignore ASCII whitespace/control bytes before matching.
+- Attribute lists survive inline delimiters inside quoted values; attribute
+  names use `-` (not `_`) for `data-*` names.
 
 ### GfmOptions
 

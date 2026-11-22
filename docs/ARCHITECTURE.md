@@ -1,9 +1,9 @@
 # Mordant Architecture
 
-> **Version:** 0.10.1 (Python and Rust crates in lockstep)  
-> **Rust crate:** mordant v0.10.1, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
+> **Version:** 0.11.0 (Python and Rust crates in lockstep)  
+> **Rust crate:** mordant v0.11.0, powered by the [rushdown](https://github.com/yuin/rushdown) Rust library by Yusuke Inuzuka (CommonMark 0.31.2 + GFM)  
 > **Bindings:** PyO3 0.29 (Python 3.9+)  
-> **Tests:** 1247 Python + 141 core Rust unit tests (all engines: linter, meta, emoji, mermaid_theme, math, highlighter, chunker)
+> **Tests:** 1288 Python tests plus the full Rust unit/integration/spec suite (all engines)
 
 ---
 
@@ -222,6 +222,10 @@ W: TextWrite (String by default)
 | Diagram | block | `diagram_type: DiagramType`, `value: Lines` |
 | FootnoteReference | inline | `label: Value`, `index: usize`, `ref_index: usize` |
 | FootnoteDefinition | block | `label: Value`, `index: usize`, `references: Vec<usize>` |
+| DefinitionList | block | — |
+| DefinitionTerm | block | — |
+| DefinitionDescription | block | — |
+| FencedDiv | block | `fence_length: usize` |
 | Extension | any | `Box<dyn ExtensionData>` |
 
 ### 3.5. Parser Options
@@ -234,6 +238,7 @@ W: TextWrite (String by default)
 | `arena` | `ArenaOptions` | Arena allocation settings (`initial_size: 1024`) |
 | `escaped_space` | false | Treat `\` as space escape |
 | `id_generator` | None | Custom node ID generator (`GenerateNodeId`) |
+| `engines` | `Engines::default()` | Runtime engine switches (all compiled-in engines except highlighting) |
 | `math_options` | `MathParserOptions` | Inline/block math options (`inline_math: true`, `display_math: true`) |
 
 ### 3.6. GFM Parser Options
@@ -252,11 +257,12 @@ W: TextWrite (String by default)
 |--------|---------|-------------|
 | `hard_wraps` | false | Soft line breaks → `<br>` |
 | `xhtml` | false | XHTML style (`<br />`) |
-| `allows_unsafe` | false | Allow raw HTML / dangerous URLs |
+| `allows_unsafe` | false | Allow raw HTML, unsafe link destinations, and unsafe extension attributes (`style`, `srcdoc`, dangerous URL values) |
 | `escaped_space` | false | Don't render backslash-escaped space |
+| `engines` | `Engines::default()` | Runtime engine switches (all compiled-in engines except highlighting) |
 | `attribute_filters` | `Option<Rc<AttributeFilters>>` | Filters for rendering node attributes (per-kind `AsciiWordSet`) |
 
-**Diagram theming.** `DiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme. The name resolves as a union: built-in mermaid presets (`modern`/`mermaid_default`/`dark`/`forest`/`neutral`) are used natively; any syntect theme is derived into a custom `base` theme (`derive_mermaid_theme` in `mermaid_theme.rs`). A `theme=` kwarg on `markdown_to_html` fans out to both code highlighting and diagrams, with explicit per-param args taking precedence.
+**Diagram theming.** `DiagramHtmlRendererOptions(theme="<name>")` derives Mermaid colors from a code-highlighting (syntect) theme. The name resolves as a union: built-in mermaid presets (`modern`/`mermaid_default`/`dark`/`forest`/`neutral`) are used natively; any syntect theme is derived into a custom `base` theme (`derive_mermaid_theme` in `mermaid_theme.rs`). A `theme=` kwarg on `markdown_to_html` fans out to both code highlighting and diagrams, with explicit per-param args taking precedence. An explicit `engines=` set is authoritative for enablement: legacy `theme=` enables highlighting only when no explicit engine set was supplied.
 
 ### 3.8. Parser Priority Constants
 
@@ -460,6 +466,7 @@ struct ParseConfig {
     auto_heading_ids: bool,
     escaped_space: bool,
     meta_table: bool,
+    engines: Engines,
     emoji_options: EmojiParserOptions,
     diagram_options: DiagramParserOptions,
     math_options: MathParserOptions,
@@ -471,9 +478,12 @@ struct RenderConfig {
     xhtml: bool,
     allows_unsafe: bool,
     escaped_space: bool,
+    engines: Engines,
     emoji_options: EmojiHtmlRendererOptions,
     diagram_options: DiagramHtmlRendererOptions,
     footnote_options: FootnoteHtmlRendererOptions,
+    math_options: MathRendererOptions,
+    math_inline_options: MathInlineRendererOptions,
     highlighting_options: Option<HighlightingRendererOptions>,
 }
 ```
@@ -493,6 +503,7 @@ These are `Send` and have no Python references, so they are safe to use inside `
 | `auto_heading_ids` | bool | false | Auto-generate heading IDs |
 | `escaped_space` | bool | false | Treat `\` as space escape |
 | `meta_table` | bool | false | Enable YAML frontmatter (`meta.rs`) |
+| `engines` | `Engines` | `Engines::default()` | Runtime engine switches; shared with the renderer unless explicitly set |
 
 ### 5.2. RenderOptions
 
@@ -500,8 +511,18 @@ These are `Send` and have no Python references, so they are safe to use inside `
 |-------|------|---------|-------------|
 | `hard_wraps` | bool | false | Soft line breaks → `<br>` |
 | `xhtml` | bool | false | XHTML style (`<br />`) |
-| `allows_unsafe` | bool | false | Allow raw HTML / dangerous URLs |
+| `allows_unsafe` | bool | false | Allow raw HTML, unsafe destinations, and unsafe extension attributes (`style`, `srcdoc`, dangerous URL values) |
 | `escaped_space` | bool | false | Don't render backslash-escaped space |
+| `engines` | `Engines` | inherited / `Engines::default()` | Runtime engine switches; a set supplied here or on `ParseOptions` is used for both sides |
+| `emoji` | `EmojiHtmlRendererOptions` | None | Emoji renderer options |
+| `diagram` | `DiagramHtmlRendererOptions` | None | Mermaid diagram renderer options |
+| `footnote` | `FootnoteHtmlRendererOptions` | None | Footnote renderer options |
+| `math` | `MathRendererOptions` | None | Math renderer options |
+| `highlighter` | `HighlighterOptions` | None | Syntax highlighting options; implies the highlighter engine unless an explicit engine set disables it |
+
+Nested options are stored as shared Python objects, so in-place mutation
+(`opts.highlighter.theme = ...`) is reflected in later calls. Legacy top-level
+kwargs remain accepted as deprecated overrides until 0.12.
 
 ### 5.3. GfmOptions
 
@@ -744,7 +765,7 @@ html = hl.highlight("python", "def hello(): pass")
 ```python
 import mordant
 
-# Basic usage — footnotes are always enabled (no parser options)
+# Basic usage — footnotes are enabled by default (no parser options; disable via the engine flag)
 md = "Text with footnote.[^1]\n\n[^1]: The footnote."
 html = mordant.markdown_to_html(md)
 # Contains <sup id="fnref:1"><a href="#fn:1" class="footnote-ref">1</a></sup>
@@ -996,6 +1017,33 @@ MetaAstTransformer (AstTransformer)
 ---
 
 ## 7. Extension System
+
+### 7.0. Runtime engine switches
+
+Every engine is compiled into the default crate build and the Python wheel.
+`mordant::Engines` (re-exported from `mordant::extensions`) and
+`mordant.Engines` (Python) are simple flag sets: `all()`, `none()`,
+`only([...])`, `without([...])`. Both Rust types are `#[non_exhaustive]`;
+construct them with the helpers and mutate flags with `set()`/`without()`.
+An engine runs only when its cargo feature was compiled in **and** its flag
+is set. The flags live on `parser::Options::engines` and
+`html::Options::engines`; `markdown_to_html_string_with_options()` composes
+the matching extensions. Syntax highlighting is the one flag off in the
+defaults (0.10 emitted plain `<pre><code>` by default); pass `Engines.all()`
+to enable it.
+
+New in 0.11: `definition_list.rs` (paragraph transformer → `<dl>`; term must
+be the first paragraph line, definitions are single-paragraph/inline only),
+`fenced_div.rs` (container block parser → `<div>`; a closing fence has at least
+as many colons as the opener, and body lines are child blocks), and
+`link_attributes.rs` (AST transformer attaching a trailing `{...}` list to
+links/images by merging adjacent text nodes; `href`/`src` are ignored and
+`style` requires `allows_unsafe` for those extensions; the older attributes
+extension keeps its 0.10 behavior). The crate-internal `parser_extensions()`
+in `src/lib.rs` is the single engine-gated factory also used by the chunker;
+it is not a public API. Div and definition-list attributes reuse the
+paragraph attribute filter until dedicated filters are added in 0.12.
+
 
 ### 7.1. Custom Block Parser
 
@@ -1293,7 +1341,7 @@ mordant_lib::renderer::html::Renderer::with_extensions(opts, emoji_ext.and(diagr
 
 ### 7.14. Footnote Extension (mordant-footnote)
 
-The footnote extension provides PHP Markdown Extra style footnotes via an inline parser, block parser, and HTML renderer with post-render hook. **Footnotes are always enabled** — there are no parser options to disable them.
+The footnote extension provides PHP Markdown Extra style footnotes via an inline parser, block parser, and HTML renderer with post-render hook. Footnotes are enabled by default; they have no parser options of their own, and are disabled with the `footnotes` engine flag or by omitting the `footnotes` cargo feature.
 
 **Syntax:**
 
@@ -1374,7 +1422,7 @@ The footnote HTML renderer converts `FootnoteReference` nodes to `<sup><a>` elem
 
 #### 7.14.5. Options
 
-The footnote extension has **no parser options** — it is always enabled. The renderer accepts `FootnoteHtmlRendererOptions` for customizing CSS classes, backlink HTML, and ID prefixes.
+The footnote extension has no parser options of its own — it is enabled by the `footnotes` engine flag (and the matching cargo feature). The renderer accepts `FootnoteHtmlRendererOptions` for customizing CSS classes, backlink HTML, and ID prefixes.
 
 #### 7.14.6. Footnote Extension Registration
 
@@ -1608,7 +1656,7 @@ JSONC (with comments) is supported via `jsonc-parser`. Failed loads print warnin
 
 ## 7.12. Math Extension (KaTeX)
 
-The math extension provides LaTeX math rendering via the pure-Rust `katex-rs` crate. It supports fenced code blocks (` ```math `, ` ```latex `) and inline math (`$...$`, `$$...$$`).
+The math extension provides LaTeX math rendering via the pure-Rust `katex-rs` 0.3.0 crate (KaTeX 0.18.5; accepted range `>=0.3.0, <0.4.0`). It supports fenced code blocks (` ```math `, ` ```latex `) and inline math (`$...$`, `$$...$$`). `KATEX_VERSION` reports the bundled CSS version.
 
 ### 7.12.1. Efficiency Model
 
@@ -1677,7 +1725,7 @@ let math_inline_ext = math_inline_html_renderer_extension(math::MathInlineRender
 
 ### 7.12.8. Embedded KaTeX CSS
 
-The library embeds KaTeX 0.16.21 minified CSS (~23KB) as a Rust constant
+The library embeds KaTeX 0.18.5 minified CSS (~24KB) as a Rust constant
 (`math::KATEX_CSS`) and exposes it to Python as `mordant.KATEX_CSS`.
 
 - **Purpose:** Consumers rendering `"both"` or `"html"` output must load KaTeX CSS
@@ -1863,12 +1911,18 @@ Built-in themes are loaded from `syntect-assets` (bat's updated themes) via `loa
 
 **Core crate (`mordant` on crates.io)** — engines and their optional dependencies are wired
 together by cargo features; see the feature table in the [README](../README.md#rust-crate).
+Supported minimal configurations are `default-features = false, features = ["std"]`
+(std parser/renderer core) and `features = ["no-std"]` (embedded parser core).
+The `no-std` feature is a compatibility alias; `definition-list`, `fenced-div`
+and `link-attributes` require `std`, so a `no-std` + extension hybrid compiles
+but is not a supported embedded configuration. This will be inverted to a
+`std` feature in 0.12.
 
 | Dependency | Version | Purpose | Feature |
 |------------|---------|---------|---------|
 | `yaml-peg` | 1.0.9 | YAML frontmatter parsing | `meta` |
 | `emojis` | 0.8.0 | Emoji shortcode database (1,500+ emojis) | *(always compiled)* |
-| `katex-rs` | 0.2.4 | LaTeX math rendering | `math` |
+| `katex-rs` | 0.3.0 (KaTeX 0.18.5) | LaTeX math rendering | `math` |
 | `mermaid-rs-renderer` | 0.3 | Server-side Mermaid SVG rendering | `diagram` |
 | `syntect` | 5.3.0 | Syntax highlighting / theme model | `highlighter`, `diagram` |
 | `syntect-assets` | 0.23.6 | bat's updated syntaxes/themes | `highlighter` |
@@ -1881,7 +1935,7 @@ together by cargo features; see the feature table in the [README](../README.md#r
 
 | Dependency | Version | Purpose |
 |------------|---------|---------|
-| `mordant` | 0.10.1 (path dep, all features) | Core crate |
+| `mordant` | 0.11.0 (path dep, all features) | Core crate |
 | `pyo3` | 0.29 | Python bindings |
 | `rayon` | 1.10 | Parallel batch lint/fix |
 
@@ -1892,8 +1946,9 @@ together by cargo features; see the feature table in the [README](../README.md#r
 cd mordant-py
 cargo build --release
 
-# Run core Rust tests (all engines)
-cargo test --features meta,emoji,footnotes,linter,diagram,chunker,math,highlighter
+# Run core Rust tests (all engines; avoid --all-features, which
+# also enables pprof/no-std)
+cargo test --features meta,emoji,footnotes,linter,diagram,chunker,math,highlighter,definition-list,fenced-div,link-attributes
 
 # Run Python tests
 python -m pytest tests/ -v

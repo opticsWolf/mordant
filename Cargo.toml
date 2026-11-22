@@ -1,6 +1,6 @@
 [package]
 name = "mordant"
-version = "0.10.1"
+version = "0.11.0"
 authors = ["Yusuke Inuzuka <yuin@inforno.net>", "opticsWolf"]
 edition = "2021"
 rust-version = "1.87"
@@ -31,7 +31,7 @@ lto = true
 codegen-units = 1
 
 [features]
-default = ["std", "html-entities"]
+default = ["std", "html-entities", "meta", "emoji", "footnotes", "linter", "diagram", "chunker", "math", "highlighter", "definition-list", "fenced-div", "link-attributes"]
 std = ["dep:memchr", "memchr/std"]
 alloc = ["dep:memchr", "memchr/alloc"]
 meta = ["dep:yaml-peg", "std"]
@@ -43,6 +43,9 @@ chunker = ["std", "diagram", "dep:memmap2"]
 math = ["std", "dep:katex"]
 highlighter = ["std", "dep:syntect", "dep:syntect-assets", "dep:jsonc-parser", "dep:serde", "dep:serde_json"]
 html-entities = []
+definition-list = ["std"]
+fenced-div = ["std"]
+link-attributes = ["std"]
 hashbrown = ["dep:hashbrown"]
 no-std = ["alloc", "hashbrown"]
 no-std-unix-debug = ["no-std", "dep:libc"]
@@ -63,7 +66,7 @@ mermaid-rs-renderer = { version = "0.3", default-features = false, optional = tr
 syntect = { version = "5.3.0", default-features = false, features = ["default-fancy"], optional = true }
 serde_json = { version = "1.0", optional = true }
 memmap2 = { version = "0.9", optional = true }
-katex = { package = "katex-rs", version = "0.2.4", optional = true }
+katex = { package = "katex-rs", version = "0.3.0", optional = true }
 syntect-assets = { version = "0.23.6", optional = true }
 jsonc-parser = { version = "0.32", features = ["serde"], optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }

@@ -9,6 +9,7 @@
 extern crate mordant as mordant_lib;
 
 use pyo3::prelude::*;
+use mordant_lib::extensions::{Engine, Engines as CoreEngines};
 use mordant_lib::parser::ParserExtension;
 use mordant_lib::renderer::html::RendererExtension;
 
@@ -34,9 +35,9 @@ use emoji::{emoji_html_renderer_extension, emoji_parser_extension, EmojiHtmlRend
 use footnote::{footnote_html_renderer_extension, footnote_parser_extension, FootnoteHtmlRendererOptions, PyFootnoteHtmlRendererOptions};
 use highlighter::{add_custom_syntax, add_custom_theme, detect_language, highlighting_html_renderer_extension, list_themes, list_syntaxes, load_builtin_themes, theme_background, HighlightingRendererOptions, PyHighlighter, PyHighlightingMode};
 use linter::{Diagnostic, FixResult, LintConfig, LintOptions, RuleMetadata};
-use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions, MathInlineRendererOptions, MathRendererOptions, PyMathRendererOptions, KATEX_CSS};
+use math::{math_html_renderer_extension, math_parser_extension, MathParserOptions, MathInlineRendererOptions, MathRendererOptions, PyMathRendererOptions, KATEX_CSS, KATEX_VERSION};
 use node::Node;
-use options::{ArenaOptions, GfmFeature, GfmOptions, ParseOptions, RenderOptions};
+use options::{ArenaOptions, Engines, GfmFeature, GfmOptions, HighlighterOptions, ParseOptions, RenderOptions};
 use walker::Walker;
 
 // ---------------------------------------------------------------------------
@@ -52,6 +53,7 @@ pub(crate) struct ParseConfig {
     emoji_options: EmojiParserOptions,
     diagram_options: DiagramParserOptions,
     math_options: MathParserOptions,
+    engines: CoreEngines,
 }
 
 impl Default for ParseConfig {
@@ -64,6 +66,7 @@ impl Default for ParseConfig {
             emoji_options: EmojiParserOptions::default(),
             diagram_options: DiagramParserOptions::default(),
             math_options: MathParserOptions::default(),
+            engines: CoreEngines::default(),
         }
     }
 }
@@ -80,6 +83,7 @@ struct RenderConfig {
     highlighting_options: Option<HighlightingRendererOptions>,
     math_options: MathRendererOptions,
     math_inline_options: MathInlineRendererOptions,
+    engines: CoreEngines,
 }
 
 impl Default for RenderConfig {
@@ -95,6 +99,7 @@ impl Default for RenderConfig {
             highlighting_options: None,
             math_options: MathRendererOptions::default(),
             math_inline_options: MathInlineRendererOptions::default(),
+            engines: CoreEngines::default(),
         }
     }
 }
@@ -107,21 +112,42 @@ pub(crate) fn build_parser(
     gfm_opts: Option<&GfmOptions>,
     parse_cfg: &ParseConfig,
 ) -> mordant_lib::parser::Parser {
-    let meta_opts = meta::MetaParserOptions { table: parse_cfg.meta_table };
-    let meta_ext = meta::meta_parser_extension(meta_opts);
-
+    let engines = parse_cfg.engines;
+    let meta_ext = meta::meta_parser_extension(meta::MetaParserOptions { table: parse_cfg.meta_table });
     let emoji_ext = emoji_parser_extension(parse_cfg.emoji_options.clone());
     let diagram_ext = diagram_parser_extension(parse_cfg.diagram_options.clone());
     let math_ext = math_parser_extension(parse_cfg.math_options.clone());
-
-    let mut parser_opts = mordant_lib::parser::Options::default();
-    parser_opts.attributes = parse_cfg.attributes;
-    parser_opts.auto_heading_ids = parse_cfg.auto_heading_ids;
-    parser_opts.escaped_space = parse_cfg.escaped_space;
+    let footnote_ext = footnote_parser_extension();
+    let definition_list_ext = mordant_lib::definition_list::definition_list_parser_extension();
+    let fenced_div_ext = mordant_lib::fenced_div::fenced_div_parser_extension();
+    let link_attributes_ext = mordant_lib::link_attributes::link_attributes_parser_extension();
 
     let gfm_features = gfm_opts.map(|o| o.features.clone());
 
-    let gfm_ext = mordant_lib::parser::ParserExtensionFn::new(move |p: &mut mordant_lib::parser::Parser| {
+    let parser_ext = mordant_lib::parser::ParserExtensionFn::new(move |p: &mut mordant_lib::parser::Parser| {
+        if engines.is_enabled(Engine::Meta) {
+            meta_ext.apply(p);
+        }
+        if engines.is_enabled(Engine::Emoji) {
+            emoji_ext.apply(p);
+        }
+        if engines.is_enabled(Engine::Diagram) {
+            diagram_ext.apply(p);
+        }
+        if engines.is_enabled(Engine::Math) {
+            math_ext.apply(p);
+        }
+        if engines.is_enabled(Engine::DefinitionList) {
+            definition_list_ext.apply(p);
+        }
+        if engines.is_enabled(Engine::FencedDiv) {
+            fenced_div_ext.apply(p);
+        }
+        if engines.is_enabled(Engine::LinkAttributes) {
+            link_attributes_ext.apply(p);
+        }
+
+        // GFM stays a separate opt-in bundle.
         use mordant_lib::parser::{
             LinkifyParser, NoParserOptions, StrikethroughParser, TableAstTransformer,
             TableParagraphTransformer, TaskListItemParagraphTransformer,
@@ -144,39 +170,66 @@ pub(crate) fn build_parser(
                 999,
             );
         }
+
+        if engines.is_enabled(Engine::Footnotes) {
+            footnote_ext.apply(p);
+        }
     });
 
-    let footnote_ext = footnote_parser_extension();
-    let parser_ext = meta_ext.and(emoji_ext).and(diagram_ext).and(math_ext).and(gfm_ext).and(footnote_ext);
+    let mut parser_opts = mordant_lib::parser::Options::default();
+    parser_opts.attributes = parse_cfg.attributes;
+    parser_opts.auto_heading_ids = parse_cfg.auto_heading_ids;
+    parser_opts.escaped_space = parse_cfg.escaped_space;
+    parser_opts.engines = engines;
 
     mordant_lib::parser::Parser::with_extensions(parser_opts, parser_ext)
 }
 
 fn build_renderer(render_cfg: &RenderConfig) -> mordant_lib::renderer::html::Renderer<'_> {
+    let engines = render_cfg.engines;
     let mut opts = mordant_lib::renderer::html::Options::default();
     opts.hard_wraps = render_cfg.hard_wraps;
     opts.xhtml = render_cfg.xhtml;
     opts.allows_unsafe = render_cfg.allows_unsafe;
     opts.escaped_space = render_cfg.escaped_space;
+    opts.engines = engines;
 
-    let emoji_ext = emoji::emoji_html_renderer_extension(render_cfg.emoji_options.clone());
-    let diagram_ext = diagram::diagram_html_renderer_extension(render_cfg.diagram_options.clone());
-    let math_fence_ext = math::math_html_renderer_extension(render_cfg.math_options.clone());
-    let math_inline_ext = math::math_inline_html_renderer_extension(render_cfg.math_inline_options.clone());
-    
-    let footnote_ext = footnote_html_renderer_extension(render_cfg.footnote_options.clone());
-    let base_ext = emoji_ext.and(diagram_ext).and(math_fence_ext).and(math_inline_ext).and(footnote_ext);
-    
-    // Add highlighting extension if enabled
-    if let Some(ref highlighting_opts) = render_cfg.highlighting_options {
-        let highlighting_ext = highlighting_html_renderer_extension(highlighting_opts.clone());
-        mordant_lib::renderer::html::Renderer::with_extensions(
-            opts,
-            base_ext.and(highlighting_ext),
-        )
-    } else {
-        mordant_lib::renderer::html::Renderer::with_extensions(opts, base_ext)
-    }
+    let renderer_ext = mordant_lib::renderer::html::RendererExtensionFn::new(move |r: &mut mordant_lib::renderer::html::Renderer<'_, String>| {
+        if engines.is_enabled(Engine::Emoji) {
+            let ext = emoji::emoji_html_renderer_extension(render_cfg.emoji_options.clone());
+            ext.apply(r);
+        }
+        if engines.is_enabled(Engine::Diagram) {
+            let ext = diagram::diagram_html_renderer_extension(render_cfg.diagram_options.clone());
+            ext.apply(r);
+        }
+        if engines.is_enabled(Engine::Math) {
+            math::math_html_renderer_extension(render_cfg.math_options.clone()).apply(r);
+            math::math_inline_html_renderer_extension(render_cfg.math_inline_options.clone()).apply(r);
+        }
+        if engines.is_enabled(Engine::Footnotes) {
+            footnote_html_renderer_extension(render_cfg.footnote_options.clone()).apply(r);
+        }
+        if engines.is_enabled(Engine::DefinitionList) {
+            mordant_lib::definition_list::definition_list_html_renderer_extension(
+                mordant_lib::definition_list::DefinitionListHtmlRendererOptions::default(),
+            )
+            .apply(r);
+        }
+        if engines.is_enabled(Engine::FencedDiv) {
+            mordant_lib::fenced_div::fenced_div_html_renderer_extension(
+                mordant_lib::fenced_div::FencedDivHtmlRendererOptions::default(),
+            )
+            .apply(r);
+        }
+        // Highlighting is applied last so it overrides the default code-block renderer.
+        if engines.is_enabled(Engine::Highlighter) {
+            let highlighting_opts = render_cfg.highlighting_options.clone().unwrap_or_default();
+            highlighting_html_renderer_extension(highlighting_opts).apply(r);
+        }
+    });
+
+    mordant_lib::renderer::html::Renderer::with_extensions(opts, renderer_ext)
 }
 
 // Parse + render to HTML string — returns Result<String, String>
@@ -211,15 +264,91 @@ pub(crate) fn parse_only(
     parser.parse(&mut reader)
 }
 
+fn engines_from_py(py: Python<'_>, engines: &Py<Engines>) -> CoreEngines {
+    engines.bind(py).borrow().to_core()
+}
+
+/// The `linter` engine flag is enforced by the Python entry points: with it
+/// disabled, lint reports nothing and fix leaves the source untouched.
+fn linter_engine_enabled(
+    py: Python<'_>,
+    engines: Option<&Engines>,
+    parse_opts: Option<&ParseOptions>,
+) -> bool {
+    engines
+        .map(|e| e.to_core().get(Engine::Linter))
+        .or_else(|| {
+            parse_opts.map(|o| engines_from_py(py, &o.engines).get(Engine::Linter))
+        })
+        .unwrap_or(true)
+}
+
+/// Resolves the engine set used by both parsing and rendering.
+///
+/// An explicit `engines=` argument wins. Otherwise an explicit engine set on
+/// either options object is used (the render options inherit the parse set
+/// and vice versa). If both sides were configured differently, that is a
+/// caller error rather than a silent content loss.
+fn resolve_engines(
+    py: Python<'_>,
+    top: Option<&Engines>,
+    parse_opts: Option<&ParseOptions>,
+    render_opts: Option<&RenderOptions>,
+) -> PyResult<(CoreEngines, bool)> {
+    // `engines_explicit` covers constructor/setter assignment; also treat a
+    // value mutated through the shared getter (`opts.engines.emoji = False`)
+    // as explicit when it differs from the defaults.
+    let option_engines = |e: &Py<Engines>| {
+        let value = engines_from_py(py, e);
+        (value != CoreEngines::default()).then_some(value)
+    };
+    let parse_set = top
+        .map(|e| e.to_core())
+        .or_else(|| {
+            parse_opts
+                .filter(|o| o.engines_explicit)
+                .map(|o| engines_from_py(py, &o.engines))
+                .or_else(|| parse_opts.and_then(|o| option_engines(&o.engines)))
+        });
+    let render_set = top
+        .map(|e| e.to_core())
+        .or_else(|| {
+            render_opts
+                .filter(|o| o.engines_explicit)
+                .map(|o| engines_from_py(py, &o.engines))
+                .or_else(|| render_opts.and_then(|o| option_engines(&o.engines)))
+        });
+    if top.is_none() && parse_set.is_some() && render_set.is_some() && parse_set != render_set {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "conflicting engine sets: parse_opts.engines and render_opts.engines differ; \
+             use the engines= argument to configure both sides",
+        ));
+    }
+    let effective = top
+        .map(|e| e.to_core())
+        .or(render_set)
+        .or(parse_set)
+        .unwrap_or_default();
+    let explicit = top.is_some() || parse_set.is_some() || render_set.is_some();
+    Ok((effective, explicit))
+}
+
 // Build a ParseConfig from the optional Python option objects. Shared by
 // parse(), markdown_to_html() (parse half), and lint().
 fn parse_config_from(
+    py: Python<'_>,
     parse_opts: Option<&ParseOptions>,
     emoji_opts: Option<&PyEmojiParserOptions>,
     diagram_opts: Option<&PyDiagramParserOptions>,
+    engines: Option<CoreEngines>,
 ) -> ParseConfig {
     let emoji_options = emoji_opts.map(|e| e.to_mordant()).unwrap_or_default();
     let diagram_options = diagram_opts.map(|d| d.to_mordant()).unwrap_or_default();
+    let engines = engines.unwrap_or_else(|| {
+        parse_opts
+            .map(|o| engines_from_py(py, &o.engines))
+            .unwrap_or_default()
+    });
     if let Some(opts) = parse_opts {
         ParseConfig {
             attributes: opts.attributes,
@@ -229,6 +358,7 @@ fn parse_config_from(
             emoji_options,
             diagram_options,
             math_options: MathParserOptions::default(),
+            engines,
         }
     } else {
         ParseConfig {
@@ -239,6 +369,7 @@ fn parse_config_from(
             emoji_options,
             diagram_options,
             math_options: MathParserOptions::default(),
+            engines,
         }
     }
 }
@@ -274,50 +405,81 @@ fn parse_config_from(
 /// html = mordant.markdown_to_html("# Hello\n\nWorld")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None, theme = None, math_renderer_opts = None))]
-fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>, theme: Option<&str>, math_renderer_opts: Option<&PyMathRendererOptions>) -> PyResult<String> {
-    // Extract plain-Rust configs (no Python references — safe for detach)
-    let parse_cfg = parse_config_from(parse_opts, emoji_parse_opts, diagram_parse_opts);
-
-    // Single-command theming: `theme` fans out to both code highlighting and
-    // diagram rendering. Explicit per-param args (highlighting_theme /
-    // diagram_render_opts.theme) take precedence over this convenience.
-    let mut eff_diagram_opts = diagram_render_opts.cloned();
-    if let Some(t) = theme {
-        match eff_diagram_opts {
-            // Explicit diagram theme already set -> it wins; leave it alone.
-            Some(ref mut d) if d.theme.is_none() => d.theme = Some(t.to_string()),
-            // No diagram opts at all -> create one with the convenience theme.
-            None => eff_diagram_opts = Some(PyDiagramHtmlRendererOptions::new("server", None, Some(t.to_string()))),
-            // Explicit diagram theme present -> keep it.
-            Some(_) => {}
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, render_opts = None, emoji_parse_opts = None, emoji_render_opts = None, diagram_parse_opts = None, diagram_render_opts = None, footnote_render_opts = None, highlighting_theme = None, highlighting_mode = None, theme = None, math_renderer_opts = None, engines = None))]
+#[allow(clippy::too_many_arguments)]
+fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, render_opts: Option<&RenderOptions>, emoji_parse_opts: Option<&PyEmojiParserOptions>, emoji_render_opts: Option<&PyEmojiHtmlRendererOptions>, diagram_parse_opts: Option<&PyDiagramParserOptions>, diagram_render_opts: Option<&PyDiagramHtmlRendererOptions>, footnote_render_opts: Option<&PyFootnoteHtmlRendererOptions>, highlighting_theme: Option<&str>, highlighting_mode: Option<&str>, theme: Option<&str>, math_renderer_opts: Option<&PyMathRendererOptions>, engines: Option<&Engines>) -> PyResult<String> {
+    // Decide the effective engine set once. Parsing and rendering use the
+    // same set so an enabled parser never produces nodes the renderer drops.
+    let (mut effective_engines, engines_explicit) =
+        resolve_engines(py, engines, parse_opts, render_opts)?;
+    let nested_highlighter = render_opts
+        .and_then(|o| o.highlighter.as_ref().map(|p| p.clone_ref(py)));
+    if !engines_explicit {
+        // D4: nested highlighter options imply the engine, but an explicit
+        // engine set always wins.
+        if nested_highlighter.is_some()
+            || highlighting_theme.is_some()
+            || theme.is_some()
+        {
+            effective_engines.set(Engine::Highlighter, true);
         }
     }
-    let hl_theme = highlighting_theme.or(theme);
-    let diagram_options = eff_diagram_opts
-        .as_ref()
-        .map(|d| d.to_mordant())
-        .unwrap_or_default();
+
+    // Extract plain-Rust configs (no Python references — safe for detach)
+    let parse_cfg = parse_config_from(
+        py,
+        parse_opts,
+        emoji_parse_opts,
+        diagram_parse_opts,
+        Some(effective_engines),
+    );
+
+    // Nested per-engine options on RenderOptions; legacy top-level kwargs
+    // override their values but never re-enable a disabled engine.
+    let nested_emoji = render_opts
+        .and_then(|o| o.emoji.as_ref())
+        .map(|p| p.bind(py).borrow().to_mordant());
+    let nested_diagram = render_opts
+        .and_then(|o| o.diagram.as_ref().map(|p| p.clone_ref(py)));
+    let nested_footnote = render_opts
+        .and_then(|o| o.footnote.as_ref())
+        .map(|p| p.bind(py).borrow().to_mordant());
+    let nested_math = render_opts
+        .and_then(|o| o.math.as_ref())
+        .map(|p| p.bind(py).borrow().to_mordant());
+    // Single-command theming: `theme` fans out to both code highlighting and
+    // diagram rendering. Explicit nested/legacy values win.
+    let diagram_options = match nested_diagram {
+        Some(d) => d.bind(py).borrow().merged(diagram_render_opts, theme),
+        None => match diagram_render_opts {
+            Some(d) => d.clone().merged(None, theme),
+            None => PyDiagramHtmlRendererOptions::new("server", None, theme.map(str::to_string)),
+        },
+    }
+    .to_mordant();
     let math_options = math_renderer_opts
+        .as_ref()
         .map(|m| m.to_mordant())
+        .or(nested_math)
         .unwrap_or_default();
     // Inline math uses the same output format as fenced math.
     let math_inline_options = MathInlineRendererOptions {
         output: math_options.output,
     };
 
-    let render_cfg = if let Some(opts) = render_opts {
+    let mut render_cfg = if let Some(opts) = render_opts {
         RenderConfig {
             hard_wraps: opts.hard_wraps,
             xhtml: opts.xhtml,
             allows_unsafe: opts.allows_unsafe,
             escaped_space: opts.escaped_space,
-            emoji_options: emoji_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
+            emoji_options: emoji_render_opts.map(|e| e.to_mordant()).or(nested_emoji).unwrap_or_default(),
             diagram_options: diagram_options.clone(),
-            footnote_options: footnote_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
-            highlighting_options: None, // Will be set below
+            footnote_options: footnote_render_opts.map(|e| e.to_mordant()).or(nested_footnote).unwrap_or_default(),
+            highlighting_options: None,
             math_options: math_options.clone(),
             math_inline_options: math_inline_options.clone(),
+            engines: effective_engines,
         }
     } else {
         RenderConfig {
@@ -325,36 +487,44 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
             xhtml: false,
             allows_unsafe: false,
             escaped_space: false,
-            emoji_options: emoji_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
+            emoji_options: emoji_render_opts.map(|e| e.to_mordant()).or(nested_emoji).unwrap_or_default(),
             diagram_options: diagram_options.clone(),
-            footnote_options: footnote_render_opts.map(|e| e.to_mordant()).unwrap_or_default(),
-            highlighting_options: None, // Will be set below
+            footnote_options: footnote_render_opts.map(|e| e.to_mordant()).or(nested_footnote).unwrap_or_default(),
+            highlighting_options: None,
             math_options: math_options.clone(),
             math_inline_options: math_inline_options.clone(),
+            engines: effective_engines,
         }
     };
 
-    // Add highlighting options if provided
-    let final_render_cfg = if let Some(theme) = hl_theme {
-        let mode = match highlighting_mode {
-            Some("Class") => highlighter::HighlightingMode::Class,
-            _ => highlighter::HighlightingMode::Attribute,
+    if effective_engines.is_enabled(Engine::Highlighter) {
+        let mut hl_opts = match &nested_highlighter {
+            Some(opts) => opts.bind(py).borrow().to_renderer_options(),
+            None => HighlightingRendererOptions::default(),
         };
-        let mut cfg = render_cfg;
-        cfg.highlighting_options = Some(HighlightingRendererOptions {
-            theme: theme.to_string(),
-            mode,
-            math_options: Some(math_options.clone()),
-        });
-        cfg
-    } else {
-        render_cfg
-    };
+        // Legacy kwargs override nested values when supplied.
+        if let Some(theme) = highlighting_theme.or(theme) {
+            hl_opts.theme = theme.to_string();
+        }
+        if let Some(mode) = highlighting_mode {
+            hl_opts.mode = match mode.to_ascii_lowercase().as_str() {
+                "class" => highlighter::HighlightingMode::Class,
+                "attribute" => highlighter::HighlightingMode::Attribute,
+                _ => {
+                    return Err(pyo3::exceptions::PyValueError::new_err(format!(
+                        "invalid highlighting mode '{mode}' (expected 'Attribute' or 'Class')"
+                    )))
+                }
+            };
+        }
+        hl_opts.math_options = Some(math_options.clone());
+        render_cfg.highlighting_options = Some(hl_opts);
+    }
 
     // Release GIL for CPU-heavy parse + render
     // String is Send, so it can cross the GIL boundary
     py.detach(move || {
-        parse_and_render(source, gfm_opts, &parse_cfg, &final_render_cfg)
+        parse_and_render(source, gfm_opts, &parse_cfg, &render_cfg)
     }).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))
 }
 
@@ -377,10 +547,10 @@ fn markdown_to_html(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>,
 /// print(doc.source)
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None))]
-fn parse(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>) -> PyResult<Document> {
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, engines = None))]
+fn parse(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts: Option<&ParseOptions>, emoji_opts: Option<&PyEmojiParserOptions>, diagram_opts: Option<&PyDiagramParserOptions>, engines: Option<&Engines>) -> PyResult<Document> {
     // Extract plain-Rust config (no Python references — safe for detach)
-    let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
+    let parse_cfg = parse_config_from(py, parse_opts, emoji_opts, diagram_opts, engines.map(|e| e.to_core()));
     let gfm_owned: Option<GfmOptions> = gfm_opts.cloned();
 
     // Release GIL for CPU-heavy parse.
@@ -418,7 +588,7 @@ fn parse(py: Python<'_>, source: &str, gfm_opts: Option<&GfmOptions>, parse_opts
 ///     print(d.rule, d.line, d.message)
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, lint_config = None))]
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, lint_config = None, engines = None))]
 fn lint(
     py: Python<'_>,
     source: &str,
@@ -428,8 +598,12 @@ fn lint(
     diagram_opts: Option<&PyDiagramParserOptions>,
     lint_opts: Option<&LintOptions>,
     lint_config: Option<&LintConfig>,
+    engines: Option<&Engines>,
 ) -> PyResult<Vec<Diagnostic>> {
-    let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
+    if !linter_engine_enabled(py, engines, parse_opts) {
+        return Ok(Vec::new());
+    }
+    let parse_cfg = parse_config_from(py, parse_opts, emoji_opts, diagram_opts, engines.map(|e| e.to_core()));
     let lint_cfg = if let Some(cfg) = lint_config {
         let mut lc = linter::PlainLintConfig {
             disable: cfg.disable.clone(),
@@ -488,7 +662,7 @@ fn lint(
 /// print(result.unfixable)     # what still needs manual attention
 /// ```
 #[pyfunction]
-#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None, lint_config = None))]
+#[pyo3(signature = (source, gfm_opts = None, parse_opts = None, emoji_opts = None, diagram_opts = None, lint_opts = None, default_language = None, lint_config = None, engines = None))]
 fn fix(
     py: Python<'_>,
     source: &str,
@@ -499,8 +673,17 @@ fn fix(
     lint_opts: Option<&LintOptions>,
     default_language: Option<String>,
     lint_config: Option<&LintConfig>,
+    engines: Option<&Engines>,
 ) -> PyResult<FixResult> {
-    let parse_cfg = parse_config_from(parse_opts, emoji_opts, diagram_opts);
+    if !linter_engine_enabled(py, engines, parse_opts) {
+        return Ok(FixResult::from_outcome(linter::FixOutcome {
+            output: source.to_string(),
+            fixed: Vec::new(),
+            unfixable: Vec::new(),
+            remaining: Vec::new(),
+        }));
+    }
+    let parse_cfg = parse_config_from(py, parse_opts, emoji_opts, diagram_opts, engines.map(|e| e.to_core()));
     let lint_cfg = if let Some(cfg) = lint_config {
         let mut lc = cfg.clone().into_inner();
         lc.suppressions = linter::parse_suppressions(source);
@@ -564,12 +747,16 @@ fn lint_rules() -> Vec<RuleMetadata> {
 ///     print(f"{name}: {len(diags)} issues")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (files, lint_config = None))]
+#[pyo3(signature = (files, lint_config = None, engines = None))]
 fn lint_many(
     py: Python<'_>,
     files: Vec<(String, String)>,
     lint_config: Option<&LintConfig>,
+    engines: Option<&Engines>,
 ) -> PyResult<Vec<(String, Vec<Diagnostic>)>> {
+    if engines.is_some_and(|e| !e.to_core().get(Engine::Linter)) {
+        return Ok(files.into_iter().map(|(name, _)| (name, Vec::new())).collect());
+    }
     let cfg = lint_config
         .map(|c| c.clone())
         .unwrap_or_else(|| linter::LintConfig::default());
@@ -614,13 +801,30 @@ fn lint_many(
 ///     print(f"{name}: fixed {len(result.fixed)} issues")
 /// ```
 #[pyfunction]
-#[pyo3(signature = (files, lint_config = None, default_language = None))]
+#[pyo3(signature = (files, lint_config = None, default_language = None, engines = None))]
 fn fix_many(
     py: Python<'_>,
     files: Vec<(String, String)>,
     lint_config: Option<&LintConfig>,
     default_language: Option<String>,
+    engines: Option<&Engines>,
 ) -> PyResult<Vec<(String, FixResult)>> {
+    if engines.is_some_and(|e| !e.to_core().get(Engine::Linter)) {
+        return Ok(files
+            .into_iter()
+            .map(|(name, source)| {
+                (
+                    name,
+                    FixResult::from_outcome(linter::FixOutcome {
+                        output: source,
+                        fixed: Vec::new(),
+                        unfixable: Vec::new(),
+                        remaining: Vec::new(),
+                    }),
+                )
+            })
+            .collect());
+    }
     let cfg = lint_config
         .map(|c| c.clone())
         .unwrap_or_default();
@@ -668,6 +872,8 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<linter::RuleMetadata>()?;
     m.add_class::<ParseOptions>()?;
     m.add_class::<RenderOptions>()?;
+    m.add_class::<Engines>()?;
+    m.add_class::<HighlighterOptions>()?;
     m.add_class::<GfmOptions>()?;
     m.add_class::<GfmFeature>()?;
     m.add_class::<ArenaOptions>()?;
@@ -688,5 +894,6 @@ fn mordant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Diagnostic>()?;
     m.add_class::<FixResult>()?;
     m.add("KATEX_CSS", KATEX_CSS)?;
+    m.add("KATEX_VERSION", KATEX_VERSION)?;
     Ok(())
 }

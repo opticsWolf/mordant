@@ -9,6 +9,8 @@ use pyo3::Bound;
 use pyo3::types::{PyDict, PyList};
 use pyo3::exceptions::{PyIOError, PyValueError};
 
+use crate::options::Engines;
+
 pub use mordant_lib::chunker::{
     BlockType, Chunk, ChunkerError, MarkdownChunker as CoreMarkdownChunker, TextSource,
     block_type_from_str,
@@ -128,8 +130,10 @@ impl PyMarkdownChunker {
     /// Build a chunker from a Python string. Parses immediately; the GIL is
     /// released during parsing.
     #[new]
-    fn from_string(py: Python<'_>, text: String) -> PyResult<Self> {
-        let inner = py.detach(move || CoreMarkdownChunker::new(text));
+    #[pyo3(signature = (text, engines = None))]
+    fn from_string(py: Python<'_>, text: String, engines: Option<&Engines>) -> PyResult<Self> {
+        let core_engines = engines.map(|e| e.to_core()).unwrap_or_default();
+        let inner = py.detach(move || CoreMarkdownChunker::with_engines(text, core_engines));
         Ok(Self { inner })
     }
 
@@ -138,12 +142,14 @@ impl PyMarkdownChunker {
     /// Read `path`, validate UTF-8, and own the bytes as a `String` (safe path).
     /// The GIL is released during parsing.
     #[staticmethod]
-    fn from_file(py: Python<'_>, path: &str) -> PyResult<Self> {
+    #[pyo3(signature = (path, engines = None))]
+    fn from_file(py: Python<'_>, path: &str, engines: Option<&Engines>) -> PyResult<Self> {
         // File I/O happens on the calling thread; only AST construction is detached.
         let bytes = std::fs::read(path).map_err(|e| PyIOError::new_err(e.to_string()))?;
         let text = String::from_utf8(bytes)
             .map_err(|e| PyValueError::new_err(format!("Invalid UTF-8 in file: {e}")))?;
-        let inner = py.detach(move || CoreMarkdownChunker::new(text));
+        let core_engines = engines.map(|e| e.to_core()).unwrap_or_default();
+        let inner = py.detach(move || CoreMarkdownChunker::with_engines(text, core_engines));
         Ok(Self { inner })
     }
 
@@ -158,10 +164,14 @@ impl PyMarkdownChunker {
     /// alive. Doing so is undefined behavior and can crash the process (SIGBUS).
     /// Use this only for trusted, immutable files; prefer `from_file` otherwise.
     #[staticmethod]
-    fn from_file_mmap(py: Python<'_>, path: &str) -> PyResult<Self> {
+    #[pyo3(signature = (path, engines = None))]
+    fn from_file_mmap(py: Python<'_>, path: &str, engines: Option<&Engines>) -> PyResult<Self> {
         let source = TextSource::from_mmap_path(path).map_err(map_chunker_error)?;
+        let core_engines = engines.map(|e| e.to_core()).unwrap_or_default();
         let inner = py
-            .detach(move || CoreMarkdownChunker::from_text_source(source))
+            .detach(move || {
+                CoreMarkdownChunker::from_text_source_with_engines(source, core_engines)
+            })
             .map_err(map_chunker_error)?;
         Ok(Self { inner })
     }
@@ -203,12 +213,12 @@ impl PyMarkdownChunker {
     }
 
     /// Get all chunks as bare `str` (backward compatible with existing iterator).
-    fn get_bare_chunks<'py>(&mut self, py: Python<'py>) -> Bound<'py, PyList> {
+    fn get_bare_chunks<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let list = PyList::empty(py);
         for s in self.inner.get_bare_chunks() {
-            list.append(s).unwrap();
+            list.append(s)?;
         }
-        list
+        Ok(list)
     }
 
     /// Get the delimiter string between two consecutive block types.

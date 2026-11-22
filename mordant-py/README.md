@@ -7,7 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/mordant)](https://crates.io/crates/mordant)
 [![Rust](https://img.shields.io/badge/Rust-1.87+-orange)](https://www.rust-lang.org)
 
-> **Version:** 0.10.1 (Python and Rust crates in lockstep)
+> **Version:** 0.11.0 (Python and Rust crates in lockstep)
 > **Python:** 3.9+ · **Bindings:** PyO3 0.29
 
 A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the [`mordant`](https://crates.io/crates/mordant) Rust library — itself built on the [rushdown](https://github.com/yuin/rushdown) engine by Yusuke Inuzuka.
@@ -19,9 +19,11 @@ A fast CommonMark + GFM Markdown parser and renderer for Python, powered by the 
 - **Full AST access** — `parse()` returns a `Document`; traverse parents, children and siblings; kind-specific properties on every node
 - **YAML frontmatter** — typed metadata extraction (null, bool, int, float, str, list, dict)
 - **Emoji shortcodes** — `:joy:` → 😂 with blacklists and custom templates
-- **LaTeX math** — fenced ```` ```math ````/```` ```latex ```` blocks, inline `$…$` and `$$…$$`, standalone `render_math()`
+- **LaTeX math** — KaTeX 0.18.5: fenced ```` ```math ````/```` ```latex ```` blocks, inline `$…$` and `$$…$$`, standalone `render_math()`; `KATEX_VERSION` reports the bundled CSS version
 - **Mermaid diagrams** — server-side inline SVG by default (~3ms), legacy client-side Mermaid.js mode, hybrid fallback; themeable from code-highlighting themes
 - **Footnotes** — PHP Markdown Extra style `[^1]` with backlinks
+- **Definition lists, fenced divs, link attributes** — `Term` + `: definition`, Pandoc-style `::: divs`, and `{#id .class}` after links/images; unsafe attributes need `allows_unsafe=True` and URL checks normalize entities/whitespace
+- **Runtime engine switches** — all engines ship in the wheel; disable any of them with `mordant.Engines`
 - **Lint engine** — 25 markdownlint-style rules, auto-fix engine, inline suppressions, `.markdownlint.json` config support
 - **Batch linting** — `lint_many()` / `fix_many()` process many files in parallel via rayon
 - **CLI** — `python -m mordant` with `--fix`, `--dry-run`, `--format human|json|github`, glob/directory recursion
@@ -66,6 +68,27 @@ html = mordant.markdown_to_html("~~strike~~", gfm_opts=opts)
 
 opts = mordant.GfmOptions.all()   # everything incl. the linkify extension
 opts = mordant.GfmOptions.none()
+```
+
+### Engine switches
+
+Every engine is bundled and enabled by default except syntax highlighting
+(use `mordant.Engines.all()` to enable it):
+
+```python
+html = mordant.markdown_to_html(":smile:", engines=mordant.Engines.none())
+html = mordant.markdown_to_html(
+    "Apple\n: A fruit.\n",
+    engines=mordant.Engines.only(["definition_list"]),
+)
+
+# Structured renderer options
+opts = mordant.RenderOptions(
+    engines=mordant.Engines.all(),
+    math=mordant.MathRendererOptions(output="mathml"),
+    highlighter=mordant.HighlighterOptions(theme="Dracula", mode="Class"),
+)
+html = mordant.markdown_to_html("```math\nx^2\n```", render_opts=opts)
 ```
 
 ## Parse to an AST
@@ -114,7 +137,8 @@ html = mordant.markdown_to_html(
 ## Math (KaTeX)
 
 ```` ```math ```` / ```` ```latex ```` fences and inline `$…$` / `$$…$$` are
-rendered automatically. Include `mordant.KATEX_CSS` in your page for styling.
+rendered automatically. Include `mordant.KATEX_CSS` in your page for styling;
+`mordant.KATEX_VERSION` is `"0.18.5"` (matching `katex-rs 0.3.0`).
 
 ```python
 html = mordant.markdown_to_html("Euler: $e^{i\\pi} + 1 = 0$")

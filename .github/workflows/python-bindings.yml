@@ -45,3 +45,8 @@ jobs:
         run: |
           pip install pytest
           python -c "import mordant; print(mordant.markdown_to_html('# Hello'))"
+          python -m pytest -q mordant-py/tests
+      - name: Engine switch smoke test
+        run: |
+          python -c "import mordant; assert '😄' not in mordant.markdown_to_html(':smile:', engines=mordant.Engines.none())"
+          python -c "import mordant; assert '<dl>' in mordant.markdown_to_html('Apple\n: A fruit.\n', engines=mordant.Engines.only(['definition_list']))"

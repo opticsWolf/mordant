@@ -160,6 +160,10 @@ fn parse_quoted_attribute_value<'a>(
         for idx in &value {
             let resolved =
                 resolve_numeric_references(resolve_entity_references(idx.bytes(reader.source())));
+            // SAFETY: each `value` slice comes from the UTF-8 source, and
+            // `resolve_entity_references` / `resolve_numeric_references` only
+            // replace references with `char::encode_utf8` output, so the
+            // resolved bytes are valid UTF-8.
             result.push_str(unsafe { core::str::from_utf8_unchecked(&resolved) });
             if matches!(resolved, Cow::Owned(_)) {
                 has_resolved = true;

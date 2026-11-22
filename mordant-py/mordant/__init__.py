@@ -22,6 +22,8 @@ try:
         LintOptions,
         ParseOptions,
         RenderOptions,
+        Engines,
+        HighlighterOptions,
         GfmOptions,
         ArenaOptions,
         EmojiParserOptions,
@@ -47,6 +49,7 @@ try:
         MarkdownChunker,
         ExtractedChunk,
         KATEX_CSS,
+        KATEX_VERSION,
     )
 except ImportError:
     # Fallback for development builds where the module name may differ
@@ -102,6 +105,8 @@ __all__ = [
     "LintOptions",
     "ParseOptions",
     "RenderOptions",
+    "Engines",
+    "HighlighterOptions",
     "GfmOptions",
     "ArenaOptions",
     "EmojiParserOptions",
@@ -127,4 +132,5 @@ __all__ = [
     "MarkdownChunker",
     "ExtractedChunk",
     "KATEX_CSS",
+    "KATEX_VERSION",
 ]

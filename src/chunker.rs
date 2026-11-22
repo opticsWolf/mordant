@@ -18,7 +18,11 @@
 //!   is retained. Peak memory ≈ source + ~24 bytes/top-level-node.
 
 use crate::ast::KindData;
-use crate::parser::{NoParserOptions, Parser, ParserExtension, ParserExtensionFn, TableAstTransformer, TableParagraphTransformer};
+use crate::extensions::Engines;
+use crate::parser::{
+    NoParserOptions, Parser, ParserExtension, ParserExtensionFn, TableAstTransformer,
+    TableParagraphTransformer,
+};
 use crate::text::BasicReader;
 
 use std::fs::File;
@@ -84,23 +88,20 @@ struct NodeInfo {
 /// Parse `source`, walk the top-level children of the Document node, and record
 /// `(block_type, start, end)` for each. `end` is the next top-level node's start, or
 /// `source.len()` for the last node. The full `Arena` is dropped on return.
-fn extract_nodes(source: &str) -> Vec<NodeInfo> {
-    // Build parser with GFM table transformers + diagram extension
-    // so that tables and mermaid diagrams are correctly classified.
+fn extract_nodes(source: &str, engines: Engines) -> Vec<NodeInfo> {
+    // GFM tables are always classified; the remaining syntax extensions are
+    // selected by the same engine gate used by Markdown rendering.
     let gfm_ext = ParserExtensionFn::new(|p: &mut Parser| {
         p.add_ast_transformer(TableAstTransformer::new, NoParserOptions, 0);
         p.add_paragraph_transformer(TableParagraphTransformer::new, NoParserOptions, 200);
     });
 
-    // Diagram extension (mermaid → Diagram node)
-    let diagram_ext = crate::diagram::diagram_parser_extension(
-        crate::diagram::DiagramParserOptions::default(),
-    );
-
-    let parser = Parser::with_extensions(
-        crate::parser::Options::default(),
-        gfm_ext.and(diagram_ext),
-    );
+    let parser_opts = crate::parser::Options {
+        engines,
+        ..Default::default()
+    };
+    let parser =
+        Parser::with_extensions(parser_opts, gfm_ext.and(crate::parser_extensions(engines)));
     let mut reader = BasicReader::new(source);
     let (arena, doc_ref) = parser.parse(&mut reader);
 
@@ -183,7 +184,7 @@ impl TextSource {
 
     /// Memory-map `path` instead of copying it.
     ///
-    /// # Safety invariant (for [`TextSource::str`])
+    /// # Safety invariant (for [`TextSource::str_checked`])
     /// The caller MUST NOT modify or truncate the file while the returned
     /// source (or any chunker built from it) is alive.
     pub fn from_mmap_path(path: &str) -> Result<Self, ChunkerError> {
@@ -248,7 +249,12 @@ pub struct MarkdownChunker {
 impl MarkdownChunker {
     /// Build a chunker from an owned string. Parses immediately.
     pub fn new(text: String) -> Self {
-        let nodes = extract_nodes(&text);
+        Self::with_engines(text, Engines::default())
+    }
+
+    /// Build a chunker from an owned string using a specific engine set.
+    pub fn with_engines(text: String, engines: Engines) -> Self {
+        let nodes = extract_nodes(&text, engines);
         Self {
             source: TextSource::Owned(text),
             nodes,
@@ -269,11 +275,19 @@ impl MarkdownChunker {
     /// Build a chunker from any [`TextSource`] (e.g. a memory-mapped file).
     /// Validates UTF-8 once up front.
     pub fn from_text_source(source: TextSource) -> Result<Self, ChunkerError> {
+        Self::from_text_source_with_engines(source, Engines::default())
+    }
+
+    /// Like [`Self::from_text_source`], with an explicit engine set.
+    pub fn from_text_source_with_engines(
+        source: TextSource,
+        engines: Engines,
+    ) -> Result<Self, ChunkerError> {
         // Validate before storing so later unchecked-style access stays sound.
         source.str_checked()?;
         let nodes = {
             let text = source.str_checked()?;
-            extract_nodes(text)
+            extract_nodes(text, engines)
         };
         Ok(Self {
             source,
