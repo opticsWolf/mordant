@@ -41,7 +41,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wheels-${{ matrix.os }}
-          path: mordant-py/target/wheels/
+          path: mordant-py/target/wheels/*.whl
           if-no-files-found: error
 
   # ── Build sdist ───────────────────────────────────────────────
@@ -57,13 +57,14 @@ jobs:
       - name: Build sdist
         uses: PyO3/maturin-action@v1
         with:
-          args: --sdist -m mordant-py/Cargo.toml
+          command: sdist
+          args: -m mordant-py/Cargo.toml
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
           name: sdist
-          path: mordant-py/target/wheels/
+          path: mordant-py/target/wheels/*.tar.gz
           if-no-files-found: error
 
   # ── Publish to PyPI ────────────────────────────────────────────
@@ -92,6 +93,16 @@ jobs:
         with:
           name: sdist
           path: dist
+
+      - name: Validate distributions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ls -lh dist
+          if compgen -G 'dist/*linux_x86_64.whl' > /dev/null; then
+            echo '::error::native linux wheel found; PyPI requires manylinux tags'
+            exit 1
+          fi
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
